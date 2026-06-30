@@ -1,5 +1,5 @@
 {
-  "projectName": "start-app",
+  "projectName": "jumeirah-messaging-system",
   "mode": "file-router",
   "typescript": true,
   "packageManager": "pnpm",
