@@ -1,10 +1,25 @@
 import { TanStackDevtools } from "@tanstack/react-devtools"
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
+import {
+  HeadContent,
+  Scripts,
+  createRootRouteWithContext,
+} from "@tanstack/react-router"
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools"
 
+import { Toaster } from "@/components/ui/sonner"
+import type { SessionUser } from "@/lib/server/auth"
+import { getSession } from "@/lib/server/auth"
 import appCss from "../styles.css?url"
 
-export const Route = createRootRoute({
+type RouterContext = {
+  session: SessionUser | null
+}
+
+export const Route = createRootRouteWithContext<RouterContext>()({
+  beforeLoad: async () => {
+    const session = await getSession()
+    return { session }
+  },
   head: () => ({
     meta: [
       {
@@ -15,7 +30,7 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "نظام مراسلات جُميرة",
+        title: "نظام مراسلات جُميرا",
       },
     ],
     links: [
@@ -28,7 +43,7 @@ export const Route = createRootRoute({
   notFoundComponent: () => (
     <main className="container mx-auto p-4 pt-16">
       <h1>404</h1>
-      <p>The requested page could not be found.</p>
+      <p>الصفحة المطلوبة غير موجودة.</p>
     </main>
   ),
   shellComponent: RootDocument,
@@ -42,6 +57,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
+        <Toaster position="top-center" richColors />
         <TanStackDevtools
           config={{
             position: "bottom-right",
