@@ -121,11 +121,11 @@ describe("excel-parser", () => {
       const result = await parseInvoiceExcel(buffer)
       expect(result).toHaveLength(3)
       const byLabel = new Map(result.map((r) => [r.label, r]))
-      expect(byLabel.get("A101")?.clientName).toBe("عبدالله زيادة")
+      expect(byLabel.get("A101")?.client_name).toBe("عبدالله زيادة")
       expectClose(byLabel.get("A101")?.total ?? 0, 56840.8)
-      expect(byLabel.get("A102")?.clientName).toBe("سالم أحمد")
+      expect(byLabel.get("A102")?.client_name).toBe("سالم أحمد")
       expectClose(byLabel.get("A102")?.total ?? 0, 31965.3)
-      expect(byLabel.get("A103")?.clientName).toBe("محمد علي")
+      expect(byLabel.get("A103")?.client_name).toBe("محمد علي")
       expectClose(byLabel.get("A103")?.total ?? 0, 97448.8)
     })
 
@@ -178,7 +178,7 @@ describe("excel-parser", () => {
       expect(result).toHaveLength(1)
       expect(result[0]).toEqual<ParsedInvoice>({
         label: "B1",
-        clientName: "Solo",
+        client_name: "Solo",
         total: 500,
       })
     })
@@ -195,6 +195,59 @@ describe("excel-parser", () => {
       ])
       const result = await parseInvoiceExcel(buffer)
       expect(result[0]?.total).toBe(999)
+    })
+
+    it("skips Arabic header row (النوع in col D)", async () => {
+      const buffer = await buildInvoiceBuffer([
+        {
+          number: 1,
+          client: "اسم العميل",
+          apartment: "رقم الشقة",
+          type: "النوع",
+          amounts: [null],
+        },
+        {
+          number: 1,
+          client: "عبدالله",
+          apartment: "A101",
+          type: "كهرباء",
+          amounts: [100],
+        },
+        {
+          number: null,
+          client: "عبدالله",
+          apartment: "A101",
+          type: TOTAL_MARKER,
+          amounts: [null, 500],
+        },
+      ])
+      const result = await parseInvoiceExcel(buffer)
+      expect(result).toHaveLength(1)
+      expect(result[0]?.label).toBe("A101")
+      expect(result[0]?.client_name).toBe("عبدالله")
+    })
+
+    it("handles الإجمالي row when apartment merge does not span it", async () => {
+      const buffer = await buildInvoiceBuffer([
+        {
+          number: 1,
+          client: "عبدالله",
+          apartment: "A101",
+          type: "كهرباء",
+          amounts: [100],
+        },
+        {
+          number: null,
+          client: null,
+          apartment: null,
+          type: TOTAL_MARKER,
+          amounts: [null, 500],
+        },
+      ])
+      const result = await parseInvoiceExcel(buffer)
+      expect(result).toHaveLength(1)
+      expect(result[0]?.label).toBe("A101")
+      expect(result[0]?.total).toBe(500)
     })
   })
 
@@ -277,6 +330,42 @@ describe("excel-parser", () => {
         expect(isExcelParseError(e)).toBe(true)
         if (isExcelParseError(e)) {
           expect(e.code).toBe("no_numeric_total")
+          expect(e.label).toBe("A101")
+        }
+      }
+    })
+
+    it("throws duplicate_total when an apartment has two الإجمالي rows", async () => {
+      const buffer = await buildInvoiceBuffer([
+        {
+          number: 1,
+          client: "X",
+          apartment: "A101",
+          type: "كهرباء",
+          amounts: [100],
+        },
+        {
+          number: null,
+          client: "X",
+          apartment: "A101",
+          type: TOTAL_MARKER,
+          amounts: [null, 200],
+        },
+        {
+          number: null,
+          client: "X",
+          apartment: "A101",
+          type: TOTAL_MARKER,
+          amounts: [null, 300],
+        },
+      ])
+      try {
+        await parseInvoiceExcel(buffer)
+        throw new Error("should have thrown")
+      } catch (e) {
+        expect(isExcelParseError(e)).toBe(true)
+        if (isExcelParseError(e)) {
+          expect(e.code).toBe("duplicate_total")
           expect(e.label).toBe("A101")
         }
       }

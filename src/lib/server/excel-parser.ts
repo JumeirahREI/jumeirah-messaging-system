@@ -4,18 +4,23 @@ import type { Buffer } from "node:buffer"
 
 export type ParsedInvoice = {
   label: string
-  clientName: string
+  client_name: string
   total: number
 }
 
 export type ParseError = {
   code:
-    "empty_file" | "no_apartment_rows" | "missing_total" | "no_numeric_total"
+    | "empty_file"
+    | "no_apartment_rows"
+    | "missing_total"
+    | "no_numeric_total"
+    | "duplicate_total"
   message: string
   label?: string
 }
 
 const TOTAL_MARKER = "الإجمالي"
+const HEADER_TYPE_MARKER = "النوع"
 const COL_CLIENT = 2
 const COL_APARTMENT = 3
 const COL_TYPE = 4
@@ -30,7 +35,10 @@ function isParseError(e: unknown): e is ParseError {
 }
 
 function throwParseError(err: ParseError): never {
-  throw err
+  const error = new Error(err.message) as Error & ParseError
+  error.code = err.code
+  if (err.label !== undefined) error.label = err.label
+  throw error
 }
 
 type CellValue = string | number | boolean | null
@@ -125,10 +133,30 @@ function extractTotalFromRow(row: Row): number | null {
   return lastNumeric
 }
 
+function isHeaderRow(
+  sheet: Worksheet,
+  resolveCell: (row: number, col: number) => CellValue,
+  row: number
+): boolean {
+  const typeValue = readCell(sheet.getRow(row).getCell(COL_TYPE).value)
+  if (
+    typeof typeValue === "string" &&
+    typeValue.trim() === HEADER_TYPE_MARKER
+  ) {
+    return true
+  }
+  const apartment = resolveCell(row, COL_APARTMENT)
+  if (typeof apartment === "string" && apartment.trim() === "رقم الشقة") {
+    return true
+  }
+  return false
+}
+
 export async function parseInvoiceExcel(
   buffer: Buffer
 ): Promise<ParsedInvoice[]> {
   const workbook = new Workbook()
+  // exceljs expects ArrayBuffer; Buffer is compatible at runtime
   await workbook.xlsx.load(buffer as unknown as ArrayBuffer)
   if (workbook.worksheets.length === 0) {
     throwParseError({
@@ -149,34 +177,49 @@ export async function parseInvoiceExcel(
 
   type Group = {
     label: string
-    clientName: string
+    client_name: string
     totalRow: number | null
   }
   const groups = new Map<string, Group>()
   const order: string[] = []
+  let currentLabel: string | null = null
 
   for (let r = 1; r <= rowCount; r++) {
     const row = sheet.getRow(r)
     if (!rowHasContent(row)) continue
+    if (isHeaderRow(sheet, resolveCell, r)) continue
 
     const apartment = resolveCell(r, COL_APARTMENT)
     const typeValue = readCell(row.getCell(COL_TYPE).value)
 
     if (typeof apartment === "string" && apartment.trim().length > 0) {
-      const label = apartment.trim()
-      if (!groups.has(label)) {
+      currentLabel = apartment.trim()
+      if (!groups.has(currentLabel)) {
         const client = resolveCell(r, COL_CLIENT)
-        groups.set(label, {
-          label,
-          clientName: typeof client === "string" ? client.trim() : "",
+        groups.set(currentLabel, {
+          label: currentLabel,
+          client_name: typeof client === "string" ? client.trim() : "",
           totalRow: null,
         })
-        order.push(label)
+        order.push(currentLabel)
       }
-      if (typeof typeValue === "string" && typeValue.trim() === TOTAL_MARKER) {
-        const g = groups.get(label)
-        if (g && g.totalRow === null) g.totalRow = r
+    }
+
+    if (
+      typeof typeValue === "string" &&
+      typeValue.trim() === TOTAL_MARKER &&
+      currentLabel !== null
+    ) {
+      const g = groups.get(currentLabel)
+      if (!g) continue
+      if (g.totalRow !== null) {
+        throwParseError({
+          code: "duplicate_total",
+          message: `الشقة ${currentLabel} تحتوي على أكثر من صف "الإجمالي"`,
+          label: currentLabel,
+        })
       }
+      g.totalRow = r
     }
   }
 
@@ -206,7 +249,7 @@ export async function parseInvoiceExcel(
         label,
       })
     }
-    result.push({ label: g.label, clientName: g.clientName, total })
+    result.push({ label: g.label, client_name: g.client_name, total })
   }
 
   return result

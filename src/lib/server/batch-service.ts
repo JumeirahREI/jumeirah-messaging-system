@@ -313,21 +313,21 @@ export const createBatch = createServerFn({ method: "POST" })
         noContacts.push({
           apartmentId: apt.id,
           label: p.label,
-          clientName: p.clientName,
+          clientName: p.client_name,
           total: p.total,
         })
       } else {
         matched.push({
           apartmentId: apt.id,
           label: p.label,
-          clientName: p.clientName,
+          clientName: p.client_name,
           total: p.total,
           contacts: withPhones,
         })
         invoiceInserts.push({
           batchId: batch.id,
           apartmentId: apt.id,
-          clientName: p.clientName,
+          clientName: p.client_name,
           total: p.total,
           createdBy: user.id,
         })
