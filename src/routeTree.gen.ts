@@ -19,6 +19,7 @@ import { Route as AuthedBatchesNewRouteImport } from './routes/_authed/batches/n
 import { Route as AuthedBatchesBatchIdIndexRouteImport } from './routes/_authed/batches/$batchId/index'
 import { Route as AuthedAdminUsersIndexRouteImport } from './routes/_authed/admin/users/index'
 import { Route as AuthedAdminProjectsIndexRouteImport } from './routes/_authed/admin/projects/index'
+import { Route as AuthedBatchesBatchIdWarningRouteImport } from './routes/_authed/batches/$batchId/warning'
 import { Route as AuthedAdminUsersNewRouteImport } from './routes/_authed/admin/users/new'
 import { Route as AuthedAdminProjectsNewRouteImport } from './routes/_authed/admin/projects/new'
 import { Route as AuthedAdminUsersUserIdIndexRouteImport } from './routes/_authed/admin/users/$userId/index'
@@ -79,6 +80,12 @@ const AuthedAdminProjectsIndexRoute =
     path: '/projects/',
     getParentRoute: () => AuthedAdminRoute,
   } as any)
+const AuthedBatchesBatchIdWarningRoute =
+  AuthedBatchesBatchIdWarningRouteImport.update({
+    id: '/batches/$batchId/warning',
+    path: '/batches/$batchId/warning',
+    getParentRoute: () => AuthedRoute,
+  } as any)
 const AuthedAdminUsersNewRoute = AuthedAdminUsersNewRouteImport.update({
   id: '/users/new',
   path: '/users/new',
@@ -137,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/batches/': typeof AuthedBatchesIndexRoute
   '/admin/projects/new': typeof AuthedAdminProjectsNewRoute
   '/admin/users/new': typeof AuthedAdminUsersNewRoute
+  '/batches/$batchId/warning': typeof AuthedBatchesBatchIdWarningRoute
   '/admin/projects/': typeof AuthedAdminProjectsIndexRoute
   '/admin/users/': typeof AuthedAdminUsersIndexRoute
   '/batches/$batchId/': typeof AuthedBatchesBatchIdIndexRoute
@@ -155,6 +163,7 @@ export interface FileRoutesByTo {
   '/batches': typeof AuthedBatchesIndexRoute
   '/admin/projects/new': typeof AuthedAdminProjectsNewRoute
   '/admin/users/new': typeof AuthedAdminUsersNewRoute
+  '/batches/$batchId/warning': typeof AuthedBatchesBatchIdWarningRoute
   '/admin/projects': typeof AuthedAdminProjectsIndexRoute
   '/admin/users': typeof AuthedAdminUsersIndexRoute
   '/batches/$batchId': typeof AuthedBatchesBatchIdIndexRoute
@@ -176,6 +185,7 @@ export interface FileRoutesById {
   '/_authed/batches/': typeof AuthedBatchesIndexRoute
   '/_authed/admin/projects/new': typeof AuthedAdminProjectsNewRoute
   '/_authed/admin/users/new': typeof AuthedAdminUsersNewRoute
+  '/_authed/batches/$batchId/warning': typeof AuthedBatchesBatchIdWarningRoute
   '/_authed/admin/projects/': typeof AuthedAdminProjectsIndexRoute
   '/_authed/admin/users/': typeof AuthedAdminUsersIndexRoute
   '/_authed/batches/$batchId/': typeof AuthedBatchesBatchIdIndexRoute
@@ -197,6 +207,7 @@ export interface FileRouteTypes {
     | '/batches/'
     | '/admin/projects/new'
     | '/admin/users/new'
+    | '/batches/$batchId/warning'
     | '/admin/projects/'
     | '/admin/users/'
     | '/batches/$batchId/'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/batches'
     | '/admin/projects/new'
     | '/admin/users/new'
+    | '/batches/$batchId/warning'
     | '/admin/projects'
     | '/admin/users'
     | '/batches/$batchId'
@@ -235,6 +247,7 @@ export interface FileRouteTypes {
     | '/_authed/batches/'
     | '/_authed/admin/projects/new'
     | '/_authed/admin/users/new'
+    | '/_authed/batches/$batchId/warning'
     | '/_authed/admin/projects/'
     | '/_authed/admin/users/'
     | '/_authed/batches/$batchId/'
@@ -322,6 +335,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/projects/'
       preLoaderRoute: typeof AuthedAdminProjectsIndexRouteImport
       parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/batches/$batchId/warning': {
+      id: '/_authed/batches/$batchId/warning'
+      path: '/batches/$batchId/warning'
+      fullPath: '/batches/$batchId/warning'
+      preLoaderRoute: typeof AuthedBatchesBatchIdWarningRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/_authed/admin/users/new': {
       id: '/_authed/admin/users/new'
@@ -424,6 +444,7 @@ interface AuthedRouteChildren {
   AuthedIndexRoute: typeof AuthedIndexRoute
   AuthedBatchesNewRoute: typeof AuthedBatchesNewRoute
   AuthedBatchesIndexRoute: typeof AuthedBatchesIndexRoute
+  AuthedBatchesBatchIdWarningRoute: typeof AuthedBatchesBatchIdWarningRoute
   AuthedBatchesBatchIdIndexRoute: typeof AuthedBatchesBatchIdIndexRoute
 }
 
@@ -432,6 +453,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedIndexRoute: AuthedIndexRoute,
   AuthedBatchesNewRoute: AuthedBatchesNewRoute,
   AuthedBatchesIndexRoute: AuthedBatchesIndexRoute,
+  AuthedBatchesBatchIdWarningRoute: AuthedBatchesBatchIdWarningRoute,
   AuthedBatchesBatchIdIndexRoute: AuthedBatchesBatchIdIndexRoute,
 }
 

@@ -679,24 +679,26 @@ export const updateContactLink = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const user = await requireRole("admin")
-    const row = await db
-      .update(apartmentContacts)
-      .set({
-        role: data.role,
-        isNotificationRecipient: data.isNotificationRecipient,
-        updatedBy: user.id,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(apartmentContacts.id, data.id),
-          isNull(apartmentContacts.deletedAt)
+    return safeMutation(async () => {
+      const row = await db
+        .update(apartmentContacts)
+        .set({
+          role: data.role,
+          isNotificationRecipient: data.isNotificationRecipient,
+          updatedBy: user.id,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(apartmentContacts.id, data.id),
+            isNull(apartmentContacts.deletedAt)
+          )
         )
-      )
-      .returning({ id: apartmentContacts.id })
-    if (row.length === 0)
-      return { ok: false, error: "الربط غير موجود" } as const
-    return { ok: true, data: row[0] } as const
+        .returning({ id: apartmentContacts.id })
+      if (row.length === 0)
+        return { ok: false, error: "الربط غير موجود" } as const
+      return { ok: true, data: row[0] } as const
+    })
   })
 
 export const unlinkContact = createServerFn({ method: "POST" })
@@ -843,14 +845,18 @@ export const updatePhoneNumber = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const user = await requireRole("admin")
-    const row = await db
-      .update(phoneNumbers)
-      .set({ number: data.number, updatedBy: user.id, updatedAt: now })
-      .where(and(eq(phoneNumbers.id, data.id), isNull(phoneNumbers.deletedAt)))
-      .returning({ id: phoneNumbers.id, number: phoneNumbers.number })
-    if (row.length === 0)
-      return { ok: false, error: "الرقم غير موجود" } as const
-    return { ok: true, data: row[0] } as const
+    return safeMutation(async () => {
+      const row = await db
+        .update(phoneNumbers)
+        .set({ number: data.number, updatedBy: user.id, updatedAt: now })
+        .where(
+          and(eq(phoneNumbers.id, data.id), isNull(phoneNumbers.deletedAt))
+        )
+        .returning({ id: phoneNumbers.id, number: phoneNumbers.number })
+      if (row.length === 0)
+        return { ok: false, error: "الرقم غير موجود" } as const
+      return { ok: true, data: row[0] } as const
+    })
   })
 
 export const deletePhoneNumber = createServerFn({ method: "POST" })

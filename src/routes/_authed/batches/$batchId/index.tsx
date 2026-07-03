@@ -17,18 +17,16 @@ import type {
   BatchDetail,
   BatchStatusResponse,
   DraftPreview,
-  WarningEligibleInvoice,
 } from "@/lib/server/batch-service"
 import {
   getBatch,
   getBatchStatus,
   getDraftPreview,
-  getWarningEligible,
   retryFailed,
   sendBatch,
-  sendWarning,
   softDeleteBatch,
 } from "@/lib/server/batch-service"
+import { formatArabicDate } from "@/lib/utils"
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -340,7 +338,19 @@ function ProgressView({
         </Button>
       )}
 
-      {status.status === "completed" && <WarningButton batchId={batch.id} />}
+      {status.status === "completed" && (
+        <Button
+          variant="outline"
+          render={
+            <Link
+              to="/batches/$batchId/warning"
+              params={{ batchId: String(batch.id) }}
+            />
+          }
+        >
+          إرسال تحذير متابعة
+        </Button>
+      )}
 
       <div className="rounded-md border">
         <Table>
@@ -373,7 +383,7 @@ function ProgressView({
                   {m.errorReason ?? "—"}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {m.sentAt ?? "—"}
+                  {m.sentAt ? formatArabicDate(m.sentAt) : "—"}
                 </TableCell>
               </TableRow>
             ))}
@@ -381,136 +391,5 @@ function ProgressView({
         </Table>
       </div>
     </div>
-  )
-}
-
-function WarningButton({ batchId }: { batchId: number }) {
-  const [open, setOpen] = useState(false)
-  const [eligible, setEligible] = useState<WarningEligibleInvoice[] | null>(
-    null
-  )
-  const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [sending, setSending] = useState(false)
-
-  async function openModal() {
-    setOpen(true)
-    setEligible(null)
-    setSelected(new Set())
-    const res = await getWarningEligible({ data: { batchId } })
-    if (res === null) {
-      toast.error("الدفعة غير مكتملة")
-      setOpen(false)
-      return
-    }
-    setEligible(res)
-  }
-
-  function toggle(id: number) {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  async function handleSend() {
-    setSending(true)
-    const res = await sendWarning({
-      data: { batchId, invoiceIds: Array.from(selected) },
-    })
-    setSending(false)
-    if (!res.ok) {
-      toast.error(res.error)
-      return
-    }
-    toast.success("تم إرسال التحذيرات")
-    setOpen(false)
-    window.location.reload()
-  }
-
-  return (
-    <>
-      <Button variant="outline" onClick={openModal}>
-        إرسال تحذير متابعة
-      </Button>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[80vh] w-full max-w-2xl overflow-auto rounded-lg border bg-background p-6 shadow-lg">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-medium">تحذيرات المتابعة</h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setOpen(false)}
-                disabled={sending}
-              >
-                إغلاق
-              </Button>
-            </div>
-            {eligible === null ? (
-              <p className="text-muted-foreground">جارٍ التحميل...</p>
-            ) : eligible.length === 0 ? (
-              <p className="text-muted-foreground">
-                جميع الشقق لها تحذيرات مرسلة بالفعل.
-              </p>
-            ) : (
-              <>
-                <p className="mb-3 text-sm text-muted-foreground">
-                  اختر الشقق لإرسال تحذيرات المتابعة:
-                </p>
-                <div className="mb-4 rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-10"></TableHead>
-                        <TableHead>الشقة</TableHead>
-                        <TableHead>العميل</TableHead>
-                        <TableHead>الإجمالي</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {eligible.map((inv) => (
-                        <TableRow key={inv.invoiceId}>
-                          <TableCell>
-                            <Checkbox
-                              checked={selected.has(inv.invoiceId)}
-                              onCheckedChange={() => toggle(inv.invoiceId)}
-                              disabled={sending}
-                            />
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {inv.label}
-                          </TableCell>
-                          <TableCell>{inv.clientName}</TableCell>
-                          <TableCell>
-                            {inv.total.toLocaleString("ar-EG")}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="ghost"
-                    onClick={() => setOpen(false)}
-                    disabled={sending}
-                  >
-                    إلغاء
-                  </Button>
-                  <Button
-                    onClick={handleSend}
-                    disabled={selected.size === 0 || sending}
-                  >
-                    {sending ? "جارٍ الإرسال..." : `إرسال (${selected.size})`}
-                  </Button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </>
   )
 }

@@ -24,6 +24,7 @@ import {
   listBatches,
   softDeleteBatch,
 } from "@/lib/server/batch-service"
+import { formatArabicDate } from "@/lib/utils"
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -184,7 +185,7 @@ function BatchesListPage() {
                   <TableCell>{b.sent}</TableCell>
                   <TableCell>{b.failed}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {b.createdAt}
+                    {formatArabicDate(b.createdAt)}
                   </TableCell>
                   <TableCell className="text-end">
                     <div className="flex justify-end gap-1">

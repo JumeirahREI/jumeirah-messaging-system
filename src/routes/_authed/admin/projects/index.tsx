@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { listProjects } from "@/lib/server/reference-data"
+import { formatArabicDate } from "@/lib/utils"
 
 export const Route = createFileRoute("/_authed/admin/projects/")({
   loader: async () => await listProjects(),
@@ -46,7 +47,7 @@ function ProjectsListPage() {
                 <TableRow key={p.id}>
                   <TableCell className="font-medium">{p.title}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {p.createdAt}
+                    {formatArabicDate(p.createdAt)}
                   </TableCell>
                   <TableCell className="text-end">
                     <Button

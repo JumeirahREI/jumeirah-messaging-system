@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { getRecentBatches } from "@/lib/server/batch-service"
+import { formatArabicDate } from "@/lib/utils"
 
 const ERROR_MESSAGES: Record<string, string> = {
   "admin-only": "هذه الصفحة متاحة للمسؤولين فقط",
@@ -106,7 +107,7 @@ function Dashboard() {
                     <TableCell>{b.sent}</TableCell>
                     <TableCell>{b.failed}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {b.createdAt}
+                      {formatArabicDate(b.createdAt)}
                     </TableCell>
                   </TableRow>
                 ))}
