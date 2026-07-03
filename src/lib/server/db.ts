@@ -9,9 +9,14 @@ declare global {
   var __db: LibSQLDatabase<typeof schema> | undefined
 }
 
-function createDb(): { client: Client; db: LibSQLDatabase<typeof schema> } {
+function createDb(): {
+  client: Client
+  db: LibSQLDatabase<typeof schema>
+} {
   const url = process.env.TURSO_DATABASE_URL
-  if (!url) throw new Error("TURSO_DATABASE_URL is not set")
+  if (!url) {
+    throw new Error("TURSO_DATABASE_URL is not set")
+  }
   const authToken = process.env.TURSO_AUTH_TOKEN
   const client = createClient(
     url.startsWith("file:") ? { url } : { url, authToken }
@@ -26,19 +31,26 @@ const globalForDb = globalThis as typeof globalThis & {
   __db?: LibSQLDatabase<typeof schema>
 }
 
-const singleton = globalForDb.__dbClient
-  ? {
-      client: globalForDb.__dbClient,
-      db: globalForDb.__db as LibSQLDatabase<typeof schema>,
-    }
-  : createDb()
-
-if (!globalForDb.__dbClient) {
-  globalForDb.__dbClient = singleton.client
-  globalForDb.__db = singleton.db
+function getSingleton(): {
+  client: Client
+  db: LibSQLDatabase<typeof schema>
+} {
+  if (globalForDb.__dbClient && globalForDb.__db) {
+    return { client: globalForDb.__dbClient, db: globalForDb.__db }
+  }
+  const created = createDb()
+  globalForDb.__dbClient = created.client
+  globalForDb.__db = created.db
+  return created
 }
 
-export const client: Client = singleton.client
-export const db: LibSQLDatabase<typeof schema> = singleton.db
+const hasServerEnv = Boolean(process.env.TURSO_DATABASE_URL)
 
-export type DB = typeof db
+export const client: Client = hasServerEnv
+  ? getSingleton().client
+  : (null as unknown as Client)
+export const db: LibSQLDatabase<typeof schema> = hasServerEnv
+  ? getSingleton().db
+  : (null as unknown as LibSQLDatabase<typeof schema>)
+
+export type DB = LibSQLDatabase<typeof schema>

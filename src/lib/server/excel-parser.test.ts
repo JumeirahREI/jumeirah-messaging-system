@@ -6,15 +6,18 @@ import type { ParsedInvoice } from "./excel-parser"
 import { isExcelParseError, parseInvoiceExcel } from "./excel-parser"
 
 const TOTAL_MARKER = "الإجمالي"
+const TOTAL_MARKER_NO_HAMZA = "الاجمالي"
+
+type InvoiceRow = {
+  number?: number | null
+  client?: string | null
+  apartment?: number | string | null
+  type?: string | null
+  amounts?: Array<number | null>
+}
 
 async function buildInvoiceBuffer(
-  rows: Array<{
-    number?: number | null
-    client?: string | null
-    apartment?: string | null
-    type?: string | null
-    amounts?: Array<number | null>
-  }>,
+  rows: InvoiceRow[],
   opts: { mergeClient?: boolean; mergeApartment?: boolean } = {}
 ): Promise<Buffer> {
   const wb = new Workbook()
@@ -52,6 +55,30 @@ async function buildInvoiceBuffer(
     }
   }
 
+  const arrayBuffer = await wb.xlsx.writeBuffer()
+  return Buffer.from(arrayBuffer)
+}
+
+async function buildMultiSheetBuffer(
+  sheets: Array<{ name: string; rows: InvoiceRow[] }>
+): Promise<Buffer> {
+  const wb = new Workbook()
+  for (const sheet of sheets) {
+    const ws = wb.addWorksheet(sheet.name)
+    sheet.rows.forEach((r, idx) => {
+      const row = ws.getRow(idx + 1)
+      if (r.number !== undefined) row.getCell(1).value = r.number
+      if (r.client !== undefined) row.getCell(2).value = r.client
+      if (r.apartment !== undefined) row.getCell(3).value = r.apartment
+      if (r.type !== undefined) row.getCell(4).value = r.type
+      if (r.amounts) {
+        r.amounts.forEach((amt, i) => {
+          row.getCell(5 + i).value = amt
+        })
+      }
+      row.commit()
+    })
+  }
   const arrayBuffer = await wb.xlsx.writeBuffer()
   return Buffer.from(arrayBuffer)
 }
@@ -248,6 +275,258 @@ describe("excel-parser", () => {
       expect(result).toHaveLength(1)
       expect(result[0]?.label).toBe("A101")
       expect(result[0]?.total).toBe(500)
+    })
+  })
+
+  describe("parseInvoiceExcel — real file format", () => {
+    it("prefixes numeric apartment labels with the tower letter from the sheet name", async () => {
+      const buffer = await buildMultiSheetBuffer([
+        {
+          name: "برجA",
+          rows: [
+            {
+              number: 1,
+              client: "عبدالله زبارة",
+              apartment: 101,
+              type: "استهلاك كهرباء",
+              amounts: [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                22225.36,
+              ],
+            },
+            {
+              number: null,
+              client: "عبدالله زبارة",
+              apartment: 101,
+              type: "استهلاك ماء",
+              amounts: [null, null, null, null, null, null, null, null, 13000],
+            },
+            {
+              number: null,
+              client: "عبدالله زبارة",
+              apartment: 101,
+              type: TOTAL_MARKER_NO_HAMZA,
+              amounts: [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                61894.98,
+              ],
+            },
+          ],
+        },
+      ])
+      const result = await parseInvoiceExcel(buffer)
+      expect(result).toHaveLength(1)
+      expect(result[0]?.label).toBe("A101")
+      expect(result[0]?.client_name).toBe("عبدالله زبارة")
+      expectClose(result[0]?.total ?? 0, 61894.98)
+    })
+
+    it("parses multiple tower sheets, disambiguating identical apartment numbers", async () => {
+      const buffer = await buildMultiSheetBuffer([
+        {
+          name: "برجA",
+          rows: [
+            {
+              number: 1,
+              client: "عميل أ",
+              apartment: 101,
+              type: "كهرباء",
+              amounts: [null, null, null, null, null, null, null, null, 1000],
+            },
+            {
+              number: null,
+              client: "عميل أ",
+              apartment: 101,
+              type: TOTAL_MARKER_NO_HAMZA,
+              amounts: [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1000,
+              ],
+            },
+          ],
+        },
+        {
+          name: "برجB",
+          rows: [
+            {
+              number: 1,
+              client: "عميل ب",
+              apartment: 101,
+              type: "كهرباء",
+              amounts: [null, null, null, null, null, null, null, null, 2000],
+            },
+            {
+              number: null,
+              client: "عميل ب",
+              apartment: 101,
+              type: TOTAL_MARKER_NO_HAMZA,
+              amounts: [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                2000,
+              ],
+            },
+          ],
+        },
+      ])
+      const result = await parseInvoiceExcel(buffer)
+      expect(result).toHaveLength(2)
+      const byLabel = new Map(result.map((r) => [r.label, r]))
+      expect(byLabel.has("A101")).toBe(true)
+      expect(byLabel.has("B101")).toBe(true)
+      expect(byLabel.get("A101")?.client_name).toBe("عميل أ")
+      expect(byLabel.get("B101")?.client_name).toBe("عميل ب")
+    })
+
+    it("accepts الاجمالي without hamza as the total marker", async () => {
+      const buffer = await buildInvoiceBuffer([
+        {
+          number: 1,
+          client: "X",
+          apartment: "A101",
+          type: "كهرباء",
+          amounts: [100],
+        },
+        {
+          number: null,
+          client: "X",
+          apartment: "A101",
+          type: TOTAL_MARKER_NO_HAMZA,
+          amounts: [null, 500],
+        },
+      ])
+      const result = await parseInvoiceExcel(buffer)
+      expect(result).toHaveLength(1)
+      expect(result[0]?.total).toBe(500)
+    })
+
+    it("extracts the total from the last numeric column of the اجمالي row", async () => {
+      const buffer = await buildMultiSheetBuffer([
+        {
+          name: "برجA",
+          rows: [
+            {
+              number: 1,
+              client: "X",
+              apartment: 101,
+              type: "استهلاك كهرباء",
+              amounts: [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                22225.36,
+              ],
+            },
+            {
+              number: null,
+              client: "X",
+              apartment: 101,
+              type: "استهلاك ماء",
+              amounts: [null, null, null, null, null, null, null, null, 13000],
+            },
+            {
+              number: null,
+              client: "X",
+              apartment: 101,
+              type: TOTAL_MARKER_NO_HAMZA,
+              amounts: [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                61894.98,
+              ],
+            },
+          ],
+        },
+      ])
+      const result = await parseInvoiceExcel(buffer)
+      expect(result).toHaveLength(1)
+      expectClose(result[0]?.total ?? 0, 61894.98)
+    })
+
+    it("prefixes digit-leading string apartment labels with the tower letter", async () => {
+      const buffer = await buildMultiSheetBuffer([
+        {
+          name: "برجA",
+          rows: [
+            {
+              number: 1,
+              client: "X",
+              apartment: "205-305",
+              type: "كهرباء",
+              amounts: [100],
+            },
+            {
+              number: null,
+              client: "X",
+              apartment: "205-305",
+              type: TOTAL_MARKER_NO_HAMZA,
+              amounts: [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                750,
+              ],
+            },
+          ],
+        },
+      ])
+      const result = await parseInvoiceExcel(buffer)
+      expect(result).toHaveLength(1)
+      expect(result[0]?.label).toBe("A205-305")
+      expect(result[0]?.total).toBe(750)
     })
   })
 

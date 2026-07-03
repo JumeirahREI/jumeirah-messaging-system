@@ -1,6 +1,8 @@
 import type { Row, Worksheet } from "exceljs"
-import { Workbook } from "exceljs"
+import ExcelJS from "exceljs"
 import type { Buffer } from "node:buffer"
+
+const { Workbook } = ExcelJS
 
 export type ParsedInvoice = {
   label: string
@@ -19,8 +21,9 @@ export type ParseError = {
   label?: string
 }
 
-const TOTAL_MARKER = "الإجمالي"
+const TOTAL_MARKERS = new Set(["الإجمالي", "الاجمالي"])
 const HEADER_TYPE_MARKER = "النوع"
+const HEADER_APARTMENT_MARKER = "رقم الشقة"
 const COL_CLIENT = 2
 const COL_APARTMENT = 3
 const COL_TYPE = 4
@@ -146,10 +149,46 @@ function isHeaderRow(
     return true
   }
   const apartment = resolveCell(row, COL_APARTMENT)
-  if (typeof apartment === "string" && apartment.trim() === "رقم الشقة") {
+  if (
+    typeof apartment === "string" &&
+    apartment.trim() === HEADER_APARTMENT_MARKER
+  ) {
     return true
   }
   return false
+}
+
+function isTotalRow(typeValue: CellValue): boolean {
+  return typeof typeValue === "string" && TOTAL_MARKERS.has(typeValue.trim())
+}
+
+function deriveTowerPrefix(sheetName: string): string {
+  const match = /[A-Za-z]+$/.exec(sheetName.trim())
+  return match ? match[0] : ""
+}
+
+function deriveApartmentLabel(
+  apartment: CellValue,
+  towerPrefix: string
+): string | null {
+  if (apartment === null) return null
+  if (typeof apartment === "number") {
+    return Number.isFinite(apartment) ? `${towerPrefix}${apartment}` : null
+  }
+  if (typeof apartment === "string") {
+    const trimmed = apartment.trim()
+    if (trimmed.length === 0 || trimmed === HEADER_APARTMENT_MARKER) return null
+    if (/^\d/.test(trimmed)) return `${towerPrefix}${trimmed}`
+    return trimmed
+  }
+  return null
+}
+
+type Group = {
+  label: string
+  client_name: string
+  totalRow: number | null
+  sheet: Worksheet
 }
 
 export async function parseInvoiceExcel(
@@ -164,62 +203,55 @@ export async function parseInvoiceExcel(
       message: "الملف لا يحتوي على أي ورقة بيانات",
     })
   }
-  const sheet: Worksheet = workbook.worksheets[0]
 
-  const resolveCell = buildMergeResolver(sheet)
-  const rowCount = sheet.rowCount
-  if (rowCount === 0) {
-    throwParseError({
-      code: "empty_file",
-      message: "الملف فارغ",
-    })
-  }
-
-  type Group = {
-    label: string
-    client_name: string
-    totalRow: number | null
-  }
   const groups = new Map<string, Group>()
   const order: string[] = []
-  let currentLabel: string | null = null
 
-  for (let r = 1; r <= rowCount; r++) {
-    const row = sheet.getRow(r)
-    if (!rowHasContent(row)) continue
-    if (isHeaderRow(sheet, resolveCell, r)) continue
+  for (const sheet of workbook.worksheets) {
+    const towerPrefix = deriveTowerPrefix(sheet.name)
+    const resolveCell = buildMergeResolver(sheet)
+    const rowCount = sheet.rowCount
+    if (rowCount === 0) continue
 
-    const apartment = resolveCell(r, COL_APARTMENT)
-    const typeValue = readCell(row.getCell(COL_TYPE).value)
+    let currentLabel: string | null = null
+    for (let r = 1; r <= rowCount; r++) {
+      const row = sheet.getRow(r)
+      if (!rowHasContent(row)) continue
+      if (isHeaderRow(sheet, resolveCell, r)) continue
 
-    if (typeof apartment === "string" && apartment.trim().length > 0) {
-      currentLabel = apartment.trim()
-      if (!groups.has(currentLabel)) {
-        const client = resolveCell(r, COL_CLIENT)
-        groups.set(currentLabel, {
-          label: currentLabel,
-          client_name: typeof client === "string" ? client.trim() : "",
-          totalRow: null,
-        })
-        order.push(currentLabel)
+      const apartment = resolveCell(r, COL_APARTMENT)
+      const label = deriveApartmentLabel(apartment, towerPrefix)
+      const typeValue = readCell(row.getCell(COL_TYPE).value)
+
+      if (label !== null) {
+        currentLabel = label
+        if (!groups.has(currentLabel)) {
+          const client = resolveCell(r, COL_CLIENT)
+          groups.set(currentLabel, {
+            label: currentLabel,
+            client_name: typeof client === "string" ? client.trim() : "",
+            totalRow: null,
+            sheet,
+          })
+          order.push(currentLabel)
+        }
       }
-    }
 
-    if (
-      typeof typeValue === "string" &&
-      typeValue.trim() === TOTAL_MARKER &&
-      currentLabel !== null
-    ) {
+      if (currentLabel === null) continue
+
       const g = groups.get(currentLabel)
       if (!g) continue
-      if (g.totalRow !== null) {
-        throwParseError({
-          code: "duplicate_total",
-          message: `الشقة ${currentLabel} تحتوي على أكثر من صف "الإجمالي"`,
-          label: currentLabel,
-        })
+
+      if (isTotalRow(typeValue)) {
+        if (g.totalRow !== null) {
+          throwParseError({
+            code: "duplicate_total",
+            message: `الشقة ${currentLabel} تحتوي على أكثر من صف "الإجمالي"`,
+            label: currentLabel,
+          })
+        }
+        g.totalRow = r
       }
-      g.totalRow = r
     }
   }
 
@@ -241,7 +273,7 @@ export async function parseInvoiceExcel(
         label,
       })
     }
-    const total = extractTotalFromRow(sheet.getRow(g.totalRow))
+    const total = extractTotalFromRow(g.sheet.getRow(g.totalRow))
     if (total === null) {
       throwParseError({
         code: "no_numeric_total",
