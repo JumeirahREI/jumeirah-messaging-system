@@ -265,7 +265,11 @@ function DraftReview({
 
       <div className="flex gap-2">
         <Button
-          disabled={!acknowledged || preview.matched.length === 0 || sending}
+          disabled={
+            (preview.noContacts.length > 0 && !acknowledged) ||
+            preview.matched.length === 0 ||
+            sending
+          }
           onClick={handleSend}
         >
           {sending ? "جارٍ الإرسال..." : "إرسال"}

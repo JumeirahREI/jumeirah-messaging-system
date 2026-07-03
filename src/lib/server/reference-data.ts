@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start"
 import bcrypt from "bcryptjs"
-import { and, desc, eq, isNull, sql } from "drizzle-orm"
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm"
 
 import type { SessionUser } from "./auth.server"
 import { requireRole } from "./auth.server"
@@ -151,6 +151,40 @@ export const softDeleteProject = createServerFn({ method: "POST" })
     if (result.length === 0) {
       return { ok: false, error: "المشروع غير موجود" } as const
     }
+
+    const towerRows = await db
+      .select({ id: towers.id })
+      .from(towers)
+      .where(and(eq(towers.projectId, data.id), isNull(towers.deletedAt)))
+    const towerIds = towerRows.map((t) => t.id)
+    if (towerIds.length > 0) {
+      await db
+        .update(towers)
+        .set({ deletedAt: now })
+        .where(inArray(towers.id, towerIds))
+
+      const aptRows = await db
+        .select({ id: apartments.id })
+        .from(apartments)
+        .where(
+          and(
+            inArray(apartments.towerId, towerIds),
+            isNull(apartments.deletedAt)
+          )
+        )
+      const aptIds = aptRows.map((a) => a.id)
+      if (aptIds.length > 0) {
+        await db
+          .update(apartments)
+          .set({ deletedAt: now })
+          .where(inArray(apartments.id, aptIds))
+        await db
+          .update(apartmentContacts)
+          .set({ deletedAt: now })
+          .where(inArray(apartmentContacts.apartmentId, aptIds))
+      }
+    }
+
     return { ok: true, data: result[0] } as const
   })
 
@@ -287,6 +321,23 @@ export const softDeleteTower = createServerFn({ method: "POST" })
     if (result.length === 0) {
       return { ok: false, error: "البرج غير موجود" } as const
     }
+
+    const aptRows = await db
+      .select({ id: apartments.id })
+      .from(apartments)
+      .where(and(eq(apartments.towerId, data.id), isNull(apartments.deletedAt)))
+    const aptIds = aptRows.map((a) => a.id)
+    if (aptIds.length > 0) {
+      await db
+        .update(apartments)
+        .set({ deletedAt: now })
+        .where(inArray(apartments.id, aptIds))
+      await db
+        .update(apartmentContacts)
+        .set({ deletedAt: now })
+        .where(inArray(apartmentContacts.apartmentId, aptIds))
+    }
+
     return { ok: true, data: result[0] } as const
   })
 
@@ -461,6 +512,17 @@ export const softDeleteApartment = createServerFn({ method: "POST" })
     if (result.length === 0) {
       return { ok: false, error: "الشقة غير موجودة" } as const
     }
+
+    await db
+      .update(apartmentContacts)
+      .set({ deletedAt: now })
+      .where(
+        and(
+          eq(apartmentContacts.apartmentId, data.id),
+          isNull(apartmentContacts.deletedAt)
+        )
+      )
+
     return { ok: true, data: result[0] } as const
   })
 
@@ -890,7 +952,7 @@ export const createUser = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const user = await requireRole("admin")
     return safeMutation(async () => {
-      const hash = await bcrypt.hash(data.password, 10)
+      const hash = await bcrypt.hash(data.password, 12)
       const [row] = await db
         .insert(users)
         .values({
@@ -935,6 +997,25 @@ export const updateUser = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const user = await requireRole("admin")
     return safeMutation(async () => {
+      if (data.isAdmin === false) {
+        const target = await db
+          .select({ isAdmin: users.isAdmin })
+          .from(users)
+          .where(and(eq(users.id, data.id), isNull(users.deletedAt)))
+          .limit(1)
+        if (target.length > 0 && target[0].isAdmin) {
+          const adminCount = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(users)
+            .where(and(eq(users.isAdmin, true), isNull(users.deletedAt)))
+          if ((adminCount[0]?.count ?? 0) <= 1) {
+            return {
+              ok: false,
+              error: "لا يمكن تخفيض صلاحيات آخر مسؤول",
+            } as const
+          }
+        }
+      }
       const row = await db
         .update(users)
         .set({
@@ -971,7 +1052,7 @@ export const resetUserPassword = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const user = await requireRole("admin")
-    const hash = await bcrypt.hash(data.password, 10)
+    const hash = await bcrypt.hash(data.password, 12)
     const row = await db
       .update(users)
       .set({ password: hash, updatedBy: user.id, updatedAt: now })
@@ -994,6 +1075,20 @@ export const softDeleteUser = createServerFn({ method: "POST" })
     const user = await requireRole("admin")
     if (data.id === user.id) {
       return { ok: false, error: "لا يمكن حذف حسابك الحالي" } as const
+    }
+    const target = await db
+      .select({ isAdmin: users.isAdmin })
+      .from(users)
+      .where(and(eq(users.id, data.id), isNull(users.deletedAt)))
+      .limit(1)
+    if (target.length > 0 && target[0].isAdmin) {
+      const adminCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(users)
+        .where(and(eq(users.isAdmin, true), isNull(users.deletedAt)))
+      if ((adminCount[0]?.count ?? 0) <= 1) {
+        return { ok: false, error: "لا يمكن حذف آخر مسؤول" } as const
+      }
     }
     const result = await db
       .update(users)

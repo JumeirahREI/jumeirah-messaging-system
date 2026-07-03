@@ -35,13 +35,19 @@ export type BatchRow = {
 export const listBatches = createServerFn({ method: "GET" })
   .validator((input: unknown) => {
     if (input === undefined || input === null) {
-      return { page: 1, status: "all" as const, includeArchived: false }
+      return {
+        page: 1,
+        status: "all" as const,
+        includeArchived: false,
+        projectId: null as number | null,
+      }
     }
     if (typeof input !== "object") throw new Error("إدخال غير صالح")
     const page = (input as { page?: unknown }).page
     const status = (input as { status?: unknown }).status
     const includeArchived = (input as { includeArchived?: unknown })
       .includeArchived
+    const projectId = (input as { projectId?: unknown }).projectId
     const statusNorm: "all" | BatchStatus =
       status === "draft" || status === "sending" || status === "completed"
         ? status
@@ -50,6 +56,7 @@ export const listBatches = createServerFn({ method: "GET" })
       page: typeof page === "number" && page > 0 ? page : 1,
       status: statusNorm,
       includeArchived: includeArchived === true,
+      projectId: typeof projectId === "number" ? projectId : null,
     }
   })
   .handler(async ({ data }) => {
@@ -63,6 +70,9 @@ export const listBatches = createServerFn({ method: "GET" })
     }
     if (data.status !== "all") {
       conditions.push(eq(batchSessions.status, data.status))
+    }
+    if (data.projectId !== null) {
+      conditions.push(eq(batchSessions.projectId, data.projectId))
     }
 
     const rows = await db
@@ -592,6 +602,7 @@ export const softDeleteBatch = createServerFn({ method: "POST" })
         error: "لا يمكن حذف الدفعة (غير موجودة أو ليست مسودة)",
       } as const
     }
+    await db.delete(invoices).where(eq(invoices.batchId, data.id))
     return { ok: true, data: rows[0] } as const
   })
 
@@ -1105,7 +1116,7 @@ export const sendWarning = createServerFn({ method: "POST" })
       return { ok: false, error: "لم يتم اختيار فواتير" } as const
     }
 
-    const invoiceRows = await db
+    let invoiceRows = await db
       .select({
         id: invoices.id,
         apartmentId: invoices.apartmentId,
@@ -1121,6 +1132,27 @@ export const sendWarning = createServerFn({ method: "POST" })
 
     if (invoiceRows.length === 0) {
       return { ok: false, error: "الفواتير غير موجودة" } as const
+    }
+
+    const existingWarnings = await db
+      .select({ invoiceId: messages.invoiceId })
+      .from(messages)
+      .where(
+        and(
+          inArray(messages.invoiceId, data.invoiceIds),
+          eq(messages.templateType, "warning")
+        )
+      )
+    if (existingWarnings.length > 0) {
+      const alreadyWarned = new Set(existingWarnings.map((w) => w.invoiceId))
+      const validInvoices = invoiceRows.filter((i) => !alreadyWarned.has(i.id))
+      if (validInvoices.length === 0) {
+        return {
+          ok: false,
+          error: "تم إرسال تحذيرات لهذه الفواتير بالفعل",
+        } as const
+      }
+      invoiceRows = validInvoices
     }
 
     const apartmentIds = invoiceRows.map((i) => i.apartmentId)
