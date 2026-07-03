@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, Link } from "@tanstack/react-router"
 import { useEffect } from "react"
 import { toast } from "sonner"
 
@@ -34,7 +34,10 @@ function Dashboard() {
         </p>
       </div>
       <div className="flex gap-2">
-        <Button>دفعة جديدة</Button>
+        <Button render={<Link to="/batches/new" />}>دفعة جديدة</Button>
+        <Button variant="outline" render={<Link to="/batches" />}>
+          الدفعات
+        </Button>
       </div>
     </div>
   )

@@ -13,7 +13,10 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
+import { Route as AuthedBatchesIndexRouteImport } from './routes/_authed/batches/index'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
+import { Route as AuthedBatchesNewRouteImport } from './routes/_authed/batches/new'
+import { Route as AuthedBatchesBatchIdIndexRouteImport } from './routes/_authed/batches/$batchId/index'
 import { Route as AuthedAdminUsersIndexRouteImport } from './routes/_authed/admin/users/index'
 import { Route as AuthedAdminProjectsIndexRouteImport } from './routes/_authed/admin/projects/index'
 import { Route as AuthedAdminUsersNewRouteImport } from './routes/_authed/admin/users/new'
@@ -44,11 +47,27 @@ const AuthedAdminRoute = AuthedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedBatchesIndexRoute = AuthedBatchesIndexRouteImport.update({
+  id: '/batches/',
+  path: '/batches/',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
+const AuthedBatchesNewRoute = AuthedBatchesNewRouteImport.update({
+  id: '/batches/new',
+  path: '/batches/new',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedBatchesBatchIdIndexRoute =
+  AuthedBatchesBatchIdIndexRouteImport.update({
+    id: '/batches/$batchId/',
+    path: '/batches/$batchId/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
 const AuthedAdminUsersIndexRoute = AuthedAdminUsersIndexRouteImport.update({
   id: '/users/',
   path: '/users/',
@@ -113,11 +132,14 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
   '/login': typeof LoginRoute
   '/admin': typeof AuthedAdminRouteWithChildren
+  '/batches/new': typeof AuthedBatchesNewRoute
   '/admin/': typeof AuthedAdminIndexRoute
+  '/batches/': typeof AuthedBatchesIndexRoute
   '/admin/projects/new': typeof AuthedAdminProjectsNewRoute
   '/admin/users/new': typeof AuthedAdminUsersNewRoute
   '/admin/projects/': typeof AuthedAdminProjectsIndexRoute
   '/admin/users/': typeof AuthedAdminUsersIndexRoute
+  '/batches/$batchId/': typeof AuthedBatchesBatchIdIndexRoute
   '/admin/projects/$projectId/': typeof AuthedAdminProjectsProjectIdIndexRoute
   '/admin/users/$userId/': typeof AuthedAdminUsersUserIdIndexRoute
   '/admin/projects/$projectId/towers/new': typeof AuthedAdminProjectsProjectIdTowersNewRoute
@@ -128,11 +150,14 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/': typeof AuthedIndexRoute
+  '/batches/new': typeof AuthedBatchesNewRoute
   '/admin': typeof AuthedAdminIndexRoute
+  '/batches': typeof AuthedBatchesIndexRoute
   '/admin/projects/new': typeof AuthedAdminProjectsNewRoute
   '/admin/users/new': typeof AuthedAdminUsersNewRoute
   '/admin/projects': typeof AuthedAdminProjectsIndexRoute
   '/admin/users': typeof AuthedAdminUsersIndexRoute
+  '/batches/$batchId': typeof AuthedBatchesBatchIdIndexRoute
   '/admin/projects/$projectId': typeof AuthedAdminProjectsProjectIdIndexRoute
   '/admin/users/$userId': typeof AuthedAdminUsersUserIdIndexRoute
   '/admin/projects/$projectId/towers/new': typeof AuthedAdminProjectsProjectIdTowersNewRoute
@@ -146,11 +171,14 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_authed/admin': typeof AuthedAdminRouteWithChildren
   '/_authed/': typeof AuthedIndexRoute
+  '/_authed/batches/new': typeof AuthedBatchesNewRoute
   '/_authed/admin/': typeof AuthedAdminIndexRoute
+  '/_authed/batches/': typeof AuthedBatchesIndexRoute
   '/_authed/admin/projects/new': typeof AuthedAdminProjectsNewRoute
   '/_authed/admin/users/new': typeof AuthedAdminUsersNewRoute
   '/_authed/admin/projects/': typeof AuthedAdminProjectsIndexRoute
   '/_authed/admin/users/': typeof AuthedAdminUsersIndexRoute
+  '/_authed/batches/$batchId/': typeof AuthedBatchesBatchIdIndexRoute
   '/_authed/admin/projects/$projectId/': typeof AuthedAdminProjectsProjectIdIndexRoute
   '/_authed/admin/users/$userId/': typeof AuthedAdminUsersUserIdIndexRoute
   '/_authed/admin/projects/$projectId/towers/new': typeof AuthedAdminProjectsProjectIdTowersNewRoute
@@ -164,11 +192,14 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin'
+    | '/batches/new'
     | '/admin/'
+    | '/batches/'
     | '/admin/projects/new'
     | '/admin/users/new'
     | '/admin/projects/'
     | '/admin/users/'
+    | '/batches/$batchId/'
     | '/admin/projects/$projectId/'
     | '/admin/users/$userId/'
     | '/admin/projects/$projectId/towers/new'
@@ -179,11 +210,14 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/'
+    | '/batches/new'
     | '/admin'
+    | '/batches'
     | '/admin/projects/new'
     | '/admin/users/new'
     | '/admin/projects'
     | '/admin/users'
+    | '/batches/$batchId'
     | '/admin/projects/$projectId'
     | '/admin/users/$userId'
     | '/admin/projects/$projectId/towers/new'
@@ -196,11 +230,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/_authed/admin'
     | '/_authed/'
+    | '/_authed/batches/new'
     | '/_authed/admin/'
+    | '/_authed/batches/'
     | '/_authed/admin/projects/new'
     | '/_authed/admin/users/new'
     | '/_authed/admin/projects/'
     | '/_authed/admin/users/'
+    | '/_authed/batches/$batchId/'
     | '/_authed/admin/projects/$projectId/'
     | '/_authed/admin/users/$userId/'
     | '/_authed/admin/projects/$projectId/towers/new'
@@ -244,12 +281,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/batches/': {
+      id: '/_authed/batches/'
+      path: '/batches'
+      fullPath: '/batches/'
+      preLoaderRoute: typeof AuthedBatchesIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/admin/': {
       id: '/_authed/admin/'
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AuthedAdminIndexRouteImport
       parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/batches/new': {
+      id: '/_authed/batches/new'
+      path: '/batches/new'
+      fullPath: '/batches/new'
+      preLoaderRoute: typeof AuthedBatchesNewRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/batches/$batchId/': {
+      id: '/_authed/batches/$batchId/'
+      path: '/batches/$batchId'
+      fullPath: '/batches/$batchId/'
+      preLoaderRoute: typeof AuthedBatchesBatchIdIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/_authed/admin/users/': {
       id: '/_authed/admin/users/'
@@ -364,11 +422,17 @@ const AuthedAdminRouteWithChildren = AuthedAdminRoute._addFileChildren(
 interface AuthedRouteChildren {
   AuthedAdminRoute: typeof AuthedAdminRouteWithChildren
   AuthedIndexRoute: typeof AuthedIndexRoute
+  AuthedBatchesNewRoute: typeof AuthedBatchesNewRoute
+  AuthedBatchesIndexRoute: typeof AuthedBatchesIndexRoute
+  AuthedBatchesBatchIdIndexRoute: typeof AuthedBatchesBatchIdIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAdminRoute: AuthedAdminRouteWithChildren,
   AuthedIndexRoute: AuthedIndexRoute,
+  AuthedBatchesNewRoute: AuthedBatchesNewRoute,
+  AuthedBatchesIndexRoute: AuthedBatchesIndexRoute,
+  AuthedBatchesBatchIdIndexRoute: AuthedBatchesBatchIdIndexRoute,
 }
 
 const AuthedRouteWithChildren =
