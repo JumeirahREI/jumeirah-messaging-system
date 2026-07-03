@@ -14,6 +14,16 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
+import { Route as AuthedAdminUsersIndexRouteImport } from './routes/_authed/admin/users/index'
+import { Route as AuthedAdminProjectsIndexRouteImport } from './routes/_authed/admin/projects/index'
+import { Route as AuthedAdminUsersNewRouteImport } from './routes/_authed/admin/users/new'
+import { Route as AuthedAdminProjectsNewRouteImport } from './routes/_authed/admin/projects/new'
+import { Route as AuthedAdminUsersUserIdIndexRouteImport } from './routes/_authed/admin/users/$userId/index'
+import { Route as AuthedAdminProjectsProjectIdIndexRouteImport } from './routes/_authed/admin/projects/$projectId/index'
+import { Route as AuthedAdminProjectsProjectIdTowersNewRouteImport } from './routes/_authed/admin/projects/$projectId/towers/new'
+import { Route as AuthedAdminProjectsProjectIdTowersTowerIdIndexRouteImport } from './routes/_authed/admin/projects/$projectId/towers/$towerId/index'
+import { Route as AuthedAdminProjectsProjectIdTowersTowerIdApartmentsNewRouteImport } from './routes/_authed/admin/projects/$projectId/towers/$towerId/apartments/new'
+import { Route as AuthedAdminProjectsProjectIdTowersTowerIdApartmentsApartmentIdIndexRouteImport } from './routes/_authed/admin/projects/$projectId/towers/$towerId/apartments/$apartmentId/index'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -39,17 +49,96 @@ const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
+const AuthedAdminUsersIndexRoute = AuthedAdminUsersIndexRouteImport.update({
+  id: '/users/',
+  path: '/users/',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
+const AuthedAdminProjectsIndexRoute =
+  AuthedAdminProjectsIndexRouteImport.update({
+    id: '/projects/',
+    path: '/projects/',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
+const AuthedAdminUsersNewRoute = AuthedAdminUsersNewRouteImport.update({
+  id: '/users/new',
+  path: '/users/new',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
+const AuthedAdminProjectsNewRoute = AuthedAdminProjectsNewRouteImport.update({
+  id: '/projects/new',
+  path: '/projects/new',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
+const AuthedAdminUsersUserIdIndexRoute =
+  AuthedAdminUsersUserIdIndexRouteImport.update({
+    id: '/users/$userId/',
+    path: '/users/$userId/',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
+const AuthedAdminProjectsProjectIdIndexRoute =
+  AuthedAdminProjectsProjectIdIndexRouteImport.update({
+    id: '/projects/$projectId/',
+    path: '/projects/$projectId/',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
+const AuthedAdminProjectsProjectIdTowersNewRoute =
+  AuthedAdminProjectsProjectIdTowersNewRouteImport.update({
+    id: '/projects/$projectId/towers/new',
+    path: '/projects/$projectId/towers/new',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
+const AuthedAdminProjectsProjectIdTowersTowerIdIndexRoute =
+  AuthedAdminProjectsProjectIdTowersTowerIdIndexRouteImport.update({
+    id: '/projects/$projectId/towers/$towerId/',
+    path: '/projects/$projectId/towers/$towerId/',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
+const AuthedAdminProjectsProjectIdTowersTowerIdApartmentsNewRoute =
+  AuthedAdminProjectsProjectIdTowersTowerIdApartmentsNewRouteImport.update({
+    id: '/projects/$projectId/towers/$towerId/apartments/new',
+    path: '/projects/$projectId/towers/$towerId/apartments/new',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
+const AuthedAdminProjectsProjectIdTowersTowerIdApartmentsApartmentIdIndexRoute =
+  AuthedAdminProjectsProjectIdTowersTowerIdApartmentsApartmentIdIndexRouteImport.update(
+    {
+      id: '/projects/$projectId/towers/$towerId/apartments/$apartmentId/',
+      path: '/projects/$projectId/towers/$towerId/apartments/$apartmentId/',
+      getParentRoute: () => AuthedAdminRoute,
+    } as any,
+  )
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
   '/login': typeof LoginRoute
   '/admin': typeof AuthedAdminRouteWithChildren
   '/admin/': typeof AuthedAdminIndexRoute
+  '/admin/projects/new': typeof AuthedAdminProjectsNewRoute
+  '/admin/users/new': typeof AuthedAdminUsersNewRoute
+  '/admin/projects/': typeof AuthedAdminProjectsIndexRoute
+  '/admin/users/': typeof AuthedAdminUsersIndexRoute
+  '/admin/projects/$projectId/': typeof AuthedAdminProjectsProjectIdIndexRoute
+  '/admin/users/$userId/': typeof AuthedAdminUsersUserIdIndexRoute
+  '/admin/projects/$projectId/towers/new': typeof AuthedAdminProjectsProjectIdTowersNewRoute
+  '/admin/projects/$projectId/towers/$towerId/': typeof AuthedAdminProjectsProjectIdTowersTowerIdIndexRoute
+  '/admin/projects/$projectId/towers/$towerId/apartments/new': typeof AuthedAdminProjectsProjectIdTowersTowerIdApartmentsNewRoute
+  '/admin/projects/$projectId/towers/$towerId/apartments/$apartmentId/': typeof AuthedAdminProjectsProjectIdTowersTowerIdApartmentsApartmentIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/': typeof AuthedIndexRoute
   '/admin': typeof AuthedAdminIndexRoute
+  '/admin/projects/new': typeof AuthedAdminProjectsNewRoute
+  '/admin/users/new': typeof AuthedAdminUsersNewRoute
+  '/admin/projects': typeof AuthedAdminProjectsIndexRoute
+  '/admin/users': typeof AuthedAdminUsersIndexRoute
+  '/admin/projects/$projectId': typeof AuthedAdminProjectsProjectIdIndexRoute
+  '/admin/users/$userId': typeof AuthedAdminUsersUserIdIndexRoute
+  '/admin/projects/$projectId/towers/new': typeof AuthedAdminProjectsProjectIdTowersNewRoute
+  '/admin/projects/$projectId/towers/$towerId': typeof AuthedAdminProjectsProjectIdTowersTowerIdIndexRoute
+  '/admin/projects/$projectId/towers/$towerId/apartments/new': typeof AuthedAdminProjectsProjectIdTowersTowerIdApartmentsNewRoute
+  '/admin/projects/$projectId/towers/$towerId/apartments/$apartmentId': typeof AuthedAdminProjectsProjectIdTowersTowerIdApartmentsApartmentIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -58,12 +147,49 @@ export interface FileRoutesById {
   '/_authed/admin': typeof AuthedAdminRouteWithChildren
   '/_authed/': typeof AuthedIndexRoute
   '/_authed/admin/': typeof AuthedAdminIndexRoute
+  '/_authed/admin/projects/new': typeof AuthedAdminProjectsNewRoute
+  '/_authed/admin/users/new': typeof AuthedAdminUsersNewRoute
+  '/_authed/admin/projects/': typeof AuthedAdminProjectsIndexRoute
+  '/_authed/admin/users/': typeof AuthedAdminUsersIndexRoute
+  '/_authed/admin/projects/$projectId/': typeof AuthedAdminProjectsProjectIdIndexRoute
+  '/_authed/admin/users/$userId/': typeof AuthedAdminUsersUserIdIndexRoute
+  '/_authed/admin/projects/$projectId/towers/new': typeof AuthedAdminProjectsProjectIdTowersNewRoute
+  '/_authed/admin/projects/$projectId/towers/$towerId/': typeof AuthedAdminProjectsProjectIdTowersTowerIdIndexRoute
+  '/_authed/admin/projects/$projectId/towers/$towerId/apartments/new': typeof AuthedAdminProjectsProjectIdTowersTowerIdApartmentsNewRoute
+  '/_authed/admin/projects/$projectId/towers/$towerId/apartments/$apartmentId/': typeof AuthedAdminProjectsProjectIdTowersTowerIdApartmentsApartmentIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/admin' | '/admin/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/admin'
+    | '/admin/'
+    | '/admin/projects/new'
+    | '/admin/users/new'
+    | '/admin/projects/'
+    | '/admin/users/'
+    | '/admin/projects/$projectId/'
+    | '/admin/users/$userId/'
+    | '/admin/projects/$projectId/towers/new'
+    | '/admin/projects/$projectId/towers/$towerId/'
+    | '/admin/projects/$projectId/towers/$towerId/apartments/new'
+    | '/admin/projects/$projectId/towers/$towerId/apartments/$apartmentId/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/' | '/admin'
+  to:
+    | '/login'
+    | '/'
+    | '/admin'
+    | '/admin/projects/new'
+    | '/admin/users/new'
+    | '/admin/projects'
+    | '/admin/users'
+    | '/admin/projects/$projectId'
+    | '/admin/users/$userId'
+    | '/admin/projects/$projectId/towers/new'
+    | '/admin/projects/$projectId/towers/$towerId'
+    | '/admin/projects/$projectId/towers/$towerId/apartments/new'
+    | '/admin/projects/$projectId/towers/$towerId/apartments/$apartmentId'
   id:
     | '__root__'
     | '/_authed'
@@ -71,6 +197,16 @@ export interface FileRouteTypes {
     | '/_authed/admin'
     | '/_authed/'
     | '/_authed/admin/'
+    | '/_authed/admin/projects/new'
+    | '/_authed/admin/users/new'
+    | '/_authed/admin/projects/'
+    | '/_authed/admin/users/'
+    | '/_authed/admin/projects/$projectId/'
+    | '/_authed/admin/users/$userId/'
+    | '/_authed/admin/projects/$projectId/towers/new'
+    | '/_authed/admin/projects/$projectId/towers/$towerId/'
+    | '/_authed/admin/projects/$projectId/towers/$towerId/apartments/new'
+    | '/_authed/admin/projects/$projectId/towers/$towerId/apartments/$apartmentId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -115,15 +251,110 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminIndexRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
+    '/_authed/admin/users/': {
+      id: '/_authed/admin/users/'
+      path: '/users'
+      fullPath: '/admin/users/'
+      preLoaderRoute: typeof AuthedAdminUsersIndexRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/projects/': {
+      id: '/_authed/admin/projects/'
+      path: '/projects'
+      fullPath: '/admin/projects/'
+      preLoaderRoute: typeof AuthedAdminProjectsIndexRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/users/new': {
+      id: '/_authed/admin/users/new'
+      path: '/users/new'
+      fullPath: '/admin/users/new'
+      preLoaderRoute: typeof AuthedAdminUsersNewRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/projects/new': {
+      id: '/_authed/admin/projects/new'
+      path: '/projects/new'
+      fullPath: '/admin/projects/new'
+      preLoaderRoute: typeof AuthedAdminProjectsNewRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/users/$userId/': {
+      id: '/_authed/admin/users/$userId/'
+      path: '/users/$userId'
+      fullPath: '/admin/users/$userId/'
+      preLoaderRoute: typeof AuthedAdminUsersUserIdIndexRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/projects/$projectId/': {
+      id: '/_authed/admin/projects/$projectId/'
+      path: '/projects/$projectId'
+      fullPath: '/admin/projects/$projectId/'
+      preLoaderRoute: typeof AuthedAdminProjectsProjectIdIndexRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/projects/$projectId/towers/new': {
+      id: '/_authed/admin/projects/$projectId/towers/new'
+      path: '/projects/$projectId/towers/new'
+      fullPath: '/admin/projects/$projectId/towers/new'
+      preLoaderRoute: typeof AuthedAdminProjectsProjectIdTowersNewRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/projects/$projectId/towers/$towerId/': {
+      id: '/_authed/admin/projects/$projectId/towers/$towerId/'
+      path: '/projects/$projectId/towers/$towerId'
+      fullPath: '/admin/projects/$projectId/towers/$towerId/'
+      preLoaderRoute: typeof AuthedAdminProjectsProjectIdTowersTowerIdIndexRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/projects/$projectId/towers/$towerId/apartments/new': {
+      id: '/_authed/admin/projects/$projectId/towers/$towerId/apartments/new'
+      path: '/projects/$projectId/towers/$towerId/apartments/new'
+      fullPath: '/admin/projects/$projectId/towers/$towerId/apartments/new'
+      preLoaderRoute: typeof AuthedAdminProjectsProjectIdTowersTowerIdApartmentsNewRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/projects/$projectId/towers/$towerId/apartments/$apartmentId/': {
+      id: '/_authed/admin/projects/$projectId/towers/$towerId/apartments/$apartmentId/'
+      path: '/projects/$projectId/towers/$towerId/apartments/$apartmentId'
+      fullPath: '/admin/projects/$projectId/towers/$towerId/apartments/$apartmentId/'
+      preLoaderRoute: typeof AuthedAdminProjectsProjectIdTowersTowerIdApartmentsApartmentIdIndexRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
   }
 }
 
 interface AuthedAdminRouteChildren {
   AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
+  AuthedAdminProjectsNewRoute: typeof AuthedAdminProjectsNewRoute
+  AuthedAdminUsersNewRoute: typeof AuthedAdminUsersNewRoute
+  AuthedAdminProjectsIndexRoute: typeof AuthedAdminProjectsIndexRoute
+  AuthedAdminUsersIndexRoute: typeof AuthedAdminUsersIndexRoute
+  AuthedAdminProjectsProjectIdIndexRoute: typeof AuthedAdminProjectsProjectIdIndexRoute
+  AuthedAdminUsersUserIdIndexRoute: typeof AuthedAdminUsersUserIdIndexRoute
+  AuthedAdminProjectsProjectIdTowersNewRoute: typeof AuthedAdminProjectsProjectIdTowersNewRoute
+  AuthedAdminProjectsProjectIdTowersTowerIdIndexRoute: typeof AuthedAdminProjectsProjectIdTowersTowerIdIndexRoute
+  AuthedAdminProjectsProjectIdTowersTowerIdApartmentsNewRoute: typeof AuthedAdminProjectsProjectIdTowersTowerIdApartmentsNewRoute
+  AuthedAdminProjectsProjectIdTowersTowerIdApartmentsApartmentIdIndexRoute: typeof AuthedAdminProjectsProjectIdTowersTowerIdApartmentsApartmentIdIndexRoute
 }
 
 const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
   AuthedAdminIndexRoute: AuthedAdminIndexRoute,
+  AuthedAdminProjectsNewRoute: AuthedAdminProjectsNewRoute,
+  AuthedAdminUsersNewRoute: AuthedAdminUsersNewRoute,
+  AuthedAdminProjectsIndexRoute: AuthedAdminProjectsIndexRoute,
+  AuthedAdminUsersIndexRoute: AuthedAdminUsersIndexRoute,
+  AuthedAdminProjectsProjectIdIndexRoute:
+    AuthedAdminProjectsProjectIdIndexRoute,
+  AuthedAdminUsersUserIdIndexRoute: AuthedAdminUsersUserIdIndexRoute,
+  AuthedAdminProjectsProjectIdTowersNewRoute:
+    AuthedAdminProjectsProjectIdTowersNewRoute,
+  AuthedAdminProjectsProjectIdTowersTowerIdIndexRoute:
+    AuthedAdminProjectsProjectIdTowersTowerIdIndexRoute,
+  AuthedAdminProjectsProjectIdTowersTowerIdApartmentsNewRoute:
+    AuthedAdminProjectsProjectIdTowersTowerIdApartmentsNewRoute,
+  AuthedAdminProjectsProjectIdTowersTowerIdApartmentsApartmentIdIndexRoute:
+    AuthedAdminProjectsProjectIdTowersTowerIdApartmentsApartmentIdIndexRoute,
 }
 
 const AuthedAdminRouteWithChildren = AuthedAdminRoute._addFileChildren(
