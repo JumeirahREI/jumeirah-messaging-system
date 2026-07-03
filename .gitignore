@@ -9,6 +9,7 @@ dist-ssr
 .wrangler
 .output
 .vinxi
+.netlify
 __unconfig*
 todos.json
 .playwright-mcp/
