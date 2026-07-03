@@ -17,7 +17,7 @@ import {
   projects,
 } from "./schema"
 import { getSmsGateway } from "./sms-gateway"
-import { renderNotification } from "./template-renderer"
+import { renderNotification, renderWarning } from "./template-renderer"
 
 const now = sql`(datetime('now'))`
 
@@ -889,6 +889,229 @@ export const retryFailed = createServerFn({ method: "POST" })
         .set({ status: "pending", errorReason: null, updatedAt: now })
         .where(eq(messages.id, m.id))
     }
+
+    await db
+      .update(batchSessions)
+      .set({ status: "sending", updatedBy: user.id, updatedAt: now })
+      .where(eq(batchSessions.id, data.batchId))
+
+    await processPendingMessages(data.batchId)
+
+    return { ok: true, batchId: data.batchId } as const
+  })
+
+export type WarningEligibleInvoice = {
+  invoiceId: number
+  apartmentId: number
+  label: string
+  clientName: string
+  total: number
+}
+
+export const getWarningEligible = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    if (typeof input !== "object" || input === null)
+      throw new Error("إدخال غير صالح")
+    const batchId = (input as { batchId?: unknown }).batchId
+    if (typeof batchId !== "number") throw new Error("معرّف الدفعة مطلوب")
+    return { batchId }
+  })
+  .handler(async ({ data }) => {
+    await requireRole("operator")
+
+    const batchRows = await db
+      .select({ id: batchSessions.id })
+      .from(batchSessions)
+      .where(
+        and(
+          eq(batchSessions.id, data.batchId),
+          eq(batchSessions.status, "completed"),
+          isNull(batchSessions.deletedAt)
+        )
+      )
+      .limit(1)
+    if (batchRows.length === 0) return null
+
+    const invoiceRows = await db
+      .select({
+        id: invoices.id,
+        apartmentId: invoices.apartmentId,
+        label: apartments.label,
+        clientName: invoices.clientName,
+        total: invoices.total,
+      })
+      .from(invoices)
+      .innerJoin(apartments, eq(invoices.apartmentId, apartments.id))
+      .where(eq(invoices.batchId, data.batchId))
+      .orderBy(apartments.label)
+
+    const invoiceIds = invoiceRows.map((i) => i.id)
+    if (invoiceIds.length === 0) return []
+
+    const warningRows = await db
+      .select({ invoiceId: messages.invoiceId })
+      .from(messages)
+      .where(
+        and(
+          inArray(messages.invoiceId, invoiceIds),
+          eq(messages.templateType, "warning")
+        )
+      )
+
+    const withWarning = new Set(warningRows.map((w) => w.invoiceId))
+    return invoiceRows
+      .filter((i) => !withWarning.has(i.id))
+      .map((i) => ({
+        invoiceId: i.id,
+        apartmentId: i.apartmentId,
+        label: i.label,
+        clientName: i.clientName,
+        total: i.total,
+      })) satisfies WarningEligibleInvoice[]
+  })
+
+export const sendWarning = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    if (typeof input !== "object" || input === null)
+      throw new Error("إدخال غير صالح")
+    const batchId = (input as { batchId?: unknown }).batchId
+    const invoiceIds = (input as { invoiceIds?: unknown }).invoiceIds
+    if (typeof batchId !== "number") throw new Error("معرّف الدفعة مطلوب")
+    if (
+      !Array.isArray(invoiceIds) ||
+      !invoiceIds.every((id) => typeof id === "number")
+    ) {
+      throw new Error("معرّفات الفواتير مطلوبة")
+    }
+    return { batchId, invoiceIds: invoiceIds }
+  })
+  .handler(async ({ data }) => {
+    const user = await requireRole("operator")
+
+    const batchRows = await db
+      .select({ id: batchSessions.id })
+      .from(batchSessions)
+      .where(
+        and(
+          eq(batchSessions.id, data.batchId),
+          eq(batchSessions.status, "completed"),
+          isNull(batchSessions.deletedAt)
+        )
+      )
+      .limit(1)
+    if (batchRows.length === 0) {
+      return { ok: false, error: "الدفعة غير مكتملة" } as const
+    }
+
+    if (data.invoiceIds.length === 0) {
+      return { ok: false, error: "لم يتم اختيار فواتير" } as const
+    }
+
+    const invoiceRows = await db
+      .select({
+        id: invoices.id,
+        apartmentId: invoices.apartmentId,
+        total: invoices.total,
+      })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.batchId, data.batchId),
+          inArray(invoices.id, data.invoiceIds)
+        )
+      )
+
+    if (invoiceRows.length === 0) {
+      return { ok: false, error: "الفواتير غير موجودة" } as const
+    }
+
+    const apartmentIds = invoiceRows.map((i) => i.apartmentId)
+    const linkRows = await db
+      .select({
+        apartmentId: apartmentContacts.apartmentId,
+        contactId: apartmentContacts.contactId,
+      })
+      .from(apartmentContacts)
+      .innerJoin(contacts, eq(apartmentContacts.contactId, contacts.id))
+      .where(
+        and(
+          inArray(apartmentContacts.apartmentId, apartmentIds),
+          isNull(apartmentContacts.deletedAt),
+          isNull(contacts.deletedAt),
+          eq(apartmentContacts.isNotificationRecipient, true)
+        )
+      )
+
+    const contactIds = linkRows.map((l) => l.contactId)
+    const phoneRows =
+      contactIds.length === 0
+        ? []
+        : await db
+            .select({
+              id: phoneNumbers.id,
+              contactId: phoneNumbers.contactId,
+              number: phoneNumbers.number,
+            })
+            .from(phoneNumbers)
+            .where(
+              and(
+                inArray(phoneNumbers.contactId, contactIds),
+                isNull(phoneNumbers.deletedAt)
+              )
+            )
+
+    const phonesByContact = new Map<number, typeof phoneRows>()
+    for (const p of phoneRows) {
+      const list = phonesByContact.get(p.contactId) ?? []
+      list.push(p)
+      phonesByContact.set(p.contactId, list)
+    }
+
+    const phonesByApartment = new Map<number, typeof phoneRows>()
+    for (const l of linkRows) {
+      const phones = phonesByContact.get(l.contactId) ?? []
+      const existing = phonesByApartment.get(l.apartmentId) ?? []
+      for (const p of phones) {
+        if (!existing.some((e) => e.id === p.id)) existing.push(p)
+      }
+      phonesByApartment.set(l.apartmentId, existing)
+    }
+
+    const aptLabelRows = await db
+      .select({ id: apartments.id, label: apartments.label })
+      .from(apartments)
+      .where(inArray(apartments.id, apartmentIds))
+    const apartmentLabels = new Map(aptLabelRows.map((a) => [a.id, a.label]))
+
+    const messageInserts: Array<{
+      invoiceId: number
+      phoneNumberId: number
+      contents: string
+      templateType: "warning"
+      status: "pending"
+      createdBy: number
+    }> = []
+    for (const inv of invoiceRows) {
+      const label = apartmentLabels.get(inv.apartmentId) ?? ""
+      const body = renderWarning({ amount: inv.total, unit_label: label })
+      const phones = phonesByApartment.get(inv.apartmentId) ?? []
+      for (const p of phones) {
+        messageInserts.push({
+          invoiceId: inv.id,
+          phoneNumberId: p.id,
+          contents: body,
+          templateType: "warning",
+          status: "pending",
+          createdBy: user.id,
+        })
+      }
+    }
+
+    if (messageInserts.length === 0) {
+      return { ok: false, error: "لا توجد أرقام هاتف للإرسال" } as const
+    }
+
+    await db.insert(messages).values(messageInserts)
 
     await db
       .update(batchSessions)
