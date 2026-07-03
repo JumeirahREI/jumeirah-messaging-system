@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -13,10 +13,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import type { DraftPreview } from "@/lib/server/batch-service"
+import type {
+  BatchDetail,
+  BatchStatusResponse,
+  DraftPreview,
+} from "@/lib/server/batch-service"
 import {
   getBatch,
+  getBatchStatus,
   getDraftPreview,
+  retryFailed,
+  sendBatch,
   softDeleteBatch,
 } from "@/lib/server/batch-service"
 
@@ -24,6 +31,12 @@ const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
   sending: "جارٍ الإرسال",
   completed: "مكتملة",
+}
+
+const MESSAGE_STATUS_LABELS: Record<string, string> = {
+  pending: "بانتظار",
+  sent: "مرسلة",
+  failed: "فاشلة",
 }
 
 export const Route = createFileRoute("/_authed/batches/$batchId/")({
@@ -43,6 +56,25 @@ export const Route = createFileRoute("/_authed/batches/$batchId/")({
 
 function BatchDetailPage() {
   const { batch, preview } = Route.useLoaderData()
+  const [status, setStatus] = useState<BatchStatusResponse | null>(null)
+
+  useEffect(() => {
+    if (batch.status === "sending" || batch.status === "completed") {
+      let cancelled = false
+      const poll = async () => {
+        const res = await getBatchStatus({ data: { batchId: batch.id } })
+        if (cancelled || !res) return
+        setStatus(res)
+        if (res.status === "sending") {
+          setTimeout(poll, 3000)
+        }
+      }
+      poll()
+      return () => {
+        cancelled = true
+      }
+    }
+  }, [batch.id, batch.status])
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,27 +88,18 @@ function BatchDetailPage() {
         {batch.status === "draft" && <DeleteBatchButton id={batch.id} />}
       </div>
 
-      {batch.status === "draft" && preview && <DraftReview preview={preview} />}
+      {batch.status === "draft" && preview && (
+        <DraftReview batch={batch} preview={preview} />
+      )}
       {batch.status === "draft" && !preview && (
         <p className="text-muted-foreground">تعذر تحميل المعاينة.</p>
       )}
-      {batch.status === "sending" && (
-        <Card>
-          <CardContent className="pt-6">
-            <p>جارٍ إرسال الرسائل... سيتم تفعيل تتبع التقدم في المرحلة 6.</p>
-          </CardContent>
-        </Card>
-      )}
-      {batch.status === "completed" && (
-        <Card>
-          <CardContent className="pt-6">
-            <p>
-              اكتملت الدفعة. مرسلة: {batch.sent} — فاشلة: {batch.failed}. سيتم
-              تفعيل التفاصيل في المرحلة 6.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      {(batch.status === "sending" || batch.status === "completed") &&
+        status && <ProgressView batch={batch} status={status} />}
+      {(batch.status === "sending" || batch.status === "completed") &&
+        !status && (
+          <p className="text-muted-foreground">جارٍ تحميل الحالة...</p>
+        )}
     </div>
   )
 }
@@ -132,8 +155,27 @@ function DeleteBatchButton({ id }: { id: number }) {
   )
 }
 
-function DraftReview({ preview }: { preview: DraftPreview }) {
+function DraftReview({
+  batch,
+  preview,
+}: {
+  batch: BatchDetail
+  preview: DraftPreview
+}) {
   const [acknowledged, setAcknowledged] = useState(false)
+  const [sending, setSending] = useState(false)
+
+  async function handleSend() {
+    setSending(true)
+    const res = await sendBatch({ data: { batchId: batch.id } })
+    setSending(false)
+    if (!res.ok) {
+      toast.error(res.error)
+      return
+    }
+    toast.success("بدأ الإرسال")
+    window.location.reload()
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -219,16 +261,116 @@ function DraftReview({ preview }: { preview: DraftPreview }) {
       </div>
 
       <div className="flex gap-2">
-        <Button disabled={!acknowledged || preview.matched.length === 0}>
-          إرسال
+        <Button
+          disabled={!acknowledged || preview.matched.length === 0 || sending}
+          onClick={handleSend}
+        >
+          {sending ? "جارٍ الإرسال..." : "إرسال"}
         </Button>
         <Button variant="ghost" render={<Link to="/batches" />}>
           رجوع
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        زر الإرسال سيفعّل في المرحلة 6 (إرسال SMS).
-      </p>
+    </div>
+  )
+}
+
+function ProgressView({
+  batch,
+  status,
+}: {
+  batch: BatchDetail
+  status: BatchStatusResponse
+}) {
+  const [retrying, setRetrying] = useState(false)
+
+  async function handleRetry() {
+    setRetrying(true)
+    const res = await retryFailed({ data: { batchId: batch.id } })
+    setRetrying(false)
+    if (!res.ok) {
+      toast.error(res.error)
+      return
+    }
+    toast.success("بدأ إعادة الإرسال")
+    window.location.reload()
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-wrap gap-6">
+            <div>
+              <p className="text-sm text-muted-foreground">الإجمالي</p>
+              <p className="text-lg font-medium">{status.total}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">مرسلة</p>
+              <p className="text-lg font-medium text-green-600">
+                {status.sent}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">فاشلة</p>
+              <p className="text-lg font-medium text-destructive">
+                {status.failed}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">الحالة</p>
+              <p className="text-lg font-medium">
+                {STATUS_LABELS[status.status] ?? status.status}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {status.status === "completed" && status.failed > 0 && (
+        <Button onClick={handleRetry} disabled={retrying}>
+          {retrying ? "جارٍ إعادة الإرسال..." : "إعادة إرسال الفاشلة"}
+        </Button>
+      )}
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>الشقة</TableHead>
+              <TableHead>جهة الاتصال</TableHead>
+              <TableHead>الهاتف</TableHead>
+              <TableHead>النوع</TableHead>
+              <TableHead>الحالة</TableHead>
+              <TableHead>الخطأ</TableHead>
+              <TableHead>وقت الإرسال</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {status.messages.map((m) => (
+              <TableRow key={m.id}>
+                <TableCell className="font-medium">
+                  {m.apartmentLabel}
+                </TableCell>
+                <TableCell>{m.contactName ?? "—"}</TableCell>
+                <TableCell>{m.phoneNumber}</TableCell>
+                <TableCell>
+                  {m.templateType === "notification" ? "إشعار" : "تحذير"}
+                </TableCell>
+                <TableCell>
+                  {MESSAGE_STATUS_LABELS[m.status] ?? m.status}
+                </TableCell>
+                <TableCell className="text-destructive">
+                  {m.errorReason ?? "—"}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {m.sentAt ?? "—"}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   )
 }
