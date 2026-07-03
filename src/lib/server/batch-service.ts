@@ -397,39 +397,6 @@ export const getBatch = createServerFn({ method: "POST" })
     return rows.length > 0 ? rows[0] : null
   })
 
-export type PreviewInvoiceRow = {
-  id: number
-  apartmentId: number
-  apartmentLabel: string
-  clientName: string
-  total: number
-}
-
-export const listBatchInvoices = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const batchId = (input as { batchId?: unknown }).batchId
-    if (typeof batchId !== "number") throw new Error("معرّف الدفعة مطلوب")
-    return { batchId }
-  })
-  .handler(async ({ data }) => {
-    await requireRole("operator")
-    const rows = await db
-      .select({
-        id: invoices.id,
-        apartmentId: invoices.apartmentId,
-        apartmentLabel: apartments.label,
-        clientName: invoices.clientName,
-        total: invoices.total,
-      })
-      .from(invoices)
-      .innerJoin(apartments, eq(invoices.apartmentId, apartments.id))
-      .where(eq(invoices.batchId, data.batchId))
-      .orderBy(apartments.label)
-    return rows satisfies PreviewInvoiceRow[]
-  })
-
 export type DraftPreviewMatched = {
   invoiceId: number
   apartmentId: number
@@ -816,13 +783,20 @@ export async function processPendingMessages(batchId: number): Promise<void> {
     .innerJoin(invoices, eq(messages.invoiceId, invoices.id))
     .where(and(eq(invoices.batchId, batchId), eq(messages.status, "pending")))
 
+  if (pendingRows.length === 0) {
+    await refreshBatchCounters(batchId)
+    return
+  }
+
+  const phoneIds = pendingRows.map((m) => m.phoneNumberId)
+  const phoneRows = await db
+    .select({ id: phoneNumbers.id, number: phoneNumbers.number })
+    .from(phoneNumbers)
+    .where(inArray(phoneNumbers.id, phoneIds))
+  const phoneMap = new Map(phoneRows.map((p) => [p.id, p.number]))
+
   for (const m of pendingRows) {
-    const phoneRow = await db
-      .select({ number: phoneNumbers.number })
-      .from(phoneNumbers)
-      .where(eq(phoneNumbers.id, m.phoneNumberId))
-      .limit(1)
-    const to = phoneRow.length > 0 ? phoneRow[0].number : ""
+    const to = phoneMap.get(m.phoneNumberId) ?? ""
     if (!to) {
       await db
         .update(messages)
@@ -853,25 +827,21 @@ export async function processPendingMessages(batchId: number): Promise<void> {
 }
 
 async function refreshBatchCounters(batchId: number): Promise<void> {
-  const sentCount = await db
-    .select({ count: sql<number>`count(*)` })
+  const countRows = await db
+    .select({ status: messages.status, count: sql<number>`count(*)` })
     .from(messages)
     .innerJoin(invoices, eq(messages.invoiceId, invoices.id))
-    .where(and(eq(invoices.batchId, batchId), eq(messages.status, "sent")))
-  const failedCount = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(messages)
-    .innerJoin(invoices, eq(messages.invoiceId, invoices.id))
-    .where(and(eq(invoices.batchId, batchId), eq(messages.status, "failed")))
-  const pendingCount = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(messages)
-    .innerJoin(invoices, eq(messages.invoiceId, invoices.id))
-    .where(and(eq(invoices.batchId, batchId), eq(messages.status, "pending")))
+    .where(eq(invoices.batchId, batchId))
+    .groupBy(messages.status)
 
-  const sent = sentCount[0]?.count ?? 0
-  const failed = failedCount[0]?.count ?? 0
-  const pending = pendingCount[0]?.count ?? 0
+  let sent = 0
+  let failed = 0
+  let pending = 0
+  for (const row of countRows) {
+    if (row.status === "sent") sent = row.count
+    else if (row.status === "failed") failed = row.count
+    else pending = row.count
+  }
 
   const status: BatchStatus = pending === 0 ? "completed" : "sending"
   await db
@@ -992,12 +962,15 @@ export const retryFailed = createServerFn({ method: "POST" })
       return { ok: false, error: "لا توجد رسائل فاشلة" } as const
     }
 
-    for (const m of failedRows) {
-      await db
-        .update(messages)
-        .set({ status: "pending", errorReason: null, updatedAt: now })
-        .where(eq(messages.id, m.id))
-    }
+    await db
+      .update(messages)
+      .set({ status: "pending", errorReason: null, updatedAt: now })
+      .where(
+        inArray(
+          messages.id,
+          failedRows.map((m) => m.id)
+        )
+      )
 
     await db
       .update(batchSessions)
