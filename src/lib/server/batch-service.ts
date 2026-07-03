@@ -32,9 +32,39 @@ export type BatchRow = {
   createdAt: string | null
 }
 
-export const listBatches = createServerFn({ method: "GET" }).handler(
-  async () => {
+export const listBatches = createServerFn({ method: "GET" })
+  .validator((input: unknown) => {
+    if (input === undefined || input === null) {
+      return { page: 1, status: "all" as const, includeArchived: false }
+    }
+    if (typeof input !== "object") throw new Error("إدخال غير صالح")
+    const page = (input as { page?: unknown }).page
+    const status = (input as { status?: unknown }).status
+    const includeArchived = (input as { includeArchived?: unknown })
+      .includeArchived
+    const statusNorm: "all" | BatchStatus =
+      status === "draft" || status === "sending" || status === "completed"
+        ? status
+        : "all"
+    return {
+      page: typeof page === "number" && page > 0 ? page : 1,
+      status: statusNorm,
+      includeArchived: includeArchived === true,
+    }
+  })
+  .handler(async ({ data }) => {
     await requireRole("operator")
+    const pageSize = 20
+    const offset = (data.page - 1) * pageSize
+
+    const conditions = [isNull(batchSessions.deletedAt)]
+    if (!data.includeArchived) {
+      conditions.push(isNull(batchSessions.archivedAt))
+    }
+    if (data.status !== "all") {
+      conditions.push(eq(batchSessions.status, data.status))
+    }
+
     const rows = await db
       .select({
         id: batchSessions.id,
@@ -48,13 +78,25 @@ export const listBatches = createServerFn({ method: "GET" }).handler(
       })
       .from(batchSessions)
       .innerJoin(projects, eq(batchSessions.projectId, projects.id))
-      .where(
-        and(isNull(batchSessions.deletedAt), isNull(batchSessions.archivedAt))
-      )
+      .where(and(...conditions))
       .orderBy(sql`${batchSessions.createdAt} DESC`)
-    return rows satisfies BatchRow[]
-  }
-)
+      .limit(pageSize)
+      .offset(offset)
+
+    const countRows = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(batchSessions)
+      .innerJoin(projects, eq(batchSessions.projectId, projects.id))
+      .where(and(...conditions))
+    const total = countRows[0]?.count ?? 0
+
+    return {
+      rows: rows satisfies BatchRow[],
+      page: data.page,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      total,
+    }
+  })
 
 export const listProjectsForBatch = createServerFn({ method: "GET" }).handler(
   async () => {
@@ -552,6 +594,62 @@ export const softDeleteBatch = createServerFn({ method: "POST" })
     }
     return { ok: true, data: rows[0] } as const
   })
+
+export const archiveBatch = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    if (typeof input !== "object" || input === null)
+      throw new Error("إدخال غير صالح")
+    const id = (input as { id?: unknown }).id
+    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
+    return { id }
+  })
+  .handler(async ({ data }) => {
+    const user = await requireRole("operator")
+    const rows = await db
+      .update(batchSessions)
+      .set({ archivedAt: now, updatedBy: user.id, updatedAt: now })
+      .where(
+        and(
+          eq(batchSessions.id, data.id),
+          eq(batchSessions.status, "completed"),
+          isNull(batchSessions.deletedAt),
+          isNull(batchSessions.archivedAt)
+        )
+      )
+      .returning({ id: batchSessions.id })
+    if (rows.length === 0) {
+      return {
+        ok: false,
+        error: "لا يمكن أرشفة الدفعة (غير موجودة أو ليست مكتملة)",
+      } as const
+    }
+    return { ok: true, data: rows[0] } as const
+  })
+
+export const getRecentBatches = createServerFn({ method: "GET" }).handler(
+  async () => {
+    await requireRole("operator")
+    const rows = await db
+      .select({
+        id: batchSessions.id,
+        title: batchSessions.title,
+        projectId: batchSessions.projectId,
+        projectTitle: projects.title,
+        status: batchSessions.status,
+        sent: batchSessions.sent,
+        failed: batchSessions.failed,
+        createdAt: batchSessions.createdAt,
+      })
+      .from(batchSessions)
+      .innerJoin(projects, eq(batchSessions.projectId, projects.id))
+      .where(
+        and(isNull(batchSessions.deletedAt), isNull(batchSessions.archivedAt))
+      )
+      .orderBy(sql`${batchSessions.createdAt} DESC`)
+      .limit(10)
+    return rows satisfies BatchRow[]
+  }
+)
 
 export const sendBatch = createServerFn({ method: "POST" })
   .validator((input: unknown) => {

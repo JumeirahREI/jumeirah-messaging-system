@@ -5,7 +5,13 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router"
-import { LayoutDashboard, LogOut, MessageSquare, Settings } from "lucide-react"
+import {
+  LayoutDashboard,
+  LogOut,
+  MessageSquare,
+  Settings,
+  Users,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -47,9 +53,14 @@ function AuthedLayout() {
               الدفعات
             </NavLink>
             {session.isAdmin && (
-              <NavLink to="/admin" icon={<Settings className="size-4" />}>
-                الإدارة
-              </NavLink>
+              <>
+                <NavLink to="/admin" icon={<Settings className="size-4" />}>
+                  الإدارة
+                </NavLink>
+                <NavLink to="/admin/users" icon={<Users className="size-4" />}>
+                  المستخدمون
+                </NavLink>
+              </>
             )}
           </nav>
           <div className="ms-auto flex items-center gap-2">
