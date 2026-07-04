@@ -1,9 +1,33 @@
-import { Link, createFileRoute } from "@tanstack/react-router"
+import {
+  Link,
+  createFileRoute,
+  useNavigate,
+  useRouter,
+} from "@tanstack/react-router"
+import {
+  Archive,
+  ArrowLeft,
+  ArrowRight,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+} from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
+import { ConfirmDialog } from "@/components/confirm-dialog"
+import { EmptyState } from "@/components/empty-state"
+import { PageHeader } from "@/components/page-header"
+import { BatchStatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Select,
   SelectContent,
@@ -26,104 +50,109 @@ import {
 } from "@/lib/server/batch-service"
 import { formatArabicDate } from "@/lib/utils"
 
-const STATUS_LABELS: Record<string, string> = {
-  draft: "مسودة",
-  sending: "جارٍ الإرسال",
-  completed: "مكتملة",
-}
+type StatusFilter = "all" | "draft" | "sending" | "completed"
 
 export const Route = createFileRoute("/_authed/batches/")({
-  loader: async () =>
+  validateSearch: (search: Record<string, unknown>) => ({
+    page: typeof search.page === "number" && search.page > 0 ? search.page : 1,
+    status: (search.status === "draft" ||
+    search.status === "sending" ||
+    search.status === "completed"
+      ? search.status
+      : "all") satisfies StatusFilter,
+    archived: search.archived === true,
+  }),
+  loaderDeps: ({ search }) => ({
+    page: search.page,
+    status: search.status,
+    archived: search.archived,
+  }),
+  loader: async ({ deps }) =>
     await listBatches({
-      data: { page: 1, status: "all", includeArchived: false },
+      data: {
+        page: deps.page,
+        status: deps.status,
+        includeArchived: deps.archived,
+      },
     }),
   component: BatchesListPage,
 })
 
 function BatchesListPage() {
-  const initial = Route.useLoaderData()
-  const [page, setPage] = useState(1)
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [includeArchived, setIncludeArchived] = useState(false)
-  const [data, setData] = useState(initial)
-  const [loading, setLoading] = useState(false)
+  const data = Route.useLoaderData()
+  const { status, archived } = Route.useSearch()
+  const navigate = useNavigate()
+  const router = useRouter()
+  const [busy, setBusy] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
-  async function reload() {
-    setLoading(true)
-    const res = await listBatches({
-      data: {
-        page,
-        status: statusFilter as "all" | "draft" | "sending" | "completed",
-        includeArchived,
+  function updateSearch(next: {
+    page?: number
+    status?: StatusFilter
+    archived?: boolean
+  }) {
+    navigate({
+      to: "/batches",
+      search: {
+        page: next.page ?? 1,
+        status: next.status ?? status,
+        archived: next.archived ?? archived,
       },
     })
-    setLoading(false)
-    setData(res)
-  }
-
-  async function handleFilterChange(newStatus: string, newArchived: boolean) {
-    setStatusFilter(newStatus)
-    setIncludeArchived(newArchived)
-    setPage(1)
-    setLoading(true)
-    const res = await listBatches({
-      data: {
-        page: 1,
-        status: newStatus as "all" | "draft" | "sending" | "completed",
-        includeArchived: newArchived,
-      },
-    })
-    setLoading(false)
-    setData(res)
-  }
-
-  async function handlePageChange(newPage: number) {
-    setPage(newPage)
-    setLoading(true)
-    const res = await listBatches({
-      data: {
-        page: newPage,
-        status: statusFilter as "all" | "draft" | "sending" | "completed",
-        includeArchived,
-      },
-    })
-    setLoading(false)
-    setData(res)
   }
 
   async function handleArchive(id: number) {
+    setBusy(true)
     const res = await archiveBatch({ data: { id } })
+    setBusy(false)
     if (!res.ok) {
       toast.error(res.error)
       return
     }
     toast.success("تمت الأرشفة")
-    reload()
+    router.invalidate()
   }
 
-  async function handleDelete(id: number) {
-    const res = await softDeleteBatch({ data: { id } })
+  async function handleDelete() {
+    if (confirmDeleteId === null) return
+    setBusy(true)
+    const res = await softDeleteBatch({ data: { id: confirmDeleteId } })
+    setBusy(false)
     setConfirmDeleteId(null)
     if (!res.ok) {
       toast.error(res.error)
       return
     }
     toast.success("تم حذف الدفعة")
-    reload()
+    router.invalidate()
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-medium">الدفعات</h1>
-        <Button render={<Link to="/batches/new" />}>دفعة جديدة</Button>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="الدفعات"
+        description="إدارة دفعات الإرسال والمتابعة"
+        actions={
+          <Button nativeButton={false} render={<Link to="/batches/new" />}>
+            <Plus data-icon="inline-start" />
+            دفعة جديدة
+          </Button>
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <Select
-          value={statusFilter}
-          onValueChange={(v) => v && handleFilterChange(v, includeArchived)}
+          value={status}
+          onValueChange={(v) => {
+            if (
+              v === "all" ||
+              v === "draft" ||
+              v === "sending" ||
+              v === "completed"
+            ) {
+              updateSearch({ status: v, page: 1 })
+            }
+          }}
         >
           <SelectTrigger className="w-40">
             <SelectValue />
@@ -135,37 +164,41 @@ function BatchesListPage() {
             <SelectItem value="completed">مكتملة</SelectItem>
           </SelectContent>
         </Select>
-        <div className="flex items-center gap-2">
+        <label className="flex items-center gap-2 text-sm">
           <Checkbox
-            id="archived"
-            checked={includeArchived}
+            checked={archived}
             onCheckedChange={(v) =>
-              handleFilterChange(statusFilter, v === true)
+              updateSearch({ archived: v === true, page: 1 })
             }
           />
-          <label htmlFor="archived" className="text-sm">
-            عرض المؤرشفة
-          </label>
-        </div>
-        {loading && (
-          <span className="text-sm text-muted-foreground">جارٍ...</span>
-        )}
+          عرض المؤرشفة
+        </label>
       </div>
 
       {data.rows.length === 0 ? (
-        <p className="text-muted-foreground">لا توجد دفعات.</p>
+        <EmptyState
+          icon={<Plus />}
+          title="لا توجد دفعات"
+          description="ابدأ بإنشاء دفعة جديدة لرفع ملف الفواتير وإرسال الرسائل."
+          action={
+            <Button nativeButton={false} render={<Link to="/batches/new" />}>
+              <Plus data-icon="inline-start" />
+              دفعة جديدة
+            </Button>
+          }
+        />
       ) : (
-        <div className="rounded-md border">
+        <div className="rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>العنوان</TableHead>
                 <TableHead>المشروع</TableHead>
                 <TableHead>الحالة</TableHead>
-                <TableHead>مرسلة</TableHead>
-                <TableHead>فاشلة</TableHead>
+                <TableHead className="tabular-nums">مرسلة</TableHead>
+                <TableHead className="tabular-nums">فاشلة</TableHead>
                 <TableHead>تاريخ الإنشاء</TableHead>
-                <TableHead className="text-end">إجراءات</TableHead>
+                <TableHead className="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -181,55 +214,65 @@ function BatchesListPage() {
                     </Link>
                   </TableCell>
                   <TableCell>{b.projectTitle}</TableCell>
-                  <TableCell>{STATUS_LABELS[b.status] ?? b.status}</TableCell>
-                  <TableCell>{b.sent}</TableCell>
-                  <TableCell>{b.failed}</TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell>
+                    <BatchStatusBadge status={b.status} />
+                  </TableCell>
+                  <TableCell className="tabular-nums">
+                    {b.sent > 0 ? (
+                      <span className="text-emerald-600 dark:text-emerald-400">
+                        {b.sent}
+                      </span>
+                    ) : (
+                      b.sent
+                    )}
+                  </TableCell>
+                  <TableCell className="tabular-nums">
+                    {b.failed > 0 ? (
+                      <span className="text-destructive">{b.failed}</span>
+                    ) : (
+                      b.failed
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground tabular-nums">
                     {formatArabicDate(b.createdAt)}
                   </TableCell>
-                  <TableCell className="text-end">
-                    <div className="flex justify-end gap-1">
-                      {b.status === "completed" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleArchive(b.id)}
-                          disabled={loading}
-                        >
-                          أرشفة
-                        </Button>
-                      )}
-                      {b.status === "draft" &&
-                        (confirmDeleteId === b.id ? (
-                          <>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleDelete(b.id)}
-                              disabled={loading}
-                            >
-                              تأكيد
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setConfirmDeleteId(null)}
-                              disabled={loading}
-                            >
-                              إلغاء
-                            </Button>
-                          </>
-                        ) : (
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
                           <Button
                             variant="ghost"
-                            size="sm"
-                            onClick={() => setConfirmDeleteId(b.id)}
-                            disabled={loading}
-                          >
-                            حذف
-                          </Button>
-                        ))}
-                    </div>
+                            size="icon-sm"
+                            aria-label="إجراءات"
+                          />
+                        }
+                      >
+                        <MoreHorizontal />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuGroup>
+                          {b.status === "completed" && (
+                            <DropdownMenuItem
+                              onClick={() => handleArchive(b.id)}
+                              disabled={busy}
+                            >
+                              <Archive data-icon="inline-start" />
+                              أرشفة
+                            </DropdownMenuItem>
+                          )}
+                          {b.status === "draft" && (
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onClick={() => setConfirmDeleteId(b.id)}
+                              disabled={busy}
+                            >
+                              <Trash2 data-icon="inline-start" />
+                              حذف
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
@@ -240,29 +283,42 @@ function BatchesListPage() {
 
       {data.totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">
+          <span className="text-sm text-muted-foreground tabular-nums">
             صفحة {data.page} من {data.totalPages} ({data.total} دفعة)
           </span>
           <div className="flex gap-1">
             <Button
               variant="outline"
               size="sm"
-              disabled={data.page <= 1 || loading}
-              onClick={() => handlePageChange(data.page - 1)}
+              disabled={data.page <= 1}
+              onClick={() => updateSearch({ page: data.page - 1 })}
             >
+              <ArrowRight data-icon="inline-start" />
               السابق
             </Button>
             <Button
               variant="outline"
               size="sm"
-              disabled={data.page >= data.totalPages || loading}
-              onClick={() => handlePageChange(data.page + 1)}
+              disabled={data.page >= data.totalPages}
+              onClick={() => updateSearch({ page: data.page + 1 })}
             >
               التالي
+              <ArrowLeft data-icon="inline-end" />
             </Button>
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        onOpenChange={(open) => !open && setConfirmDeleteId(null)}
+        title="حذف الدفعة"
+        description="هل أنت متأكد من حذف هذه الدفعة؟ لا يمكن التراجع عن هذا الإجراء."
+        confirmLabel="حذف"
+        destructive
+        busy={busy}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

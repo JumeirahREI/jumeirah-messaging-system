@@ -1,7 +1,11 @@
-import { Link, createFileRoute } from "@tanstack/react-router"
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
+import { ArrowRight, Send, TriangleAlert } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
+import { ConfirmDialog } from "@/components/confirm-dialog"
+import { EmptyState } from "@/components/empty-state"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -38,8 +42,12 @@ export const Route = createFileRoute("/_authed/batches/$batchId/warning")({
 
 function WarningPage() {
   const { batch, eligible } = Route.useLoaderData()
+  const navigate = useNavigate()
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [sending, setSending] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+
+  const allSelected = eligible.length > 0 && selected.size === eligible.length
 
   function toggle(id: number) {
     setSelected((prev) => {
@@ -50,12 +58,10 @@ function WarningPage() {
     })
   }
 
-  function selectAll() {
-    setSelected(new Set(eligible.map((e) => e.invoiceId)))
-  }
-
-  function deselectAll() {
-    setSelected(new Set())
+  function toggleAll() {
+    setSelected(
+      allSelected ? new Set() : new Set(eligible.map((e) => e.invoiceId))
+    )
   }
 
   async function handleSend() {
@@ -64,46 +70,55 @@ function WarningPage() {
       data: { batchId: batch.id, invoiceIds: Array.from(selected) },
     })
     setSending(false)
+    setConfirmOpen(false)
     if (!res.ok) {
       toast.error(res.error)
       return
     }
     toast.success("تم إرسال التحذيرات")
-    window.location.href = `/batches/${batch.id}`
+    navigate({ to: "/batches/$batchId", params: { batchId: String(batch.id) } })
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-medium">تحذيرات المتابعة</h1>
-          <p className="text-sm text-muted-foreground">
-            {batch.title} — {batch.projectTitle}
-          </p>
-        </div>
-        <Button variant="ghost" render={<Link to="/batches/$batchId" params={{ batchId: String(batch.id) }} />}>
-          رجوع
-        </Button>
-      </div>
+      <PageHeader
+        title="تحذيرات المتابعة"
+        description={`${batch.title} — ${batch.projectTitle}`}
+        actions={
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={
+              <Link
+                to="/batches/$batchId"
+                params={{ batchId: String(batch.id) }}
+              />
+            }
+          >
+            <ArrowRight data-icon="inline-start" />
+            رجوع
+          </Button>
+        }
+      />
 
       {eligible.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-muted-foreground">
-              جميع الشقق لها تحذيرات مرسلة بالفعل. لا توجد فواتير مؤهلة.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={<TriangleAlert />}
+          title="لا توجد فواتير مؤهلة"
+          description="جميع الشقق لها تحذيرات مرسلة بالفعل."
+        />
       ) : (
         <>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={selectAll} disabled={sending}>
-              تحديد الكل
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleAll}
+              disabled={sending}
+            >
+              {allSelected ? "إلغاء تحديد الكل" : "تحديد الكل"}
             </Button>
-            <Button variant="outline" size="sm" onClick={deselectAll} disabled={sending}>
-              إلغاء التحديد
-            </Button>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-sm text-muted-foreground tabular-nums">
               {selected.size} من {eligible.length} محدد
             </span>
           </div>
@@ -113,14 +128,20 @@ function WarningPage() {
               <CardTitle>الفواتير المؤهلة للتحذير</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="rounded-md border">
+              <div className="rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-10"></TableHead>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={allSelected}
+                          onCheckedChange={toggleAll}
+                          disabled={sending}
+                        />
+                      </TableHead>
                       <TableHead>الشقة</TableHead>
                       <TableHead>العميل</TableHead>
-                      <TableHead>الإجمالي</TableHead>
+                      <TableHead className="tabular-nums">الإجمالي</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -137,7 +158,7 @@ function WarningPage() {
                           {inv.label}
                         </TableCell>
                         <TableCell>{inv.clientName}</TableCell>
-                        <TableCell>
+                        <TableCell className="tabular-nums">
                           {inv.total.toLocaleString("ar-EG")}
                         </TableCell>
                       </TableRow>
@@ -150,21 +171,25 @@ function WarningPage() {
 
           <div className="flex gap-2">
             <Button
-              onClick={handleSend}
+              onClick={() => setConfirmOpen(true)}
               disabled={selected.size === 0 || sending}
             >
+              <Send data-icon="inline-start" />
               {sending
                 ? "جارٍ الإرسال..."
                 : `إرسال التحذيرات (${selected.size})`}
             </Button>
-            <Button
-              variant="ghost"
-              render={<Link to="/batches/$batchId" params={{ batchId: String(batch.id) }} />}
-              disabled={sending}
-            >
-              إلغاء
-            </Button>
           </div>
+
+          <ConfirmDialog
+            open={confirmOpen}
+            onOpenChange={setConfirmOpen}
+            title="تأكيد إرسال التحذيرات"
+            description={`سيتم إرسال تحذيرات متابعة إلى ${selected.size} فاترة. هل تريد المتابعة؟`}
+            confirmLabel="إرسال"
+            busy={sending}
+            onConfirm={handleSend}
+          />
         </>
       )}
     </div>

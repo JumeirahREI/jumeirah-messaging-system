@@ -1,9 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { Building2, Plus, Users } from "lucide-react"
+import { Building2, MessageSquare, Plus, Users } from "lucide-react"
 import { useEffect } from "react"
 import { toast } from "sonner"
 
+import { EmptyState } from "@/components/empty-state"
+import { PageHeader } from "@/components/page-header"
+import { BatchStatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -19,10 +23,38 @@ const ERROR_MESSAGES: Record<string, string> = {
   "admin-only": "هذه الصفحة متاحة للمسؤولين فقط",
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  draft: "مسودة",
-  sending: "جارٍ الإرسال",
-  completed: "مكتملة",
+function QuickAction({
+  to,
+  icon,
+  label,
+  description,
+}: {
+  to: string
+  icon: React.ReactNode
+  label: string
+  description: string
+}) {
+  return (
+    <Card className="transition-colors hover:border-primary/40">
+      <CardContent className="flex items-center gap-4">
+        <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          {icon}
+        </div>
+        <div className="flex flex-1 flex-col">
+          <span className="text-sm font-medium">{label}</span>
+          <span className="text-xs text-muted-foreground">{description}</span>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          nativeButton={false}
+          render={<Link to={to} />}
+        >
+          <Plus />
+        </Button>
+      </CardContent>
+    </Card>
+  )
 }
 
 export const Route = createFileRoute("/_authed/")({
@@ -45,48 +77,66 @@ function Dashboard() {
   }, [error])
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-medium">لوحة التحكم</h1>
-        <p className="text-muted-foreground">
-          مرحبًا {session.fullname} — دور: {session.isAdmin ? "مسؤول" : "مشغّل"}
-        </p>
-      </div>
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        title={`مرحبًا، ${session.fullname}`}
+        description={`${session.isAdmin ? "مسؤول" : "مشغّل"} — لوحة التحكم`}
+      />
 
-      <div className="flex flex-wrap gap-2">
-        <Button render={<Link to="/batches/new" />}>
-          <Plus className="size-4" />
-          دفعة جديدة
-        </Button>
-        <Button variant="outline" render={<Link to="/batches" />}>
-          الدفعات
-        </Button>
-        <Button variant="outline" render={<Link to="/admin/projects" />}>
-          <Building2 className="size-4" />
-          إدارة البيانات
-        </Button>
-        {session.isAdmin && (
-          <Button variant="outline" render={<Link to="/admin/users" />}>
-            <Users className="size-4" />
-            إدارة المستخدمين
-          </Button>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <QuickAction
+          to="/batches/new"
+          icon={<Plus />}
+          label="دفعة جديدة"
+          description="ارفع ملف فواتير وأرسل الرسائل"
+        />
+        <QuickAction
+          to="/batches"
+          icon={<MessageSquare />}
+          label="الدفعات"
+          description="عرض وإدارة الدفعات السابقة"
+        />
+        {session.isAdmin ? (
+          <QuickAction
+            to="/admin/projects"
+            icon={<Building2 />}
+            label="إدارة البيانات"
+            description="المشاريع والأبراج والشقق"
+          />
+        ) : (
+          <QuickAction
+            to="/batches"
+            icon={<Users />}
+            label="السجل"
+            description="استعراض الدفعات المكتملة"
+          />
         )}
       </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">آخر الدفعات</h2>
+        <h2 className="font-heading text-lg font-medium">آخر الدفعات</h2>
         {recentBatches.length === 0 ? (
-          <p className="text-muted-foreground">لا توجد دفعات بعد.</p>
+          <EmptyState
+            icon={<Plus />}
+            title="لا توجد دفعات بعد"
+            description="ابدأ بإنشاء دفعة جديدة لرفع ملف الفواتير وإرسال الرسائل."
+            action={
+              <Button nativeButton={false} render={<Link to="/batches/new" />}>
+                <Plus data-icon="inline-start" />
+                دفعة جديدة
+              </Button>
+            }
+          />
         ) : (
-          <div className="rounded-md border">
+          <div className="rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>العنوان</TableHead>
                   <TableHead>المشروع</TableHead>
                   <TableHead>الحالة</TableHead>
-                  <TableHead>مرسلة</TableHead>
-                  <TableHead>فاشلة</TableHead>
+                  <TableHead className="tabular-nums">مرسلة</TableHead>
+                  <TableHead className="tabular-nums">فاشلة</TableHead>
                   <TableHead>تاريخ الإنشاء</TableHead>
                 </TableRow>
               </TableHeader>
@@ -103,10 +153,26 @@ function Dashboard() {
                       </Link>
                     </TableCell>
                     <TableCell>{b.projectTitle}</TableCell>
-                    <TableCell>{STATUS_LABELS[b.status] ?? b.status}</TableCell>
-                    <TableCell>{b.sent}</TableCell>
-                    <TableCell>{b.failed}</TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell>
+                      <BatchStatusBadge status={b.status} />
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {b.sent > 0 ? (
+                        <span className="text-emerald-600 dark:text-emerald-400">
+                          {b.sent}
+                        </span>
+                      ) : (
+                        b.sent
+                      )}
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {b.failed > 0 ? (
+                        <span className="text-destructive">{b.failed}</span>
+                      ) : (
+                        b.failed
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
                       {formatArabicDate(b.createdAt)}
                     </TableCell>
                   </TableRow>

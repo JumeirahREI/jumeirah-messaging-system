@@ -1,4 +1,5 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router"
+import { ShieldCheck } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -11,8 +12,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Spinner } from "@/components/ui/spinner"
 import { login } from "@/lib/server/auth"
 
 export const Route = createFileRoute("/login")({
@@ -47,45 +49,62 @@ function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <form onSubmit={handleSubmit}>
-          <CardHeader className="text-center">
-            <CardTitle>تسجيل الدخول</CardTitle>
-            <CardDescription>نظام مراسلات جُميرا</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="username">اسم المستخدم</Label>
-              <Input
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                required
-                disabled={submitting}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="password">كلمة المرور</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-                disabled={submitting}
-              />
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? "جارٍ الدخول..." : "دخول"}
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
+    <main className="flex min-h-svh items-center justify-center bg-muted/30 p-4">
+      <div className="flex w-full max-w-sm flex-col gap-6">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+            <ShieldCheck className="size-7" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">
+              جُميرا
+            </h1>
+            <p className="text-sm text-muted-foreground">نظام مراسلات</p>
+          </div>
+        </div>
+
+        <Card>
+          <form onSubmit={handleSubmit}>
+            <CardHeader className="text-center">
+              <CardTitle>تسجيل الدخول</CardTitle>
+              <CardDescription>أدخل بياناتك للمتابعة</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="username">اسم المستخدم</FieldLabel>
+                  <Input
+                    id="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    autoComplete="username"
+                    required
+                    disabled={submitting}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="password">كلمة المرور</FieldLabel>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    required
+                    disabled={submitting}
+                  />
+                </Field>
+              </FieldGroup>
+            </CardContent>
+            <CardFooter>
+              <Button type="submit" className="w-full" disabled={submitting}>
+                {submitting && <Spinner data-icon="inline-start" />}
+                {submitting ? "جارٍ الدخول..." : "دخول"}
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
     </main>
   )
 }

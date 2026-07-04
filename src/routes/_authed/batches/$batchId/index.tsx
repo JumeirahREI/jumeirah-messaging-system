@@ -1,10 +1,33 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
-import { useEffect, useState } from "react"
+import {
+  Link,
+  createFileRoute,
+  useNavigate,
+  useRouter,
+} from "@tanstack/react-router"
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  Mail,
+  RefreshCw,
+  Send,
+  TriangleAlert,
+  XCircle,
+} from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
+import { ConfirmDialog } from "@/components/confirm-dialog"
+import { EmptyState } from "@/components/empty-state"
+import { PageHeader } from "@/components/page-header"
+import { BatchStatusBadge, MessageStatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Progress, ProgressLabel } from "@/components/ui/progress"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
   TableBody,
@@ -13,6 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type {
   BatchDetail,
   BatchStatusResponse,
@@ -27,18 +51,6 @@ import {
   softDeleteBatch,
 } from "@/lib/server/batch-service"
 import { formatArabicDate } from "@/lib/utils"
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: "مسودة",
-  sending: "جارٍ الإرسال",
-  completed: "مكتملة",
-}
-
-const MESSAGE_STATUS_LABELS: Record<string, string> = {
-  pending: "بانتظار",
-  sent: "مرسلة",
-  failed: "فاشلة",
-}
 
 export const Route = createFileRoute("/_authed/batches/$batchId/")({
   loader: async ({ params }) => {
@@ -58,6 +70,7 @@ export const Route = createFileRoute("/_authed/batches/$batchId/")({
 function BatchDetailPage() {
   const { batch, preview } = Route.useLoaderData()
   const [status, setStatus] = useState<BatchStatusResponse | null>(null)
+  const router = useRouter()
 
   useEffect(() => {
     if (batch.status === "sending" || batch.status === "completed") {
@@ -79,80 +92,130 @@ function BatchDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-medium">{batch.title}</h1>
-          <p className="text-sm text-muted-foreground">
-            {batch.projectTitle} — {STATUS_LABELS[batch.status] ?? batch.status}
-          </p>
-        </div>
-        {batch.status === "draft" && <DeleteBatchButton id={batch.id} />}
-      </div>
+      <PageHeader
+        title={batch.title}
+        description={`${batch.projectTitle}`}
+        actions={
+          <>
+            <BatchStatusBadge status={batch.status} />
+            {batch.status === "draft" && <DeleteBatchButton id={batch.id} />}
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={
+                <Link
+                  to="/batches"
+                  search={{ page: 1, status: "all", archived: false }}
+                />
+              }
+            >
+              <ArrowRight data-icon="inline-start" />
+              رجوع
+            </Button>
+          </>
+        }
+      />
 
       {batch.status === "draft" && preview && (
         <DraftReview batch={batch} preview={preview} />
       )}
       {batch.status === "draft" && !preview && (
-        <p className="text-muted-foreground">تعذر تحميل المعاينة.</p>
+        <Skeleton className="h-64 w-full" />
       )}
       {(batch.status === "sending" || batch.status === "completed") &&
-        status && <ProgressView batch={batch} status={status} />}
+        status && (
+          <ProgressView
+            batch={batch}
+            status={status}
+            onRefresh={() => router.invalidate()}
+          />
+        )}
       {(batch.status === "sending" || batch.status === "completed") &&
         !status && (
-          <p className="text-muted-foreground">جارٍ تحميل الحالة...</p>
+          <div className="flex flex-col gap-4">
+            <Skeleton className="h-28 w-full" />
+            <Skeleton className="h-64 w-full" />
+          </div>
         )}
     </div>
   )
 }
 
 function DeleteBatchButton({ id }: { id: number }) {
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
 
   async function handleDelete() {
     setBusy(true)
     const res = await softDeleteBatch({ data: { id } })
     setBusy(false)
-    setConfirmOpen(false)
     if (!res.ok) {
       toast.error(res.error)
       return
     }
     toast.success("تم حذف الدفعة")
-    window.location.href = "/batches"
+    navigate({
+      to: "/batches",
+      search: { page: 1, status: "all", archived: false },
+    })
   }
 
-  if (!confirmOpen) {
-    return (
-      <Button
-        variant="destructive"
-        onClick={() => setConfirmOpen(true)}
-        disabled={busy}
-      >
-        حذف الدفعة
-      </Button>
-    )
-  }
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-sm">تأكيد الحذف؟</span>
-      <Button
-        variant="destructive"
-        size="sm"
-        onClick={handleDelete}
-        disabled={busy}
-      >
-        نعم، حذف
+    <>
+      <Button variant="destructive" size="sm" onClick={() => setOpen(true)}>
+        <XCircle data-icon="inline-start" />
+        حذف
       </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => setConfirmOpen(false)}
-        disabled={busy}
-      >
-        إلغاء
-      </Button>
-    </div>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="حذف الدفعة"
+        description="هل أنت متأكد من حذف هذه الدفعة؟ لا يمكن التراجع عن هذا الإجراء."
+        confirmLabel="حذف"
+        destructive
+        busy={busy}
+        onConfirm={handleDelete}
+      />
+    </>
+  )
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  tone = "default",
+}: {
+  icon: React.ReactNode
+  label: string
+  value: React.ReactNode
+  tone?: "default" | "success" | "destructive" | "warning"
+}) {
+  const toneClass = {
+    default: "text-foreground",
+    success: "text-emerald-600 dark:text-emerald-400",
+    destructive: "text-destructive",
+    warning: "text-amber-600 dark:text-amber-400",
+  }[tone]
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-3">
+        <div
+          className={`flex size-10 items-center justify-center rounded-lg bg-muted ${toneClass}`}
+        >
+          {icon}
+        </div>
+        <div className="flex flex-col">
+          <span className="text-xs text-muted-foreground">{label}</span>
+          <span
+            className={`font-heading text-2xl font-semibold tabular-nums ${toneClass}`}
+          >
+            {value}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -163,41 +226,74 @@ function DraftReview({
   batch: BatchDetail
   preview: DraftPreview
 }) {
+  const router = useRouter()
   const [acknowledged, setAcknowledged] = useState(false)
   const [sending, setSending] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+
+  const totalRecipients = useMemo(
+    () =>
+      preview.matched.reduce(
+        (sum, m) => sum + m.contacts.flatMap((c) => c.phoneNumbers).length,
+        0
+      ),
+    [preview]
+  )
 
   async function handleSend() {
     setSending(true)
     const res = await sendBatch({ data: { batchId: batch.id } })
     setSending(false)
+    setConfirmOpen(false)
     if (!res.ok) {
       toast.error(res.error)
       return
     }
     toast.success("بدأ الإرسال")
-    window.location.reload()
+    router.invalidate()
   }
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard
+          icon={<Mail />}
+          label="شقق مطابقة"
+          value={preview.matched.length}
+        />
+        <StatCard
+          icon={<Send />}
+          label="مستلمون"
+          value={totalRecipients}
+          tone="success"
+        />
+        <StatCard
+          icon={<AlertTriangle />}
+          label="بدون مستلمين"
+          value={preview.noContacts.length}
+          tone={preview.noContacts.length > 0 ? "warning" : "default"}
+        />
+      </div>
+
       {preview.noContacts.length > 0 && (
-        <Card className="border-destructive/40 bg-destructive/5">
+        <Card className="border-amber-500/40 bg-amber-500/5">
           <CardHeader>
-            <CardTitle className="text-destructive">
+            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="size-5" />
               شقق بدون مستلمي إشعارات
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <p className="text-sm">
+            <p className="text-sm text-muted-foreground">
               هذه الشقق لن يتم إرسال رسائل لها. يجب الإقرار بذلك قبل الإرسال.
             </p>
-            <div className="rounded-md border">
+            <div className="rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>الشقة</TableHead>
                     <TableHead>العميل</TableHead>
-                    <TableHead>الإجمالي</TableHead>
+                    <TableHead className="tabular-nums">الإجمالي</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -205,32 +301,35 @@ function DraftReview({
                     <TableRow key={c.apartmentId}>
                       <TableCell className="font-medium">{c.label}</TableCell>
                       <TableCell>{c.clientName}</TableCell>
-                      <TableCell>{c.total.toLocaleString("ar-EG")}</TableCell>
+                      <TableCell className="tabular-nums">
+                        {c.total.toLocaleString("ar-EG")}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-            <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-sm">
               <Checkbox
-                id="ack"
                 checked={acknowledged}
                 onCheckedChange={(v) => setAcknowledged(v === true)}
               />
-              <label htmlFor="ack" className="text-sm">
-                أقر بأن هذه الشقق لن يتم إرسال رسائل لها
-              </label>
-            </div>
+              أقر بأن هذه الشقق لن يتم إرسال رسائل لها
+            </label>
           </CardContent>
         </Card>
       )}
 
       <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">الشقق المطابقة</h2>
+        <h2 className="font-heading text-lg font-medium">الشقق المطابقة</h2>
         {preview.matched.length === 0 ? (
-          <p className="text-muted-foreground">لا توجد شقق مطابقة.</p>
+          <EmptyState
+            icon={<Mail />}
+            title="لا توجد شقق مطابقة"
+            description="لم يتم العثور على شقق لها أرقام هاتف في هذا الملف."
+          />
         ) : (
-          <div className="rounded-md border">
+          <div className="rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -238,7 +337,7 @@ function DraftReview({
                   <TableHead>العميل</TableHead>
                   <TableHead>جهات الاتصال</TableHead>
                   <TableHead>أرقام الهاتف</TableHead>
-                  <TableHead>الإجمالي</TableHead>
+                  <TableHead className="tabular-nums">الإجمالي</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -246,13 +345,15 @@ function DraftReview({
                   <TableRow key={m.invoiceId}>
                     <TableCell className="font-medium">{m.label}</TableCell>
                     <TableCell>{m.clientName}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
                       {m.contacts.map((c) => c.contactName).join("، ")}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-sm text-muted-foreground tabular-nums">
                       {m.contacts.flatMap((c) => c.phoneNumbers).join("، ")}
                     </TableCell>
-                    <TableCell>{m.total.toLocaleString("ar-EG")}</TableCell>
+                    <TableCell className="tabular-nums">
+                      {m.total.toLocaleString("ar-EG")}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -268,14 +369,22 @@ function DraftReview({
             preview.matched.length === 0 ||
             sending
           }
-          onClick={handleSend}
+          onClick={() => setConfirmOpen(true)}
         >
-          {sending ? "جارٍ الإرسال..." : "إرسال"}
-        </Button>
-        <Button variant="ghost" render={<Link to="/batches" />}>
-          رجوع
+          <Send data-icon="inline-start" />
+          إرسال
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="تأكيد الإرسال"
+        description={`سيتم إرسال ${totalRecipients} رسالة إلى ${preview.matched.length} شقة. هل تريد المتابعة؟`}
+        confirmLabel="إرسال الآن"
+        busy={sending}
+        onConfirm={handleSend}
+      />
     </div>
   )
 }
@@ -283,113 +392,179 @@ function DraftReview({
 function ProgressView({
   batch,
   status,
+  onRefresh,
 }: {
   batch: BatchDetail
   status: BatchStatusResponse
+  onRefresh: () => void
 }) {
   const [retrying, setRetrying] = useState(false)
+  const [retryConfirm, setRetryConfirm] = useState(false)
+  const [filter, setFilter] = useState<"all" | "sent" | "failed" | "pending">(
+    "all"
+  )
+
+  const percent =
+    status.total > 0
+      ? Math.round(((status.sent + status.failed) / status.total) * 100)
+      : 0
+  const isSending = status.status === "sending"
+
+  const filteredMessages = useMemo(() => {
+    if (filter === "all") return status.messages
+    return status.messages.filter((m) => m.status === filter)
+  }, [status.messages, filter])
 
   async function handleRetry() {
     setRetrying(true)
     const res = await retryFailed({ data: { batchId: batch.id } })
     setRetrying(false)
+    setRetryConfirm(false)
     if (!res.ok) {
       toast.error(res.error)
       return
     }
     toast.success("بدأ إعادة الإرسال")
-    window.location.reload()
+    onRefresh()
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
+      <div className="grid gap-4 sm:grid-cols-4">
+        <StatCard icon={<Mail />} label="الإجمالي" value={status.total} />
+        <StatCard
+          icon={<CheckCircle2 />}
+          label="مرسلة"
+          value={status.sent}
+          tone="success"
+        />
+        <StatCard
+          icon={<XCircle />}
+          label="فاشلة"
+          value={status.failed}
+          tone={status.failed > 0 ? "destructive" : "default"}
+        />
+        <StatCard
+          icon={isSending ? <Spinner /> : <Clock />}
+          label="الحالة"
+          value={isSending ? "جارٍ..." : "مكتملة"}
+          tone={isSending ? "warning" : "default"}
+        />
+      </div>
+
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap gap-6">
-            <div>
-              <p className="text-sm text-muted-foreground">الإجمالي</p>
-              <p className="text-lg font-medium">{status.total}</p>
+        <CardContent className="flex flex-col gap-2">
+          <Progress value={percent}>
+            <div className="flex items-center justify-between">
+              <ProgressLabel>التقدم</ProgressLabel>
+              <span className="text-sm text-muted-foreground tabular-nums">
+                {percent}%
+              </span>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">مرسلة</p>
-              <p className="text-lg font-medium text-green-600">
-                {status.sent}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">فاشلة</p>
-              <p className="text-lg font-medium text-destructive">
-                {status.failed}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">الحالة</p>
-              <p className="text-lg font-medium">
-                {STATUS_LABELS[status.status] ?? status.status}
-              </p>
-            </div>
-          </div>
+          </Progress>
         </CardContent>
       </Card>
 
-      {status.status === "completed" && status.failed > 0 && (
-        <Button onClick={handleRetry} disabled={retrying}>
-          {retrying ? "جارٍ إعادة الإرسال..." : "إعادة إرسال الفاشلة"}
-        </Button>
-      )}
-
       {status.status === "completed" && (
-        <Button
-          variant="outline"
-          render={
-            <Link
-              to="/batches/$batchId/warning"
-              params={{ batchId: String(batch.id) }}
-            />
-          }
-        >
-          إرسال تحذير متابعة
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {status.failed > 0 && (
+            <Button onClick={() => setRetryConfirm(true)} disabled={retrying}>
+              <RefreshCw data-icon="inline-start" />
+              إعادة إرسال الفاشلة ({status.failed})
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={
+              <Link
+                to="/batches/$batchId/warning"
+                params={{ batchId: String(batch.id) }}
+              />
+            }
+          >
+            <TriangleAlert data-icon="inline-start" />
+            إرسال تحذير متابعة
+          </Button>
+        </div>
       )}
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>الشقة</TableHead>
-              <TableHead>جهة الاتصال</TableHead>
-              <TableHead>الهاتف</TableHead>
-              <TableHead>النوع</TableHead>
-              <TableHead>الحالة</TableHead>
-              <TableHead>الخطأ</TableHead>
-              <TableHead>وقت الإرسال</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {status.messages.map((m) => (
-              <TableRow key={m.id}>
-                <TableCell className="font-medium">
-                  {m.apartmentLabel}
-                </TableCell>
-                <TableCell>{m.contactName ?? "—"}</TableCell>
-                <TableCell>{m.phoneNumber}</TableCell>
-                <TableCell>
-                  {m.templateType === "notification" ? "إشعار" : "تحذير"}
-                </TableCell>
-                <TableCell>
-                  {MESSAGE_STATUS_LABELS[m.status] ?? m.status}
-                </TableCell>
-                <TableCell className="text-destructive">
-                  {m.errorReason ?? "—"}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {m.sentAt ? formatArabicDate(m.sentAt) : "—"}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-heading text-lg font-medium">الرسائل</h2>
+          <Tabs
+            value={filter}
+            onValueChange={(v) => setFilter(v as typeof filter)}
+          >
+            <TabsList>
+              <TabsTrigger value="all">
+                الكل ({status.messages.length})
+              </TabsTrigger>
+              <TabsTrigger value="sent">مرسلة ({status.sent})</TabsTrigger>
+              <TabsTrigger value="failed">فاشلة ({status.failed})</TabsTrigger>
+              <TabsTrigger value="pending">بانتظار</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+        {filteredMessages.length === 0 ? (
+          <EmptyState
+            icon={<Mail />}
+            title="لا توجد رسائل"
+            description="لا توجد رسائل بهذه الحالة."
+          />
+        ) : (
+          <div className="rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>الشقة</TableHead>
+                  <TableHead>جهة الاتصال</TableHead>
+                  <TableHead>الهاتف</TableHead>
+                  <TableHead>النوع</TableHead>
+                  <TableHead>الحالة</TableHead>
+                  <TableHead>الخطأ</TableHead>
+                  <TableHead>وقت الإرسال</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredMessages.map((m) => (
+                  <TableRow key={m.id}>
+                    <TableCell className="font-medium">
+                      {m.apartmentLabel}
+                    </TableCell>
+                    <TableCell>{m.contactName ?? "—"}</TableCell>
+                    <TableCell className="tabular-nums">
+                      {m.phoneNumber}
+                    </TableCell>
+                    <TableCell>
+                      {m.templateType === "notification" ? "إشعار" : "تحذير"}
+                    </TableCell>
+                    <TableCell>
+                      <MessageStatusBadge status={m.status} />
+                    </TableCell>
+                    <TableCell className="text-sm text-destructive">
+                      {m.errorReason ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {m.sentAt ? formatArabicDate(m.sentAt) : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
+
+      <ConfirmDialog
+        open={retryConfirm}
+        onOpenChange={setRetryConfirm}
+        title="إعادة إرسال الفاشلة"
+        description={`سيتم إعادة محاولة إرسال ${status.failed} رسالة فاشلة. هل تريد المتابعة؟`}
+        confirmLabel="إعادة الإرسال"
+        busy={retrying}
+        onConfirm={handleRetry}
+      />
     </div>
   )
 }
