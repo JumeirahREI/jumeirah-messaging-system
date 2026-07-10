@@ -556,7 +556,7 @@ export async function getDraftPreview(input: {
     })
     .from(invoices)
     .innerJoin(apartments, eq(invoices.apartmentId, apartments.id))
-    .where(eq(invoices.batchId, batchId))
+    .where(and(eq(invoices.batchId, batchId), isNull(invoices.deletedAt)))
     .orderBy(apartments.label)
 
   const apartmentIds = invoiceRows.map((i) => i.apartmentId)
@@ -679,7 +679,22 @@ export async function softDeleteBatch(input: {
       error: "لا يمكن حذف الدفعة (غير موجودة أو ليست مسودة)",
     } as const
   }
-  await db.delete(invoices).where(eq(invoices.batchId, id))
+  const invoiceIds = await db
+    .select({ id: invoices.id })
+    .from(invoices)
+    .where(and(eq(invoices.batchId, id), isNull(invoices.deletedAt)))
+
+  if (invoiceIds.length > 0) {
+    const ids = invoiceIds.map((i) => i.id)
+    await db
+      .update(messages)
+      .set({ deletedBy: user.id, deletedAt: now })
+      .where(and(inArray(messages.invoiceId, ids), isNull(messages.deletedAt)))
+    await db
+      .update(invoices)
+      .set({ deletedBy: user.id, deletedAt: now })
+      .where(and(inArray(invoices.id, ids), isNull(invoices.deletedAt)))
+  }
   return { ok: true, data: rows[0] } as const
 }
 
@@ -744,7 +759,7 @@ export async function sendBatch(input: {
       total: invoices.total,
     })
     .from(invoices)
-    .where(eq(invoices.batchId, batchId))
+    .where(and(eq(invoices.batchId, batchId), isNull(invoices.deletedAt)))
 
   if (invoiceRows.length === 0) {
     return { ok: false, error: "لا توجد فواتير في هذه الدفعة" } as const
@@ -908,7 +923,13 @@ export async function getBatchStatus(input: {
     .innerJoin(apartments, eq(invoices.apartmentId, apartments.id))
     .innerJoin(phoneNumbers, eq(messages.phoneNumberId, phoneNumbers.id))
     .leftJoin(contacts, eq(phoneNumbers.contactId, contacts.id))
-    .where(eq(invoices.batchId, batchId))
+    .where(
+      and(
+        eq(invoices.batchId, batchId),
+        isNull(invoices.deletedAt),
+        isNull(messages.deletedAt)
+      )
+    )
     .orderBy(messages.id)
 
   const total = messageRows.length
@@ -949,7 +970,14 @@ export async function retryFailed(input: {
     .select({ id: messages.id })
     .from(messages)
     .innerJoin(invoices, eq(messages.invoiceId, invoices.id))
-    .where(and(eq(invoices.batchId, batchId), eq(messages.status, "failed")))
+    .where(
+      and(
+        eq(invoices.batchId, batchId),
+        eq(messages.status, "failed"),
+        isNull(invoices.deletedAt),
+        isNull(messages.deletedAt)
+      )
+    )
 
   if (failedRows.length === 0) {
     return { ok: false, error: "لا توجد رسائل فاشلة" } as const
@@ -1015,7 +1043,7 @@ export async function getWarningEligible(input: {
     })
     .from(invoices)
     .innerJoin(apartments, eq(invoices.apartmentId, apartments.id))
-    .where(eq(invoices.batchId, batchId))
+    .where(and(eq(invoices.batchId, batchId), isNull(invoices.deletedAt)))
     .orderBy(apartments.label)
 
   const invoiceIds = invoiceRows.map((i) => i.id)
@@ -1027,7 +1055,8 @@ export async function getWarningEligible(input: {
     .where(
       and(
         inArray(messages.invoiceId, invoiceIds),
-        eq(messages.templateType, "warning")
+        eq(messages.templateType, "warning"),
+        isNull(messages.deletedAt)
       )
     )
 
@@ -1086,7 +1115,13 @@ export async function sendWarning(input: {
       total: invoices.total,
     })
     .from(invoices)
-    .where(and(eq(invoices.batchId, batchId), inArray(invoices.id, invoiceIds)))
+    .where(
+      and(
+        eq(invoices.batchId, batchId),
+        inArray(invoices.id, invoiceIds),
+        isNull(invoices.deletedAt)
+      )
+    )
 
   if (invoiceRows.length === 0) {
     return { ok: false, error: "الفواتير غير موجودة" } as const
@@ -1098,7 +1133,8 @@ export async function sendWarning(input: {
     .where(
       and(
         inArray(messages.invoiceId, invoiceIds),
-        eq(messages.templateType, "warning")
+        eq(messages.templateType, "warning"),
+        isNull(messages.deletedAt)
       )
     )
   if (existingWarnings.length > 0) {

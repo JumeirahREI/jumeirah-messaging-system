@@ -30,10 +30,12 @@ export const messages = sqliteTable(
       .default(sql`(datetime('now'))`),
     updatedBy: integer("updated_by").references(() => users.id),
     updatedAt: text("updated_at"),
+    deletedAt: text("deleted_at"),
+    deletedBy: integer("deleted_by").references(() => users.id),
   },
   (t) => ({
     invoiceIdx: index("messages_invoice_id_idx").on(t.invoiceId),
     phoneNumberIdx: index("messages_phone_number_id_idx").on(t.phoneNumberId),
     statusIdx: index("messages_status_idx").on(t.status),
-  }),
+  })
 )

@@ -2,7 +2,7 @@
 
 import {
   AlertTriangle,
-  ArrowRight,
+  ArrowLeft,
   CheckCircle2,
   Clock,
   Mail,
@@ -75,8 +75,8 @@ export function BatchDetailClient({
               nativeButton={false}
               render={<Link href="/batches" />}
             >
-              <ArrowRight data-icon="inline-start" />
               رجوع
+              <ArrowLeft data-icon="inline-start" />
             </Button>
           </>
         }

@@ -1,13 +1,6 @@
 "use client"
 
-import {
-  Archive,
-  ArrowLeft,
-  ArrowRight,
-  MoreHorizontal,
-  Plus,
-  Trash2,
-} from "lucide-react"
+import { Archive, ArrowLeft, ArrowRight, MoreHorizontal, Plus, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -264,8 +257,8 @@ export function BatchesListClient({
               disabled={page <= 1}
               onClick={() => updateSearch({ page: page - 1 })}
             >
-              <ArrowRight data-icon="inline-start" />
               السابق
+              <ArrowLeft data-icon="inline-start" />
             </Button>
             <Button
               variant="outline"
@@ -273,8 +266,8 @@ export function BatchesListClient({
               disabled={page >= totalPages}
               onClick={() => updateSearch({ page: page + 1 })}
             >
+              <ArrowRight data-icon="inline-end" />
               التالي
-              <ArrowLeft data-icon="inline-end" />
             </Button>
           </div>
         </div>

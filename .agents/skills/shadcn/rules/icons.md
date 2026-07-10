@@ -27,7 +27,7 @@ Add `data-icon="inline-start"` (prefix) or `data-icon="inline-end"` (suffix) to 
 
 <Button>
   Next
-  <ArrowRightIcon data-icon="inline-end"/>
+  <ArrowLeftIcon data-icon="inline-end"/>
 </Button>
 ```
 

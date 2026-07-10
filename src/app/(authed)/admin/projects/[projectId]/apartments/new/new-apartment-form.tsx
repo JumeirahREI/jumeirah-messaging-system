@@ -1,6 +1,6 @@
 "use client"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { ArrowRight } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
@@ -17,10 +17,10 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { apartmentSchema, type ApartmentFormData } from "@/lib/schemas"
 import type { TowerRow } from "@/lib/server/reference-data"
 import { createApartment } from "@/lib/server/reference-data"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 
 export function NewApartmentForm({
   projectId,
@@ -69,8 +69,8 @@ export function NewApartmentForm({
             nativeButton={false}
             render={<Link href={backHref} />}
           >
-            <ArrowRight className="size-4" />
             رجوع
+            <ArrowLeft className="size-4" />
           </Button>
         }
       />

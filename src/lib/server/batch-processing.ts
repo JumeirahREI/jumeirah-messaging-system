@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm"
+import { and, eq, inArray, isNull, sql } from "drizzle-orm"
 
 import { db } from "@/lib/server/db"
 import type { BatchStatus } from "@/lib/server/schema"
@@ -17,7 +17,13 @@ export async function refreshBatchCounters(batchId: number): Promise<void> {
     .select({ status: messages.status, count: sql<number>`count(*)` })
     .from(messages)
     .innerJoin(invoices, eq(messages.invoiceId, invoices.id))
-    .where(eq(invoices.batchId, batchId))
+    .where(
+      and(
+        eq(invoices.batchId, batchId),
+        isNull(invoices.deletedAt),
+        isNull(messages.deletedAt)
+      )
+    )
     .groupBy(messages.status)
 
   let sent = 0
@@ -47,7 +53,14 @@ export async function processPendingMessages(batchId: number): Promise<void> {
     })
     .from(messages)
     .innerJoin(invoices, eq(messages.invoiceId, invoices.id))
-    .where(and(eq(invoices.batchId, batchId), eq(messages.status, "pending")))
+    .where(
+      and(
+        eq(invoices.batchId, batchId),
+        eq(messages.status, "pending"),
+        isNull(invoices.deletedAt),
+        isNull(messages.deletedAt)
+      )
+    )
 
   if (pendingRows.length === 0) {
     await refreshBatchCounters(batchId)
