@@ -57,8 +57,8 @@ export default function NewProjectPage() {
         }
       />
       <div className="mx-auto w-full max-w-lg">
-        <Card>
-          <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <Card>
             <CardHeader>
               <CardTitle>بيانات المشروع</CardTitle>
             </CardHeader>
@@ -91,8 +91,8 @@ export default function NewProjectPage() {
                 إلغاء
               </Button>
             </CardFooter>
-          </form>
-        </Card>
+          </Card>
+        </form>
       </div>
     </div>
   )

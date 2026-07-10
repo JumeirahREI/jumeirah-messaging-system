@@ -125,8 +125,8 @@ export function EditUserForm({
   return (
     <div className="flex flex-col gap-6">
       <div className="mx-auto w-full max-w-md">
-        <Card>
-          <form onSubmit={handleSubmit(onUpdate)}>
+        <form onSubmit={handleSubmit(onUpdate)}>
+          <Card>
             <CardHeader>
               <CardTitle>تعديل المستخدم</CardTitle>
             </CardHeader>
@@ -200,13 +200,13 @@ export function EditUserForm({
                 </AlertDialogContent>
               </AlertDialog>
             </CardFooter>
-          </form>
-        </Card>
+          </Card>
+        </form>
       </div>
 
       <div className="mx-auto w-full max-w-md">
-        <Card>
-          <form onSubmit={handleResetSubmit(onResetPassword)}>
+        <form onSubmit={handleResetSubmit(onResetPassword)}>
+          <Card>
             <CardHeader>
               <CardTitle>تغيير كلمة المرور</CardTitle>
             </CardHeader>
@@ -231,8 +231,8 @@ export function EditUserForm({
                 {isResetting ? "جارٍ التغيير..." : "تغيير كلمة المرور"}
               </Button>
             </CardFooter>
-          </form>
-        </Card>
+          </Card>
+        </form>
       </div>
     </div>
   )

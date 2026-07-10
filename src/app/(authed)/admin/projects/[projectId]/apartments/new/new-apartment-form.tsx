@@ -25,8 +25,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { apartmentSchema, type ApartmentFormData } from "@/lib/schemas"
-import { createApartment } from "@/lib/server/reference-data"
 import type { TowerRow } from "@/lib/server/reference-data"
+import { createApartment } from "@/lib/server/reference-data"
 
 export function NewApartmentForm({
   projectId,
@@ -81,8 +81,8 @@ export function NewApartmentForm({
         }
       />
       <div className="mx-auto w-full max-w-lg">
-        <Card>
-          <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <Card>
             <CardHeader>
               <CardTitle>بيانات الشقة</CardTitle>
             </CardHeader>
@@ -102,8 +102,8 @@ export function NewApartmentForm({
                     <SelectValue placeholder="اختر البرج...">
                       {(value: string | null) =>
                         value
-                          ? towers.find((t) => String(t.id) === value)?.label ??
-                            null
+                          ? (towers.find((t) => String(t.id) === value)
+                              ?.label ?? null)
                           : null
                       }
                     </SelectValue>
@@ -171,8 +171,8 @@ export function NewApartmentForm({
                 إلغاء
               </Button>
             </CardFooter>
-          </form>
-        </Card>
+          </Card>
+        </form>
       </div>
     </div>
   )

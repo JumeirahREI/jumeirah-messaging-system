@@ -62,8 +62,8 @@ export default function NewTowerPage() {
         }
       />
       <div className="mx-auto w-full max-w-lg">
-        <Card>
-          <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <Card>
             <CardHeader>
               <CardTitle>بيانات البرج</CardTitle>
             </CardHeader>
@@ -96,8 +96,8 @@ export default function NewTowerPage() {
                 إلغاء
               </Button>
             </CardFooter>
-          </form>
-        </Card>
+          </Card>
+        </form>
       </div>
     </div>
   )

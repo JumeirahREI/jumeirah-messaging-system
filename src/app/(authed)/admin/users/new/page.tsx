@@ -54,8 +54,8 @@ export default function NewUserPage() {
 
   return (
     <div className="mx-auto max-w-md">
-      <Card>
-        <form onSubmit={handleSubmit(onSubmit)}>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <Card>
           <CardHeader>
             <CardTitle>مستخدم جديد</CardTitle>
           </CardHeader>
@@ -123,8 +123,8 @@ export default function NewUserPage() {
               إلغاء
             </Button>
           </CardFooter>
-        </form>
-      </Card>
+        </Card>
+      </form>
     </div>
   )
 }

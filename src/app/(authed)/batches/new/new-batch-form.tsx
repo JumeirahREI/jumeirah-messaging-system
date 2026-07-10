@@ -135,8 +135,8 @@ export function NewBatchForm({
           </AlertDescription>
         </Alert>
       ) : (
-        <Card>
-          <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <Card>
             <CardHeader>
               <CardTitle>بيانات الدفعة</CardTitle>
             </CardHeader>
@@ -254,8 +254,8 @@ export function NewBatchForm({
                 {isSubmitting ? "جارٍ الإنشاء..." : "إنشاء ومعاينة"}
               </Button>
             </CardFooter>
-          </form>
-        </Card>
+          </Card>
+        </form>
       )}
 
       {result?.kind === "unmatched" && (

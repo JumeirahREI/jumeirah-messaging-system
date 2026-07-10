@@ -52,8 +52,8 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <Card>
-          <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <Card>
             <CardHeader className="text-center">
               <CardTitle>تسجيل الدخول</CardTitle>
               <CardDescription>أدخل بياناتك للمتابعة</CardDescription>
@@ -97,8 +97,8 @@ export default function LoginPage() {
                 {isSubmitting ? "جارٍ الدخول..." : "دخول"}
               </Button>
             </CardFooter>
-          </form>
-        </Card>
+          </Card>
+        </form>
       </div>
     </main>
   )
