@@ -10,7 +10,9 @@
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx}\"",
     "check": "prettier --check \"**/*.{ts,tsx,js,jsx}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:push": "drizzle-kit push",
+    "db:seed": "bun run drizzle/seed.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

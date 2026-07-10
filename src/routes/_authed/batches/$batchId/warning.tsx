@@ -27,11 +27,11 @@ import {
 export const Route = createFileRoute("/_authed/batches/$batchId/warning")({
   loader: async ({ params }) => {
     const batchId = Number(params.batchId)
-    if (Number.isNaN(batchId)) throw new Error("معرّف دفعة غير صالح")
+    if (Number.isNaN(batchId)) throw new Error("معرّف دفعة رسائل غير صالح")
     const batch = await getBatch({ data: { id: batchId } })
-    if (!batch) throw new Error("الدفعة غير موجودة")
+    if (!batch) throw new Error("دفعة الرسائل غير موجودة")
     if (batch.status !== "completed") {
-      throw new Error("الدفعة غير مكتملة")
+      throw new Error("دفعة الرسائل غير مكتملة")
     }
     const eligible = await getWarningEligible({ data: { batchId } })
     if (eligible === null) throw new Error("تعذر تحميل البيانات")

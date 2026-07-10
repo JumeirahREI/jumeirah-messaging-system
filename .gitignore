@@ -14,5 +14,10 @@ __unconfig*
 todos.json
 .playwright-mcp/
 
+# Local SQLite databases (dev)
+*.db
+*.sqlite
+*.sqlite3
+
 # typescript
 *.tsbuildinfo

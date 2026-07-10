@@ -123,19 +123,19 @@ function BatchesListPage() {
       toast.error(res.error)
       return
     }
-    toast.success("تم حذف الدفعة")
+    toast.success("تم حذف دفعة الرسائل")
     router.invalidate()
   }
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="الدفعات"
-        description="إدارة دفعات الإرسال والمتابعة"
+        title="دفعات الرسائل"
+        description="إدارة دفعات الرسائل والمتابعة"
         actions={
           <Button nativeButton={false} render={<Link to="/batches/new" />}>
             <Plus data-icon="inline-start" />
-            دفعة جديدة
+            دفعة رسائل جديدة
           </Button>
         }
       />
@@ -178,12 +178,12 @@ function BatchesListPage() {
       {data.rows.length === 0 ? (
         <EmptyState
           icon={<Plus />}
-          title="لا توجد دفعات"
-          description="ابدأ بإنشاء دفعة جديدة لرفع ملف الفواتير وإرسال الرسائل."
+          title="لا توجد دفعات رسائل"
+          description="ابدأ بإنشاء دفعة رسائل جديدة لرفع ملف الفواتير وإرسال الرسائل."
           action={
             <Button nativeButton={false} render={<Link to="/batches/new" />}>
               <Plus data-icon="inline-start" />
-              دفعة جديدة
+              دفعة رسائل جديدة
             </Button>
           }
         />
@@ -294,7 +294,7 @@ function BatchesListPage() {
       {data.totalPages > 1 && (
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground tabular-nums">
-            صفحة {data.page} من {data.totalPages} ({data.total} دفعة)
+            صفحة {data.page} من {data.totalPages} ({data.total} دفعة رسائل)
           </span>
           <div className="flex gap-1">
             <Button
@@ -322,8 +322,8 @@ function BatchesListPage() {
       <ConfirmDialog
         open={confirmDeleteId !== null}
         onOpenChange={(open) => !open && setConfirmDeleteId(null)}
-        title="حذف الدفعة"
-        description="هل أنت متأكد من حذف هذه الدفعة؟ لا يمكن التراجع عن هذا الإجراء."
+        title="حذف دفعة الرسائل"
+        description="هل أنت متأكد من حذف دفعة الرسائل هذه؟ لا يمكن التراجع عن هذا الإجراء."
         confirmLabel="حذف"
         destructive
         busy={busy}

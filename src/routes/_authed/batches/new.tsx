@@ -107,7 +107,7 @@ function NewBatchPage() {
       }
       return
     }
-    toast.success("تم إنشاء الدفعة")
+    toast.success("تم إنشاء دفعة الرسائل")
     navigate({
       to: "/batches/$batchId",
       params: { batchId: String(res.batchId) },
@@ -117,22 +117,22 @@ function NewBatchPage() {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <PageHeader
-        title="دفعة جديدة"
-        description="ارفع ملف الفواتير لإنشاء دفعة إرسال"
+        title="دفعة رسائل جديدة"
+        description="ارفع ملف الفواتير لإنشاء دفعة رسائل"
       />
 
       {projects.length === 0 ? (
         <Alert>
           <AlertTitle>لا توجد مشاريع</AlertTitle>
           <AlertDescription>
-            اطلب من المسؤول إنشاء مشروع أولًا قبل إنشاء دفعات.
+            اطلب من المسؤول إنشاء مشروع أولًا قبل إنشاء دفعات رسائل.
           </AlertDescription>
         </Alert>
       ) : (
         <Card>
           <form onSubmit={handleSubmit}>
             <CardHeader>
-              <CardTitle>بيانات الدفعة</CardTitle>
+              <CardTitle>بيانات دفعة الرسائل</CardTitle>
             </CardHeader>
             <CardContent>
               <FieldGroup>

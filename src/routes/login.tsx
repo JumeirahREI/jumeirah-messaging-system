@@ -59,7 +59,7 @@ function LoginPage() {
             <h1 className="font-heading text-2xl font-semibold tracking-tight">
               جُميرا
             </h1>
-            <p className="text-sm text-muted-foreground">نظام مراسلات</p>
+            <p className="text-sm text-muted-foreground">نظام الرسائل</p>
           </div>
         </div>
 

@@ -58,9 +58,9 @@ import { formatArabicDate } from "@/lib/utils"
 export const Route = createFileRoute("/_authed/batches/$batchId/")({
   loader: async ({ params }) => {
     const batchId = Number(params.batchId)
-    if (Number.isNaN(batchId)) throw new Error("معرّف دفعة غير صالح")
+    if (Number.isNaN(batchId)) throw new Error("معرّف دفعة رسائل غير صالح")
     const batch = await getBatch({ data: { id: batchId } })
-    if (!batch) throw new Error("الدفعة غير موجودة")
+    if (!batch) throw new Error("دفعة الرسائل غير موجودة")
     const preview =
       batch.status === "draft"
         ? await getDraftPreview({ data: { batchId } })
@@ -172,7 +172,7 @@ function DeleteBatchButton({ id }: { id: number }) {
       toast.error(res.error)
       return
     }
-    toast.success("تم حذف الدفعة")
+    toast.success("تم حذف دفعة الرسائل")
     navigate({
       to: "/batches",
       search: { page: 1, status: "all", archived: false },
@@ -188,8 +188,8 @@ function DeleteBatchButton({ id }: { id: number }) {
       <ConfirmDialog
         open={open}
         onOpenChange={setOpen}
-        title="حذف الدفعة"
-        description="هل أنت متأكد من حذف هذه الدفعة؟ لا يمكن التراجع عن هذا الإجراء."
+        title="حذف دفعة الرسائل"
+        description="هل أنت متأكد من حذف دفعة الرسائل هذه؟ لا يمكن التراجع عن هذا الإجراء."
         confirmLabel="حذف"
         destructive
         busy={busy}
@@ -354,7 +354,7 @@ function DraftReview({
           <h2 className="font-heading text-lg font-medium">الشقق المطابقة</h2>
           {preview.matched.length > 0 && (
             <div className="relative w-full sm:w-64">
-              <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto size-4 text-muted-foreground" />
+              <Search className="pointer-events-none absolute inset-y-0 inset-s-3 my-auto size-4 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -536,7 +536,7 @@ function ProgressView({
           <h2 className="font-heading text-lg font-medium">الرسائل</h2>
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative w-full sm:w-56">
-              <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto size-4 text-muted-foreground" />
+              <Search className="pointer-events-none absolute inset-y-0 inset-s-3 my-auto size-4 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}

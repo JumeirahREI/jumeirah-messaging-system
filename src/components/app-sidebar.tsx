@@ -84,7 +84,7 @@ function UserMenu({ session }: { session: SessionUser }) {
   return (
     <DropdownMenu>
       <SidebarMenuButton
-        render={<DropdownMenuTrigger className="w-full" />}
+        render={<DropdownMenuTrigger className="w-full py-4!" />}
         tooltip={session.fullname}
       >
         <Avatar className="size-7">
@@ -155,7 +155,7 @@ export function AppSidebar({ session }: { session: SessionUser }) {
                   جُميرا
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  نظام المراسلات
+                  نظام الرسائل
                 </span>
               </div>
             </SidebarMenuButton>
@@ -174,7 +174,11 @@ export function AppSidebar({ session }: { session: SessionUser }) {
                 label="لوحة التحكم"
                 exact
               />
-              <NavItem to="/batches" icon={<MessageSquare />} label="الدفعات" />
+              <NavItem
+                to="/batches"
+                icon={<MessageSquare />}
+                label="دفعات الرسائل"
+              />
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

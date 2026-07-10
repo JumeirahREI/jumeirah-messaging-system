@@ -88,14 +88,14 @@ function Dashboard() {
         <QuickAction
           to="/batches/new"
           icon={<Plus />}
-          label="دفعة جديدة"
+          label="دفعة رسائل جديدة"
           description="ارفع ملف فواتير وأرسل الرسائل"
         />
         <QuickAction
           to="/batches"
           icon={<MessageSquare />}
-          label="الدفعات"
-          description="عرض وإدارة الدفعات السابقة"
+          label="دفعات الرسائل"
+          description="عرض وإدارة دفعات الرسائل السابقة"
         />
         {session.isAdmin ? (
           <QuickAction
@@ -109,22 +109,22 @@ function Dashboard() {
             to="/batches"
             icon={<Users />}
             label="السجل"
-            description="استعراض الدفعات المكتملة"
+            description="استعراض دفعات الرسائل المكتملة"
           />
         )}
       </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="font-heading text-lg font-medium">آخر الدفعات</h2>
+        <h2 className="font-heading text-lg font-medium">آخر دفعات الرسائل</h2>
         {recentBatches.length === 0 ? (
           <EmptyState
             icon={<Plus />}
-            title="لا توجد دفعات بعد"
-            description="ابدأ بإنشاء دفعة جديدة لرفع ملف الفواتير وإرسال الرسائل."
+            title="لا توجد دفعات رسائل بعد"
+            description="ابدأ بإنشاء دفعة رسائل جديدة لرفع ملف الفواتير وإرسال الرسائل."
             action={
               <Button nativeButton={false} render={<Link to="/batches/new" />}>
                 <Plus data-icon="inline-start" />
-                دفعة جديدة
+                دفعة رسائل جديدة
               </Button>
             }
           />
