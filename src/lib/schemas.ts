@@ -16,6 +16,7 @@ export const towerSchema = z.object({
 export const apartmentSchema = z.object({
   label: z.string().min(1, "الاسم مطلوب"),
   unitNumber: z.string().optional(),
+  towerId: z.coerce.number().min(1, "البرج مطلوب"),
 })
 
 export const contactSchema = z.object({

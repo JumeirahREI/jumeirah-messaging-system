@@ -165,7 +165,14 @@ export function NewBatchForm({
                     disabled={isSubmitting}
                   >
                     <SelectTrigger id="project">
-                      <SelectValue placeholder="اختر مشروعًا" />
+                      <SelectValue placeholder="اختر مشروعًا">
+                        {(value: string | null) =>
+                          value
+                            ? (projects.find((p) => String(p.id) === value)
+                                ?.title ?? null)
+                            : null
+                        }
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {projects.map((p) => (

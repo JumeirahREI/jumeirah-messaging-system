@@ -1,10 +1,10 @@
 "use client"
 
 import {
+  Building2,
   LogOut,
   MessageSquare,
   MoonIcon,
-  Settings,
   ShieldCheck,
   SunIcon,
   Users,
@@ -146,7 +146,7 @@ function UserMenu({ session }: { session: SessionUser }) {
 
 export function AppSidebar({ session }: { session: SessionUser }) {
   return (
-    <Sidebar side="right" dir="rtl">
+    <Sidebar variant="floating" side="right" dir="rtl">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -193,14 +193,9 @@ export function AppSidebar({ session }: { session: SessionUser }) {
               <SidebarGroupContent>
                 <SidebarMenu>
                   <NavItem
-                    to="/admin"
-                    icon={<Settings />}
-                    label="لوحة الإدارة"
-                  />
-                  <NavItem
                     to="/admin/projects"
-                    icon={<ShieldCheck />}
-                    label="المشاريع والبيانات"
+                    icon={<Building2 />}
+                    label="المشاريع"
                   />
                   <NavItem
                     to="/admin/users"

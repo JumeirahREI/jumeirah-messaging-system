@@ -131,7 +131,17 @@ export function BatchesListClient({
           }}
         >
           <SelectTrigger className="w-40">
-            <SelectValue />
+            <SelectValue>
+              {(value: string | null) => {
+                const labels: Record<string, string> = {
+                  all: "الكل",
+                  draft: "مسودة",
+                  sending: "جارٍ الإرسال",
+                  completed: "مكتملة",
+                }
+                return value ? (labels[value] ?? value) : null
+              }}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">الكل</SelectItem>

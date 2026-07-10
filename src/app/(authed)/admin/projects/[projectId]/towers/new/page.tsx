@@ -1,9 +1,12 @@
 "use client"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { ArrowRight } from "lucide-react"
+import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 
+import { PageHeader } from "@/components/admin/page-header"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -39,46 +42,63 @@ export default function NewTowerPage() {
       return
     }
     toast.success("تم إنشاء البرج")
-    router.push(`/admin/projects/${projectId}/towers/${result.data.id}`)
+    router.push(`/admin/projects/${projectId}`)
   }
 
   return (
-    <div className="mx-auto max-w-md">
-      <Card>
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <CardHeader>
-            <CardTitle>برج جديد</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="label">الاسم</Label>
-              <Input
-                id="label"
-                {...register("label")}
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="برج جديد"
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            nativeButton={false}
+            render={<Link href={`/admin/projects/${projectId}`} />}
+          >
+            <ArrowRight className="size-4" />
+            رجوع
+          </Button>
+        }
+      />
+      <div className="mx-auto w-full max-w-lg">
+        <Card>
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <CardHeader>
+              <CardTitle>بيانات البرج</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="label">الاسم</Label>
+                <Input
+                  id="label"
+                  placeholder="مثال: برج A"
+                  {...register("label")}
+                  disabled={isSubmitting}
+                />
+                {errors.label && (
+                  <p className="text-sm text-destructive">
+                    {errors.label.message}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+            <CardFooter className="gap-2 border-t pt-(--card-spacing)">
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "جارٍ الحفظ..." : "حفظ"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
                 disabled={isSubmitting}
-              />
-              {errors.label && (
-                <p className="text-sm text-destructive">
-                  {errors.label.message}
-                </p>
-              )}
-            </div>
-          </CardContent>
-          <CardFooter className="gap-2">
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "جارٍ الحفظ..." : "حفظ"}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={isSubmitting}
-              onClick={() => router.push(`/admin/projects/${projectId}`)}
-            >
-              إلغاء
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
+                onClick={() => router.push(`/admin/projects/${projectId}`)}
+              >
+                إلغاء
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
     </div>
   )
 }

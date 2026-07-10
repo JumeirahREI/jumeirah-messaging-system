@@ -7,8 +7,8 @@ import { apartments, projects, towers, users } from "../src/lib/server/schema"
 const EXCEL_FILE =
   "‏‏‏‏‏‏‏‏‏‏‏‏‏‏‏‏‏‏فواتير الخدمات لشهر يونيو للفترة بين 21-5-2026م حتى  24-6-2026م - نسخة.xlsx"
 const PROJECT_TITLE = "ابرج الحظاء"
-const TOWER_LABEL_A = "برجA"
-const TOWER_LABEL_B = "برجB"
+const TOWER_LABEL_A = "برج A"
+const TOWER_LABEL_B = "برج B"
 const HEADER_APARTMENT_MARKER = "رقم الشقة"
 const COL_APARTMENT = 3
 

@@ -1,68 +1,29 @@
 import { Plus } from "lucide-react"
 import Link from "next/link"
 
+import { PageHeader } from "@/components/admin/page-header"
+import { ProjectsGrid } from "@/components/admin/projects-grid"
 import { Button } from "@/components/ui/button"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { listProjects } from "@/lib/server/reference-data"
-import { formatArabicDate } from "@/lib/utils"
+import { listProjectsWithCounts } from "@/lib/server/reference-data"
 
 export default async function ProjectsListPage() {
-  const projects = await listProjects()
+  const projects = await listProjectsWithCounts()
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-medium">المشاريع</h1>
-        <Button
-          nativeButton={false}
-          render={<Link href="/admin/projects/new" />}
-        >
-          <Plus className="size-4" />
-          مشروع جديد
-        </Button>
-      </div>
-      {projects.length === 0 ? (
-        <p className="text-muted-foreground">لا توجد مشاريع بعد.</p>
-      ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>العنوان</TableHead>
-                <TableHead>تاريخ الإنشاء</TableHead>
-                <TableHead className="text-end">إجراءات</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {projects.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-medium">{p.title}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatArabicDate(p.createdAt)}
-                  </TableCell>
-                  <TableCell className="text-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      nativeButton={false}
-                      render={<Link href={`/admin/projects/${p.id}`} />}
-                    >
-                      تعديل
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="المشاريع"
+        actions={
+          <Button
+            nativeButton={false}
+            render={<Link href="/admin/projects/new" />}
+          >
+            <Plus className="size-4" />
+            مشروع جديد
+          </Button>
+        }
+      />
+      <ProjectsGrid projects={projects} />
     </div>
   )
 }

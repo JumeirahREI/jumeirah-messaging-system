@@ -1,6 +1,6 @@
 "use server"
 import bcrypt from "bcryptjs"
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm"
+import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm"
 
 import type { SessionUser } from "@/lib/server/auth-helpers"
 import { requireRole } from "@/lib/server/auth-helpers"
@@ -64,6 +64,45 @@ export async function listProjects(): Promise<ProjectRow[]> {
     .where(isNull(projects.deletedAt))
     .orderBy(desc(projects.createdAt))
   return rows satisfies ProjectRow[]
+}
+
+export type ProjectWithCountsRow = ProjectRow & {
+  towerCount: number
+  apartmentCount: number
+}
+
+export async function listProjectsWithCounts(): Promise<
+  ProjectWithCountsRow[]
+> {
+  await requireRole("admin")
+  const [projectsRows, towerCounts, aptCounts] = await Promise.all([
+    db
+      .select({
+        id: projects.id,
+        title: projects.title,
+        createdAt: projects.createdAt,
+      })
+      .from(projects)
+      .where(isNull(projects.deletedAt))
+      .orderBy(desc(projects.createdAt)),
+    db
+      .select({ projectId: towers.projectId, n: count() })
+      .from(towers)
+      .where(isNull(towers.deletedAt))
+      .groupBy(towers.projectId),
+    db
+      .select({ projectId: apartments.projectId, n: count() })
+      .from(apartments)
+      .where(isNull(apartments.deletedAt))
+      .groupBy(apartments.projectId),
+  ])
+  const towerMap = new Map(towerCounts.map((r) => [r.projectId, r.n]))
+  const aptMap = new Map(aptCounts.map((r) => [r.projectId, r.n]))
+  return projectsRows.map((p) => ({
+    ...p,
+    towerCount: towerMap.get(p.id) ?? 0,
+    apartmentCount: aptMap.get(p.id) ?? 0,
+  }))
 }
 
 export async function getProject(input: {
@@ -180,6 +219,43 @@ export async function listTowers(input: {
     .where(and(eq(towers.projectId, input.projectId), isNull(towers.deletedAt)))
     .orderBy(desc(towers.createdAt))
   return rows satisfies TowerRow[]
+}
+
+export type TowerWithCountsRow = TowerRow & { apartmentCount: number }
+
+export async function listTowersWithCounts(input: {
+  projectId: number
+}): Promise<TowerWithCountsRow[]> {
+  await requireRole("admin")
+  const [towerRows, aptCounts] = await Promise.all([
+    db
+      .select({
+        id: towers.id,
+        projectId: towers.projectId,
+        label: towers.label,
+        createdAt: towers.createdAt,
+      })
+      .from(towers)
+      .where(
+        and(eq(towers.projectId, input.projectId), isNull(towers.deletedAt))
+      )
+      .orderBy(desc(towers.createdAt)),
+    db
+      .select({ towerId: apartments.towerId, n: count() })
+      .from(apartments)
+      .where(
+        and(
+          eq(apartments.projectId, input.projectId),
+          isNull(apartments.deletedAt)
+        )
+      )
+      .groupBy(apartments.towerId),
+  ])
+  const aptMap = new Map(aptCounts.map((r) => [r.towerId, r.n]))
+  return towerRows.map((t) => ({
+    ...t,
+    apartmentCount: aptMap.get(t.id) ?? 0,
+  }))
 }
 
 export async function getTower(input: {
@@ -301,6 +377,34 @@ export async function listApartments(input: {
     )
     .orderBy(apartments.label)
   return rows satisfies ApartmentRow[]
+}
+
+export type ApartmentWithTowerRow = ApartmentRow & { towerLabel: string }
+
+export async function listApartmentsByProject(input: {
+  projectId: number
+}): Promise<ApartmentWithTowerRow[]> {
+  await requireRole("admin")
+  const rows = await db
+    .select({
+      id: apartments.id,
+      towerId: apartments.towerId,
+      projectId: apartments.projectId,
+      label: apartments.label,
+      unitNumber: apartments.unitNumber,
+      createdAt: apartments.createdAt,
+      towerLabel: towers.label,
+    })
+    .from(apartments)
+    .innerJoin(towers, eq(towers.id, apartments.towerId))
+    .where(
+      and(
+        eq(apartments.projectId, input.projectId),
+        isNull(apartments.deletedAt)
+      )
+    )
+    .orderBy(apartments.label)
+  return rows satisfies ApartmentWithTowerRow[]
 }
 
 export async function getApartment(input: { id: number }): Promise<{
