@@ -1,5 +1,8 @@
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
+"use client"
+
 import { ArrowRight, Send, TriangleAlert } from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -17,32 +20,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import type { WarningEligibleInvoice } from "@/lib/server/batch-service"
-import {
-  getBatch,
-  getWarningEligible,
-  sendWarning,
+import type {
+  BatchDetail,
+  WarningEligibleInvoice,
 } from "@/lib/server/batch-service"
+import { sendWarning } from "@/lib/server/batch-service"
 
-export const Route = createFileRoute("/_authed/batches/$batchId/warning")({
-  loader: async ({ params }) => {
-    const batchId = Number(params.batchId)
-    if (Number.isNaN(batchId)) throw new Error("معرّف دفعة رسائل غير صالح")
-    const batch = await getBatch({ data: { id: batchId } })
-    if (!batch) throw new Error("دفعة الرسائل غير موجودة")
-    if (batch.status !== "completed") {
-      throw new Error("دفعة الرسائل غير مكتملة")
-    }
-    const eligible = await getWarningEligible({ data: { batchId } })
-    if (eligible === null) throw new Error("تعذر تحميل البيانات")
-    return { batch, eligible }
-  },
-  component: WarningPage,
-})
-
-function WarningPage() {
-  const { batch, eligible } = Route.useLoaderData()
-  const navigate = useNavigate()
+export function WarningClient({
+  batch,
+  eligible,
+}: {
+  batch: BatchDetail
+  eligible: WarningEligibleInvoice[]
+}) {
+  const router = useRouter()
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [sending, setSending] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -67,7 +58,8 @@ function WarningPage() {
   async function handleSend() {
     setSending(true)
     const res = await sendWarning({
-      data: { batchId: batch.id, invoiceIds: Array.from(selected) },
+      batchId: batch.id,
+      invoiceIds: Array.from(selected),
     })
     setSending(false)
     setConfirmOpen(false)
@@ -76,7 +68,7 @@ function WarningPage() {
       return
     }
     toast.success("تم إرسال التحذيرات")
-    navigate({ to: "/batches/$batchId", params: { batchId: String(batch.id) } })
+    router.push(`/batches/${batch.id}`)
   }
 
   return (
@@ -87,13 +79,7 @@ function WarningPage() {
         actions={
           <Button
             variant="outline"
-            nativeButton={false}
-            render={
-              <Link
-                to="/batches/$batchId"
-                params={{ batchId: String(batch.id) }}
-              />
-            }
+            render={<Link href={`/batches/${batch.id}`} />}
           >
             <ArrowRight data-icon="inline-start" />
             رجوع
@@ -145,7 +131,7 @@ function WarningPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {eligible.map((inv: WarningEligibleInvoice) => (
+                    {eligible.map((inv) => (
                       <TableRow key={inv.invoiceId}>
                         <TableCell>
                           <Checkbox
@@ -185,7 +171,7 @@ function WarningPage() {
             open={confirmOpen}
             onOpenChange={setConfirmOpen}
             title="تأكيد إرسال التحذيرات"
-            description={`سيتم إرسال تحذيرات متابعة إلى ${selected.size} فاترة. هل تريد المتابعة؟`}
+            description={`سيتم إرسال تحذيرات متابعة إلى ${selected.size} فاتورة. هل تريد المتابعة؟`}
             confirmLabel="إرسال"
             busy={sending}
             onConfirm={handleSend}

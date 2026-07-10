@@ -15,13 +15,11 @@ declare module "next-auth" {
   }
 }
 
-declare module "@auth/core/jwt" {
-  interface JWT {
-    id?: number
-    fullname?: string
-    username?: string
-    isAdmin?: boolean
-  }
+type AugmentedJWT = {
+  id?: number
+  fullname?: string
+  username?: string
+  isAdmin?: boolean
 }
 
 export const authConfig = {
@@ -29,22 +27,24 @@ export const authConfig = {
   pages: { signIn: "/login" },
   callbacks: {
     jwt({ token, user }) {
+      const t = token as unknown as AugmentedJWT
       if (user) {
-        const u = user as SessionUser
-        token.id = u.id
-        token.fullname = u.fullname
-        token.username = u.username
-        token.isAdmin = u.isAdmin
+        const u = user as unknown as SessionUser
+        t.id = u.id
+        t.fullname = u.fullname
+        t.username = u.username
+        t.isAdmin = u.isAdmin
       }
       return token
     },
     session({ session, token }) {
-      if (token.id !== undefined) {
-        session.user = {
-          id: token.id,
-          fullname: token.fullname ?? "",
-          username: token.username ?? "",
-          isAdmin: token.isAdmin ?? false,
+      const t = token as unknown as AugmentedJWT
+      if (t.id !== undefined) {
+        ;(session as unknown as { user: SessionUser }).user = {
+          id: t.id,
+          fullname: t.fullname ?? "",
+          username: t.username ?? "",
+          isAdmin: t.isAdmin ?? false,
         }
       }
       return session

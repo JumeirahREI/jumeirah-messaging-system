@@ -1,7 +1,7 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 
-import { authConfig, type SessionUser } from "@/auth.config"
+import { authConfig } from "@/auth.config"
 import { authenticateUser } from "@/lib/server/auth-db"
 
 export { authenticateUser }
@@ -22,7 +22,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
         const user = await authenticateUser(username, password)
         if (!user) return null
-        return user as unknown as SessionUser & { image?: string | null }
+        return user as unknown as { id: string; name: string; email: string }
       },
     }),
   ],

@@ -1,9 +1,5 @@
-import {
-  Link,
-  createFileRoute,
-  useNavigate,
-  useRouter,
-} from "@tanstack/react-router"
+"use client"
+
 import {
   AlertTriangle,
   ArrowRight,
@@ -16,6 +12,8 @@ import {
   TriangleAlert,
   XCircle,
 } from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
@@ -46,40 +44,28 @@ import type {
   DraftPreview,
 } from "@/lib/server/batch-service"
 import {
-  getBatch,
   getBatchStatus,
-  getDraftPreview,
   retryFailed,
   sendBatch,
   softDeleteBatch,
 } from "@/lib/server/batch-service"
 import { formatArabicDate } from "@/lib/utils"
 
-export const Route = createFileRoute("/_authed/batches/$batchId/")({
-  loader: async ({ params }) => {
-    const batchId = Number(params.batchId)
-    if (Number.isNaN(batchId)) throw new Error("معرّف دفعة رسائل غير صالح")
-    const batch = await getBatch({ data: { id: batchId } })
-    if (!batch) throw new Error("دفعة الرسائل غير موجودة")
-    const preview =
-      batch.status === "draft"
-        ? await getDraftPreview({ data: { batchId } })
-        : null
-    return { batch, preview }
-  },
-  component: BatchDetailPage,
-})
-
-function BatchDetailPage() {
-  const { batch, preview } = Route.useLoaderData()
-  const [status, setStatus] = useState<BatchStatusResponse | null>(null)
+export function BatchDetailClient({
+  batch,
+  preview,
+}: {
+  batch: BatchDetail
+  preview: DraftPreview | null
+}) {
   const router = useRouter()
+  const [status, setStatus] = useState<BatchStatusResponse | null>(null)
 
   useEffect(() => {
     if (batch.status === "sending" || batch.status === "completed") {
       let cancelled = false
       const poll = async () => {
-        const res = await getBatchStatus({ data: { batchId: batch.id } })
+        const res = await getBatchStatus({ batchId: batch.id })
         if (cancelled || !res) return
         setStatus(res)
         if (res.status === "sending") {
@@ -102,16 +88,7 @@ function BatchDetailPage() {
           <>
             <BatchStatusBadge status={batch.status} />
             {batch.status === "draft" && <DeleteBatchButton id={batch.id} />}
-            <Button
-              variant="outline"
-              nativeButton={false}
-              render={
-                <Link
-                  to="/batches"
-                  search={{ page: 1, status: "all", archived: false }}
-                />
-              }
-            >
+            <Button variant="outline" render={<Link href="/batches" />}>
               <ArrowRight data-icon="inline-start" />
               رجوع
             </Button>
@@ -145,7 +122,7 @@ function BatchDetailPage() {
           <ProgressView
             batch={batch}
             status={status}
-            onRefresh={() => router.invalidate()}
+            onRefresh={() => router.refresh()}
           />
         )}
       {(batch.status === "sending" || batch.status === "completed") &&
@@ -160,23 +137,20 @@ function BatchDetailPage() {
 }
 
 function DeleteBatchButton({ id }: { id: number }) {
-  const navigate = useNavigate()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
   async function handleDelete() {
     setBusy(true)
-    const res = await softDeleteBatch({ data: { id } })
+    const res = await softDeleteBatch({ id })
     setBusy(false)
     if (!res.ok) {
       toast.error(res.error)
       return
     }
     toast.success("تم حذف دفعة الرسائل")
-    navigate({
-      to: "/batches",
-      search: { page: 1, status: "all", archived: false },
-    })
+    router.push("/batches?page=1&status=all&archived=false")
   }
 
   return (
@@ -271,7 +245,7 @@ function DraftReview({
 
   async function handleSend() {
     setSending(true)
-    const res = await sendBatch({ data: { batchId: batch.id } })
+    const res = await sendBatch({ batchId: batch.id })
     setSending(false)
     setConfirmOpen(false)
     if (!res.ok) {
@@ -279,7 +253,7 @@ function DraftReview({
       return
     }
     toast.success("بدأ الإرسال")
-    router.invalidate()
+    router.refresh()
   }
 
   return (
@@ -483,7 +457,7 @@ function ProgressView({
 
   async function handleRetry() {
     setRetrying(true)
-    const res = await retryFailed({ data: { batchId: batch.id } })
+    const res = await retryFailed({ batchId: batch.id })
     setRetrying(false)
     setRetryConfirm(false)
     if (!res.ok) {
@@ -627,12 +601,8 @@ function ProgressView({
           )}
           <Button
             variant="outline"
-            nativeButton={false}
             render={
-              <Link
-                to="/batches/$batchId/warning"
-                params={{ batchId: String(batch.id) }}
-              />
+              <Link href={`/batches/${batch.id}/warning`} />
             }
           >
             <TriangleAlert data-icon="inline-start" />

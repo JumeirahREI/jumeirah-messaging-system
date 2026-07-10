@@ -16,6 +16,6 @@ export async function GET(
   if (Number.isNaN(batchId)) {
     return NextResponse.json({ error: "معرّف غير صالح" }, { status: 400 })
   }
-  const status = await getBatchStatus({ id: batchId })
+  const status = await getBatchStatus({ batchId })
   return NextResponse.json(status)
 }
