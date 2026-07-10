@@ -11,6 +11,7 @@ import {
   Clock,
   Mail,
   RefreshCw,
+  Search,
   Send,
   TriangleAlert,
   XCircle,
@@ -25,7 +26,9 @@ import { BatchStatusBadge, MessageStatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
 import { Progress, ProgressLabel } from "@/components/ui/progress"
+import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -115,6 +118,21 @@ function BatchDetailPage() {
           </>
         }
       />
+
+      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <span className="tabular-nums">#{batch.id}</span>
+        <Separator orientation="vertical" className="h-4" />
+        <span className="tabular-nums">
+          {batch.createdAt ? formatArabicDate(batch.createdAt) : "—"}
+        </span>
+        {(batch.status === "sending" || batch.status === "completed") &&
+          status && (
+            <>
+              <Separator orientation="vertical" className="h-4" />
+              <span className="tabular-nums">{status.total} رسالة</span>
+            </>
+          )}
+      </div>
 
       {batch.status === "draft" && preview && (
         <DraftReview batch={batch} preview={preview} />
@@ -230,6 +248,7 @@ function DraftReview({
   const [acknowledged, setAcknowledged] = useState(false)
   const [sending, setSending] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [search, setSearch] = useState("")
 
   const totalRecipients = useMemo(
     () =>
@@ -239,6 +258,16 @@ function DraftReview({
       ),
     [preview]
   )
+
+  const filteredMatched = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (q === "") return preview.matched
+    return preview.matched.filter(
+      (m) =>
+        m.label.toLowerCase().includes(q) ||
+        m.clientName.toLowerCase().includes(q)
+    )
+  }, [preview.matched, search])
 
   async function handleSend() {
     setSending(true)
@@ -321,12 +350,32 @@ function DraftReview({
       )}
 
       <div className="flex flex-col gap-3">
-        <h2 className="font-heading text-lg font-medium">الشقق المطابقة</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="font-heading text-lg font-medium">الشقق المطابقة</h2>
+          {preview.matched.length > 0 && (
+            <div className="relative w-full sm:w-64">
+              <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto size-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="ابحث بالشقة أو العميل"
+                className="ps-9"
+                aria-label="بحث في الشقق المطابقة"
+              />
+            </div>
+          )}
+        </div>
         {preview.matched.length === 0 ? (
           <EmptyState
             icon={<Mail />}
             title="لا توجد شقق مطابقة"
             description="لم يتم العثور على شقق لها أرقام هاتف في هذا الملف."
+          />
+        ) : filteredMatched.length === 0 ? (
+          <EmptyState
+            icon={<Search />}
+            title="لا نتائج"
+            description="لا توجد شقق مطابقة لبحثك."
           />
         ) : (
           <div className="rounded-lg border">
@@ -341,7 +390,7 @@ function DraftReview({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {preview.matched.map((m) => (
+                {filteredMatched.map((m) => (
                   <TableRow key={m.invoiceId}>
                     <TableCell className="font-medium">{m.label}</TableCell>
                     <TableCell>{m.clientName}</TableCell>
@@ -360,9 +409,17 @@ function DraftReview({
             </Table>
           </div>
         )}
+        {search.trim() !== "" && preview.matched.length > 0 && (
+          <p className="text-sm text-muted-foreground tabular-nums">
+            {filteredMatched.length} من {preview.matched.length}
+          </p>
+        )}
       </div>
 
-      <div className="flex gap-2">
+      <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+        <span className="text-sm text-muted-foreground tabular-nums">
+          {totalRecipients} رسالة إلى {preview.matched.length} شقة
+        </span>
         <Button
           disabled={
             (preview.noContacts.length > 0 && !acknowledged) ||
@@ -403,6 +460,7 @@ function ProgressView({
   const [filter, setFilter] = useState<"all" | "sent" | "failed" | "pending">(
     "all"
   )
+  const [search, setSearch] = useState("")
 
   const percent =
     status.total > 0
@@ -411,9 +469,17 @@ function ProgressView({
   const isSending = status.status === "sending"
 
   const filteredMessages = useMemo(() => {
-    if (filter === "all") return status.messages
-    return status.messages.filter((m) => m.status === filter)
-  }, [status.messages, filter])
+    const q = search.trim().toLowerCase()
+    return status.messages.filter((m) => {
+      if (filter !== "all" && m.status !== filter) return false
+      if (q === "") return true
+      return (
+        m.apartmentLabel.toLowerCase().includes(q) ||
+        (m.contactName?.toLowerCase().includes(q) ?? false) ||
+        m.phoneNumber.includes(q)
+      )
+    })
+  }, [status.messages, filter, search])
 
   async function handleRetry() {
     setRetrying(true)
@@ -465,52 +531,42 @@ function ProgressView({
         </CardContent>
       </Card>
 
-      {status.status === "completed" && (
-        <div className="flex flex-wrap gap-2">
-          {status.failed > 0 && (
-            <Button onClick={() => setRetryConfirm(true)} disabled={retrying}>
-              <RefreshCw data-icon="inline-start" />
-              إعادة إرسال الفاشلة ({status.failed})
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            nativeButton={false}
-            render={
-              <Link
-                to="/batches/$batchId/warning"
-                params={{ batchId: String(batch.id) }}
-              />
-            }
-          >
-            <TriangleAlert data-icon="inline-start" />
-            إرسال تحذير متابعة
-          </Button>
-        </div>
-      )}
-
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="font-heading text-lg font-medium">الرسائل</h2>
-          <Tabs
-            value={filter}
-            onValueChange={(v) => setFilter(v as typeof filter)}
-          >
-            <TabsList>
-              <TabsTrigger value="all">
-                الكل ({status.messages.length})
-              </TabsTrigger>
-              <TabsTrigger value="sent">مرسلة ({status.sent})</TabsTrigger>
-              <TabsTrigger value="failed">فاشلة ({status.failed})</TabsTrigger>
-              <TabsTrigger value="pending">بانتظار</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-full sm:w-56">
+              <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto size-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="ابحث بالشقة أو الهاتف"
+                className="ps-9"
+                aria-label="بحث في الرسائل"
+              />
+            </div>
+            <Tabs
+              value={filter}
+              onValueChange={(v) => setFilter(v as typeof filter)}
+            >
+              <TabsList>
+                <TabsTrigger value="all">
+                  الكل ({status.messages.length})
+                </TabsTrigger>
+                <TabsTrigger value="sent">مرسلة ({status.sent})</TabsTrigger>
+                <TabsTrigger value="failed">
+                  فاشلة ({status.failed})
+                </TabsTrigger>
+                <TabsTrigger value="pending">بانتظار</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
         {filteredMessages.length === 0 ? (
           <EmptyState
             icon={<Mail />}
             title="لا توجد رسائل"
-            description="لا توجد رسائل بهذه الحالة."
+            description="لا توجد رسائل بهذه الحالة أو بحثك."
           />
         ) : (
           <div className="rounded-lg border">
@@ -554,7 +610,36 @@ function ProgressView({
             </Table>
           </div>
         )}
+        {search.trim() !== "" && (
+          <p className="text-sm text-muted-foreground tabular-nums">
+            {filteredMessages.length} من {status.messages.length}
+          </p>
+        )}
       </div>
+
+      {status.status === "completed" && (
+        <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+          {status.failed > 0 && (
+            <Button onClick={() => setRetryConfirm(true)} disabled={retrying}>
+              <RefreshCw data-icon="inline-start" />
+              إعادة إرسال الفاشلة ({status.failed})
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={
+              <Link
+                to="/batches/$batchId/warning"
+                params={{ batchId: String(batch.id) }}
+              />
+            }
+          >
+            <TriangleAlert data-icon="inline-start" />
+            إرسال تحذير متابعة
+          </Button>
+        </div>
+      )}
 
       <ConfirmDialog
         open={retryConfirm}

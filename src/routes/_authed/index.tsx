@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { Building2, MessageSquare, Plus, Users } from "lucide-react"
 import { useEffect } from "react"
 import { toast } from "sonner"
@@ -69,6 +69,7 @@ function Dashboard() {
   const { session } = Route.useRouteContext()
   const { error } = Route.useSearch()
   const recentBatches = Route.useLoaderData()
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (error && ERROR_MESSAGES[error]) {
@@ -142,12 +143,22 @@ function Dashboard() {
               </TableHeader>
               <TableBody>
                 {recentBatches.map((b) => (
-                  <TableRow key={b.id}>
+                  <TableRow
+                    key={b.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() =>
+                      navigate({
+                        to: "/batches/$batchId",
+                        params: { batchId: String(b.id) },
+                      })
+                    }
+                  >
                     <TableCell className="font-medium">
                       <Link
                         to="/batches/$batchId"
                         params={{ batchId: String(b.id) }}
                         className="hover:underline"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         {b.title}
                       </Link>

@@ -203,12 +203,22 @@ function BatchesListPage() {
             </TableHeader>
             <TableBody>
               {data.rows.map((b) => (
-                <TableRow key={b.id}>
+                <TableRow
+                  key={b.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() =>
+                    navigate({
+                      to: "/batches/$batchId",
+                      params: { batchId: String(b.id) },
+                    })
+                  }
+                >
                   <TableCell className="font-medium">
                     <Link
                       to="/batches/$batchId"
                       params={{ batchId: String(b.id) }}
                       className="hover:underline"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       {b.title}
                     </Link>
@@ -236,7 +246,7 @@ function BatchesListPage() {
                   <TableCell className="text-muted-foreground tabular-nums">
                     {formatArabicDate(b.createdAt)}
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger
                         render={
