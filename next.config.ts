@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
     },
     turbopackFileSystemCacheForDev: true,
   },
+  transpilePackages: ["@base-ui/react"],
 }
 
 export default nextConfig
