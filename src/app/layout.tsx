@@ -2,13 +2,15 @@ import { SWRProvider } from "@/components/swr-provider"
 import { Toaster } from "@/components/ui/sonner"
 import type { Metadata } from "next"
 import { ThemeProvider } from "next-themes"
-import { Cairo, Inter } from "next/font/google"
+import { Cairo } from "next/font/google"
+import localFont from "next/font/local"
 
 import "../styles.css"
 
-const inter = Inter({
+const inter = localFont({
+  src: "../fonts/Inter-VariableFont_opsz,wght.ttf",
   variable: "--font-inter",
-  subsets: ["latin"],
+  display: "swap",
 })
 
 const cairo = Cairo({

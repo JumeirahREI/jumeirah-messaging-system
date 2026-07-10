@@ -60,7 +60,8 @@ requirements, schema, and build order.
   - `src/lib/server/` — server-only modules (db, schema, auth-helpers, batch-service)
   - `netlify/functions/` — Netlify background functions (SMS processing)
   - Keep files small and single-purpose. Deep modules, shallow wrappers.
-- **Icons:** `lucide-react`. Fonts: `next/font` (Inter + Cairo).
+- **Icons:** `lucide-react`. Fonts: `next/font/local` for Inter
+  (`src/fonts/Inter-VariableFont_opsz,wght.ttf`), `next/font/google` for Cairo.
 - **Animations:** `tw-animate-css` + Tailwind. No heavy animation libs unless
   justified.
 
