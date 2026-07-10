@@ -1,6 +1,7 @@
 "use client"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -13,18 +14,21 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { projectSchema, type ProjectFormData } from "@/lib/schemas"
 import { createProject } from "@/lib/server/reference-data"
 
 export default function NewProjectPage() {
   const router = useRouter()
-  const [title, setTitle] = useState("")
-  const [submitting, setSubmitting] = useState(false)
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<ProjectFormData>({
+    resolver: zodResolver(projectSchema),
+  })
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setSubmitting(true)
-    const result = await createProject({ title })
-    setSubmitting(false)
+  async function onSubmit(data: ProjectFormData) {
+    const result = await createProject({ title: data.title })
     if (!result.ok) {
       toast.error(result.error)
       return
@@ -36,7 +40,7 @@ export default function NewProjectPage() {
   return (
     <div className="mx-auto max-w-md">
       <Card>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit(onSubmit)}>
           <CardHeader>
             <CardTitle>مشروع جديد</CardTitle>
           </CardHeader>
@@ -45,21 +49,24 @@ export default function NewProjectPage() {
               <Label htmlFor="title">العنوان</Label>
               <Input
                 id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                disabled={submitting}
+                {...register("title")}
+                disabled={isSubmitting}
               />
+              {errors.title && (
+                <p className="text-sm text-destructive">
+                  {errors.title.message}
+                </p>
+              )}
             </div>
           </CardContent>
           <CardFooter className="gap-2">
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "جارٍ الحفظ..." : "حفظ"}
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
             <Button
               type="button"
               variant="ghost"
-              disabled={submitting}
+              disabled={isSubmitting}
               onClick={() => router.push("/admin/projects")}
             >
               إلغاء

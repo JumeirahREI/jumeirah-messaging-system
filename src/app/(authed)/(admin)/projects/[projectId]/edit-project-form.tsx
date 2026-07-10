@@ -1,6 +1,8 @@
 "use client"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 
 import {
@@ -24,6 +26,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { projectSchema, type ProjectFormData } from "@/lib/schemas"
 import { softDeleteProject, updateProject } from "@/lib/server/reference-data"
 
 export function EditProjectForm({
@@ -34,15 +37,18 @@ export function EditProjectForm({
   initialTitle: string
 }) {
   const router = useRouter()
-  const [title, setTitle] = useState(initialTitle)
-  const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<ProjectFormData>({
+    resolver: zodResolver(projectSchema),
+    defaultValues: { title: initialTitle },
+  })
 
-  async function handleUpdate(e: React.FormEvent) {
-    e.preventDefault()
-    setSubmitting(true)
-    const result = await updateProject({ id: projectId, title })
-    setSubmitting(false)
+  async function onSubmit(data: ProjectFormData) {
+    const result = await updateProject({ id: projectId, title: data.title })
     if (!result.ok) {
       toast.error(result.error)
       return
@@ -65,7 +71,7 @@ export function EditProjectForm({
   return (
     <div className="mx-auto w-full max-w-md">
       <Card>
-        <form onSubmit={handleUpdate}>
+        <form onSubmit={handleSubmit(onSubmit)}>
           <CardHeader>
             <CardTitle>تعديل المشروع</CardTitle>
           </CardHeader>
@@ -74,16 +80,19 @@ export function EditProjectForm({
               <Label htmlFor="title">العنوان</Label>
               <Input
                 id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                disabled={submitting}
+                {...register("title")}
+                disabled={isSubmitting}
               />
+              {errors.title && (
+                <p className="text-sm text-destructive">
+                  {errors.title.message}
+                </p>
+              )}
             </div>
           </CardContent>
           <CardFooter className="justify-between">
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "جارٍ الحفظ..." : "حفظ"}
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
             <AlertDialog>
               <AlertDialogTrigger

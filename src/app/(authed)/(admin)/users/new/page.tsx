@@ -1,6 +1,7 @@
 "use client"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -14,26 +15,35 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { userCreateSchema, type UserCreateFormData } from "@/lib/schemas"
 import { createUser } from "@/lib/server/reference-data"
 
 export default function NewUserPage() {
   const router = useRouter()
-  const [fullname, setFullname] = useState("")
-  const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<UserCreateFormData>({
+    resolver: zodResolver(userCreateSchema),
+    defaultValues: {
+      fullname: "",
+      username: "",
+      password: "",
+      isAdmin: false,
+    },
+  })
+  const isAdmin = watch("isAdmin")
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setSubmitting(true)
+  async function onSubmit(data: UserCreateFormData) {
     const result = await createUser({
-      fullname,
-      username,
-      password,
-      isAdmin,
+      fullname: data.fullname,
+      username: data.username,
+      password: data.password,
+      isAdmin: data.isAdmin,
     })
-    setSubmitting(false)
     if (!result.ok) {
       toast.error(result.error)
       return
@@ -45,7 +55,7 @@ export default function NewUserPage() {
   return (
     <div className="mx-auto max-w-md">
       <Card>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit(onSubmit)}>
           <CardHeader>
             <CardTitle>مستخدم جديد</CardTitle>
           </CardHeader>
@@ -54,52 +64,60 @@ export default function NewUserPage() {
               <Label htmlFor="fullname">الاسم الكامل</Label>
               <Input
                 id="fullname"
-                value={fullname}
-                onChange={(e) => setFullname(e.target.value)}
-                required
-                disabled={submitting}
+                {...register("fullname")}
+                disabled={isSubmitting}
               />
+              {errors.fullname && (
+                <p className="text-sm text-destructive">
+                  {errors.fullname.message}
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="username">اسم المستخدم</Label>
               <Input
                 id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                disabled={submitting}
+                {...register("username")}
+                disabled={isSubmitting}
               />
+              {errors.username && (
+                <p className="text-sm text-destructive">
+                  {errors.username.message}
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="password">كلمة المرور</Label>
               <Input
                 id="password"
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                disabled={submitting}
+                {...register("password")}
+                disabled={isSubmitting}
               />
+              {errors.password && (
+                <p className="text-sm text-destructive">
+                  {errors.password.message}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Checkbox
                 id="isAdmin"
                 checked={isAdmin}
-                onCheckedChange={(v) => setIsAdmin(v === true)}
-                disabled={submitting}
+                onCheckedChange={(v) => setValue("isAdmin", v === true)}
+                disabled={isSubmitting}
               />
               <Label htmlFor="isAdmin">صلاحيات مسؤول</Label>
             </div>
           </CardContent>
           <CardFooter className="gap-2">
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "جارٍ الحفظ..." : "حفظ"}
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
             <Button
               type="button"
               variant="ghost"
-              disabled={submitting}
+              disabled={isSubmitting}
               onClick={() => router.push("/admin/users")}
             >
               إلغاء

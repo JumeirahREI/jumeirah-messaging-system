@@ -1,8 +1,10 @@
 "use client"
 
+import { zodResolver } from "@hookform/resolvers/zod"
 import { FileSpreadsheet, Upload, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useRef, useState } from "react"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/page-header"
@@ -25,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
+import { batchCreateSchema, type BatchCreateFormData } from "@/lib/schemas"
 import { createBatch } from "@/lib/server/batch-service"
 
 function todayTitle(): string {
@@ -43,17 +46,30 @@ export function NewBatchForm({
   projects: { id: number; title: string }[]
 }) {
   const router = useRouter()
-  const [title, setTitle] = useState(todayTitle())
-  const [projectId, setProjectId] = useState<string>("")
   const [file, setFile] = useState<File | null>(null)
   const [dragOver, setDragOver] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<
     | null
     | { kind: "unmatched"; labels: string[] }
     | { kind: "error"; message: string }
   >(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<BatchCreateFormData>({
+    resolver: zodResolver(batchCreateSchema),
+    defaultValues: {
+      title: todayTitle(),
+      projectId: "",
+    },
+  })
+
+  const projectId = watch("projectId")
 
   function handleFileSelect(selected: File | null) {
     if (selected && !selected.name.endsWith(".xlsx")) {
@@ -71,28 +87,21 @@ export function NewBatchForm({
     if (dropped) handleFileSelect(dropped)
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function onSubmit(data: BatchCreateFormData) {
     if (projects.length === 0) {
       toast.error("لا توجد مشاريع. أنشئ مشروعًا أولًا.")
-      return
-    }
-    if (!projectId) {
-      toast.error("اختر مشروعًا")
       return
     }
     if (!file) {
       toast.error("اختر ملف Excel")
       return
     }
-    setSubmitting(true)
     setResult(null)
     const formData = new FormData()
-    formData.set("title", title)
-    formData.set("projectId", projectId)
+    formData.set("title", data.title)
+    formData.set("projectId", data.projectId)
     formData.set("file", file)
     const res = await createBatch(formData)
-    setSubmitting(false)
     if (!res.ok) {
       if (res.error === "unmatched") {
         setResult({ kind: "unmatched", labels: res.unmatched })
@@ -127,7 +136,7 @@ export function NewBatchForm({
         </Alert>
       ) : (
         <Card>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit(onSubmit)}>
             <CardHeader>
               <CardTitle>بيانات الدفعة</CardTitle>
             </CardHeader>
@@ -137,18 +146,23 @@ export function NewBatchForm({
                   <FieldLabel htmlFor="title">العنوان</FieldLabel>
                   <Input
                     id="title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    required
-                    disabled={submitting}
+                    disabled={isSubmitting}
+                    {...register("title")}
                   />
+                  {errors.title && (
+                    <p className="text-sm text-destructive">
+                      {errors.title.message}
+                    </p>
+                  )}
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="project">المشروع</FieldLabel>
                   <Select
                     value={projectId}
-                    onValueChange={(v) => v && setProjectId(v)}
-                    disabled={submitting}
+                    onValueChange={(v) =>
+                      v && setValue("projectId", v, { shouldValidate: true })
+                    }
+                    disabled={isSubmitting}
                   >
                     <SelectTrigger id="project">
                       <SelectValue placeholder="اختر مشروعًا" />
@@ -161,6 +175,11 @@ export function NewBatchForm({
                       ))}
                     </SelectContent>
                   </Select>
+                  {errors.projectId && (
+                    <p className="text-sm text-destructive">
+                      {errors.projectId.message}
+                    </p>
+                  )}
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="file">ملف Excel (.xlsx)</FieldLabel>
@@ -170,7 +189,7 @@ export function NewBatchForm({
                     type="file"
                     accept=".xlsx"
                     required
-                    disabled={submitting}
+                    disabled={isSubmitting}
                     onChange={(e) =>
                       handleFileSelect(e.target.files?.[0] ?? null)
                     }
@@ -192,7 +211,7 @@ export function NewBatchForm({
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => setFile(null)}
-                        disabled={submitting}
+                        disabled={isSubmitting}
                         aria-label="إزالة الملف"
                       >
                         <X />
@@ -208,7 +227,7 @@ export function NewBatchForm({
                       }}
                       onDragLeave={() => setDragOver(false)}
                       onDrop={handleDrop}
-                      disabled={submitting}
+                      disabled={isSubmitting}
                       className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/40 disabled:opacity-50 data-[drag=true]:border-primary data-[drag=true]:bg-primary/5"
                       data-drag={dragOver}
                     >
@@ -223,9 +242,9 @@ export function NewBatchForm({
               </FieldGroup>
             </CardContent>
             <CardFooter>
-              <Button type="submit" disabled={submitting}>
-                {submitting && <Spinner data-icon="inline-start" />}
-                {submitting ? "جارٍ الإنشاء..." : "إنشاء ومعاينة"}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Spinner data-icon="inline-start" />}
+                {isSubmitting ? "جارٍ الإنشاء..." : "إنشاء ومعاينة"}
               </Button>
             </CardFooter>
           </form>

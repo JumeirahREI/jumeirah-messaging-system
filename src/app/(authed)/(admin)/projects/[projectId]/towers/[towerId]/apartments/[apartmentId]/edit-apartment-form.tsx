@@ -1,6 +1,8 @@
 "use client"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 
 import {
@@ -40,6 +42,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  apartmentSchema,
+  contactLinkSchema,
+  phoneNumberSchema,
+  type ApartmentFormData,
+  type ContactLinkFormData,
+  type PhoneNumberFormData,
+} from "@/lib/schemas"
 import type {
   ApartmentContactRow,
   ApartmentPhoneNumberRow,
@@ -78,24 +88,29 @@ export function EditApartmentForm({
   allContacts: ContactRow[]
 }) {
   const router = useRouter()
-  const [label, setLabel] = useState(initialLabel)
-  const [unitNumber, setUnitNumber] = useState(initialUnitNumber ?? "")
-  const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<ApartmentFormData>({
+    resolver: zodResolver(apartmentSchema),
+    defaultValues: {
+      label: initialLabel,
+      unitNumber: initialUnitNumber ?? "",
+    },
+  })
 
   async function refresh() {
     router.refresh()
   }
 
-  async function handleUpdate(e: React.FormEvent) {
-    e.preventDefault()
-    setSubmitting(true)
+  async function onSubmit(data: ApartmentFormData) {
     const result = await updateApartment({
       id: apartmentId,
-      label,
-      unitNumber: unitNumber.trim() || null,
+      label: data.label,
+      unitNumber: data.unitNumber?.trim() || null,
     })
-    setSubmitting(false)
     if (!result.ok) {
       toast.error(result.error)
       return
@@ -119,7 +134,7 @@ export function EditApartmentForm({
     <div className="flex flex-col gap-6">
       <div className="mx-auto w-full max-w-md">
         <Card>
-          <form onSubmit={handleUpdate}>
+          <form onSubmit={handleSubmit(onSubmit)}>
             <CardHeader>
               <CardTitle>تعديل الشقة</CardTitle>
             </CardHeader>
@@ -128,25 +143,32 @@ export function EditApartmentForm({
                 <Label htmlFor="label">الاسم</Label>
                 <Input
                   id="label"
-                  value={label}
-                  onChange={(e) => setLabel(e.target.value)}
-                  required
-                  disabled={submitting}
+                  {...register("label")}
+                  disabled={isSubmitting}
                 />
+                {errors.label && (
+                  <p className="text-sm text-destructive">
+                    {errors.label.message}
+                  </p>
+                )}
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="unitNumber">رقم الوحدة (اختياري)</Label>
                 <Input
                   id="unitNumber"
-                  value={unitNumber}
-                  onChange={(e) => setUnitNumber(e.target.value)}
-                  disabled={submitting}
+                  {...register("unitNumber")}
+                  disabled={isSubmitting}
                 />
+                {errors.unitNumber && (
+                  <p className="text-sm text-destructive">
+                    {errors.unitNumber.message}
+                  </p>
+                )}
               </div>
             </CardContent>
             <CardFooter className="justify-between">
-              <Button type="submit" disabled={submitting}>
-                {submitting ? "جارٍ الحفظ..." : "حفظ"}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "جارٍ الحفظ..." : "حفظ"}
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger
@@ -206,47 +228,61 @@ function ContactsSection({
 }) {
   const linkedIds = new Set(contacts.map((c) => c.contactId))
   const available = allContacts.filter((c) => !linkedIds.has(c.id))
-  const [contactId, setContactId] = useState<string>("")
-  const [newName, setNewName] = useState("")
-  const [role, setRole] = useState<ContactRole>("owner")
-  const [notify, setNotify] = useState(true)
-  const [busy, setBusy] = useState(false)
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<ContactLinkFormData>({
+    resolver: zodResolver(contactLinkSchema),
+    defaultValues: {
+      apartmentId,
+      contactId: undefined,
+      newName: "",
+      role: "owner",
+      isNotificationRecipient: true,
+    },
+  })
+  const contactId = watch("contactId")
+  const newName = watch("newName")
+  const role = watch("role")
+  const notify = watch("isNotificationRecipient")
 
-  async function handleLink() {
-    setBusy(true)
-    try {
-      let cid = Number(contactId)
-      if (newName.trim().length > 0) {
-        const created = await createContact({ fullname: newName.trim() })
-        if (!created.ok) {
-          toast.error(created.error)
-          return
-        }
-        cid = created.data.id
-      }
-      if (Number.isNaN(cid)) {
-        toast.error("اختر جهة اتصال أو أنشئ جديدة")
+  async function onSubmit(data: ContactLinkFormData) {
+    let cid = data.contactId
+    if (data.newName && data.newName.trim().length > 0) {
+      const created = await createContact({ fullname: data.newName.trim() })
+      if (!created.ok) {
+        toast.error(created.error)
         return
       }
-      const result = await linkContact({
-        apartmentId,
-        contactId: cid,
-        role,
-        isNotificationRecipient: notify,
-      })
-      if (!result.ok) {
-        toast.error(result.error)
-        return
-      }
-      toast.success("تم ربط جهة الاتصال")
-      setContactId("")
-      setNewName("")
-      setRole("owner")
-      setNotify(true)
-      onMutate()
-    } finally {
-      setBusy(false)
+      cid = created.data.id
     }
+    if (cid === undefined || Number.isNaN(cid)) {
+      toast.error("اختر جهة اتصال أو أنشئ جديدة")
+      return
+    }
+    const result = await linkContact({
+      apartmentId,
+      contactId: cid,
+      role: data.role,
+      isNotificationRecipient: data.isNotificationRecipient,
+    })
+    if (!result.ok) {
+      toast.error(result.error)
+      return
+    }
+    toast.success("تم ربط جهة الاتصال")
+    reset({
+      apartmentId,
+      contactId: undefined,
+      newName: "",
+      role: "owner",
+      isNotificationRecipient: true,
+    })
+    onMutate()
   }
 
   return (
@@ -259,9 +295,11 @@ function ContactsSection({
             <div className="flex flex-col gap-2">
               <Label htmlFor="existing">جهة اتصال موجودة</Label>
               <Select
-                value={contactId}
-                onValueChange={(v) => setContactId((v ?? "") as string)}
-                disabled={busy}
+                value={contactId !== undefined ? String(contactId) : ""}
+                onValueChange={(v) =>
+                  setValue("contactId", v && v !== "" ? Number(v) : undefined)
+                }
+                disabled={isSubmitting}
               >
                 <SelectTrigger id="existing">
                   <SelectValue placeholder="اختر..." />
@@ -285,9 +323,8 @@ function ContactsSection({
               <Label htmlFor="newName">أو اسم جديد</Label>
               <Input
                 id="newName"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                disabled={busy}
+                {...register("newName")}
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -296,8 +333,8 @@ function ContactsSection({
               <Label htmlFor="role">الدور</Label>
               <Select
                 value={role}
-                onValueChange={(v) => v && setRole(v as ContactRole)}
-                disabled={busy}
+                onValueChange={(v) => v && setValue("role", v as ContactRole)}
+                disabled={isSubmitting}
               >
                 <SelectTrigger id="role">
                   <SelectValue />
@@ -313,17 +350,35 @@ function ContactsSection({
               <Checkbox
                 id="notify"
                 checked={notify}
-                onCheckedChange={(v) => setNotify(v === true)}
-                disabled={busy}
+                onCheckedChange={(v) =>
+                  setValue("isNotificationRecipient", v === true)
+                }
+                disabled={isSubmitting}
               />
               <Label htmlFor="notify">مستلم إشعارات</Label>
             </div>
             <div className="flex items-end">
-              <Button type="button" onClick={handleLink} disabled={busy}>
+              <Button
+                type="button"
+                onClick={handleSubmit(onSubmit)}
+                disabled={isSubmitting}
+              >
                 ربط
               </Button>
             </div>
           </div>
+          {(errors.contactId || errors.newName || errors.role) && (
+            <p className="text-sm text-destructive">
+              {errors.contactId?.message ||
+                errors.newName?.message ||
+                errors.role?.message}
+            </p>
+          )}
+          {newName === "" && contactId === undefined && (
+            <p className="text-sm text-muted-foreground">
+              اختر جهة اتصال أو أنشئ جديدة
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -336,7 +391,7 @@ function ContactsSection({
               key={c.id}
               link={c}
               phoneNumbers={phoneNumbers.filter(
-                (p) => p.contactId === c.contactId,
+                (p) => p.contactId === c.contactId
               )}
               onMutate={onMutate}
             />
@@ -359,8 +414,19 @@ function ContactCard({
   const [role, setRole] = useState<ContactRole>(link.role)
   const [notify, setNotify] = useState(link.isNotificationRecipient)
   const [busy, setBusy] = useState(false)
-  const [newNumber, setNewNumber] = useState("")
   const [editingNumber, setEditingNumber] = useState<Record<number, string>>({})
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<PhoneNumberFormData>({
+    resolver: zodResolver(phoneNumberSchema),
+    defaultValues: {
+      contactId: link.contactId,
+      number: "",
+    },
+  })
 
   async function handleSaveLink() {
     setBusy(true)
@@ -390,19 +456,18 @@ function ContactCard({
     onMutate()
   }
 
-  async function handleAddNumber() {
-    if (newNumber.trim().length === 0) return
+  async function handleAddNumber(data: PhoneNumberFormData) {
     setBusy(true)
     const result = await addPhoneNumber({
-      contactId: link.contactId,
-      number: newNumber.trim(),
+      contactId: data.contactId,
+      number: data.number.trim(),
     })
     setBusy(false)
     if (!result.ok) {
       toast.error(result.error)
       return
     }
-    setNewNumber("")
+    reset({ contactId: link.contactId, number: "" })
     onMutate()
   }
 
@@ -577,17 +642,19 @@ function ContactCard({
               </Table>
             </div>
           )}
-          <div className="flex gap-2">
+          <form className="flex gap-2" onSubmit={handleSubmit(handleAddNumber)}>
             <Input
-              value={newNumber}
-              onChange={(e) => setNewNumber(e.target.value)}
               placeholder="رقم جديد"
-              disabled={busy}
+              {...register("number")}
+              disabled={busy || isSubmitting}
             />
-            <Button type="button" onClick={handleAddNumber} disabled={busy}>
+            <Button type="submit" disabled={busy || isSubmitting}>
               إضافة
             </Button>
-          </div>
+          </form>
+          {errors.number && (
+            <p className="text-sm text-destructive">{errors.number.message}</p>
+          )}
         </div>
       </CardContent>
     </Card>

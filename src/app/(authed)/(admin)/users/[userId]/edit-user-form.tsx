@@ -1,6 +1,8 @@
 "use client"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 
 import {
@@ -26,6 +28,12 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
+  passwordResetSchema,
+  userUpdateSchema,
+  type PasswordResetFormData,
+  type UserUpdateFormData,
+} from "@/lib/schemas"
+import {
   resetUserPassword,
   softDeleteUser,
   updateUser,
@@ -43,24 +51,44 @@ export function EditUserForm({
   initialIsAdmin: boolean
 }) {
   const router = useRouter()
-  const [fullname, setFullname] = useState(initialFullname)
-  const [username, setUsername] = useState(initialUsername)
-  const [isAdmin, setIsAdmin] = useState(initialIsAdmin)
-  const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [newPassword, setNewPassword] = useState("")
-  const [resetting, setResetting] = useState(false)
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<UserUpdateFormData>({
+    resolver: zodResolver(userUpdateSchema),
+    defaultValues: {
+      id: userId,
+      fullname: initialFullname,
+      username: initialUsername,
+      isAdmin: initialIsAdmin,
+    },
+  })
+  const isAdmin = watch("isAdmin")
 
-  async function handleUpdate(e: React.FormEvent) {
-    e.preventDefault()
-    setSubmitting(true)
+  const {
+    register: registerReset,
+    handleSubmit: handleResetSubmit,
+    reset: resetResetForm,
+    formState: { errors: resetErrors, isSubmitting: isResetting },
+  } = useForm<PasswordResetFormData>({
+    resolver: zodResolver(passwordResetSchema),
+    defaultValues: {
+      id: userId,
+      password: "",
+    },
+  })
+
+  async function onUpdate(data: UserUpdateFormData) {
     const result = await updateUser({
       id: userId,
-      fullname,
-      username,
-      isAdmin,
+      fullname: data.fullname,
+      username: data.username,
+      isAdmin: data.isAdmin,
     })
-    setSubmitting(false)
     if (!result.ok) {
       toast.error(result.error)
       return
@@ -69,16 +97,17 @@ export function EditUserForm({
     router.refresh()
   }
 
-  async function handleResetPassword() {
-    setResetting(true)
-    const result = await resetUserPassword({ id: userId, password: newPassword })
-    setResetting(false)
+  async function onResetPassword(data: PasswordResetFormData) {
+    const result = await resetUserPassword({
+      id: userId,
+      password: data.password,
+    })
     if (!result.ok) {
       toast.error(result.error)
       return
     }
     toast.success("تم تغيير كلمة المرور")
-    setNewPassword("")
+    resetResetForm({ id: userId, password: "" })
   }
 
   async function handleDelete() {
@@ -97,7 +126,7 @@ export function EditUserForm({
     <div className="flex flex-col gap-6">
       <div className="mx-auto w-full max-w-md">
         <Card>
-          <form onSubmit={handleUpdate}>
+          <form onSubmit={handleSubmit(onUpdate)}>
             <CardHeader>
               <CardTitle>تعديل المستخدم</CardTitle>
             </CardHeader>
@@ -106,35 +135,41 @@ export function EditUserForm({
                 <Label htmlFor="fullname">الاسم الكامل</Label>
                 <Input
                   id="fullname"
-                  value={fullname}
-                  onChange={(e) => setFullname(e.target.value)}
-                  required
-                  disabled={submitting}
+                  {...register("fullname")}
+                  disabled={isSubmitting}
                 />
+                {errors.fullname && (
+                  <p className="text-sm text-destructive">
+                    {errors.fullname.message}
+                  </p>
+                )}
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="username">اسم المستخدم</Label>
                 <Input
                   id="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                  disabled={submitting}
+                  {...register("username")}
+                  disabled={isSubmitting}
                 />
+                {errors.username && (
+                  <p className="text-sm text-destructive">
+                    {errors.username.message}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="isAdmin"
                   checked={isAdmin}
-                  onCheckedChange={(v) => setIsAdmin(v === true)}
-                  disabled={submitting}
+                  onCheckedChange={(v) => setValue("isAdmin", v === true)}
+                  disabled={isSubmitting}
                 />
                 <Label htmlFor="isAdmin">صلاحيات مسؤول</Label>
               </div>
             </CardContent>
             <CardFooter className="justify-between">
-              <Button type="submit" disabled={submitting}>
-                {submitting ? "جارٍ الحفظ..." : "حفظ"}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "جارٍ الحفظ..." : "حفظ"}
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger
@@ -171,31 +206,32 @@ export function EditUserForm({
 
       <div className="mx-auto w-full max-w-md">
         <Card>
-          <CardHeader>
-            <CardTitle>تغيير كلمة المرور</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="newPassword">كلمة المرور الجديدة</Label>
-              <Input
-                id="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                minLength={6}
-                disabled={resetting}
-              />
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button
-              type="button"
-              onClick={handleResetPassword}
-              disabled={resetting || newPassword.length < 6}
-            >
-              {resetting ? "جارٍ التغيير..." : "تغيير كلمة المرور"}
-            </Button>
-          </CardFooter>
+          <form onSubmit={handleResetSubmit(onResetPassword)}>
+            <CardHeader>
+              <CardTitle>تغيير كلمة المرور</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="newPassword">كلمة المرور الجديدة</Label>
+                <Input
+                  id="newPassword"
+                  type="password"
+                  {...registerReset("password")}
+                  disabled={isResetting}
+                />
+                {resetErrors.password && (
+                  <p className="text-sm text-destructive">
+                    {resetErrors.password.message}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button type="submit" disabled={isResetting}>
+                {isResetting ? "جارٍ التغيير..." : "تغيير كلمة المرور"}
+              </Button>
+            </CardFooter>
+          </form>
         </Card>
       </div>
     </div>

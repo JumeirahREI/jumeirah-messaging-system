@@ -1,6 +1,8 @@
 "use client"
-import { useRouter, useParams } from "next/navigation"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 
 import {
@@ -24,6 +26,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { towerSchema, type TowerFormData } from "@/lib/schemas"
 import { softDeleteTower, updateTower } from "@/lib/server/reference-data"
 
 export function EditTowerForm({
@@ -36,15 +39,18 @@ export function EditTowerForm({
   const router = useRouter()
   const params = useParams<{ projectId: string }>()
   const projectId = params.projectId
-  const [label, setLabel] = useState(initialLabel)
-  const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<TowerFormData>({
+    resolver: zodResolver(towerSchema),
+    defaultValues: { label: initialLabel },
+  })
 
-  async function handleUpdate(e: React.FormEvent) {
-    e.preventDefault()
-    setSubmitting(true)
-    const result = await updateTower({ id: towerId, label })
-    setSubmitting(false)
+  async function onSubmit(data: TowerFormData) {
+    const result = await updateTower({ id: towerId, label: data.label })
     if (!result.ok) {
       toast.error(result.error)
       return
@@ -67,7 +73,7 @@ export function EditTowerForm({
   return (
     <div className="mx-auto w-full max-w-md">
       <Card>
-        <form onSubmit={handleUpdate}>
+        <form onSubmit={handleSubmit(onSubmit)}>
           <CardHeader>
             <CardTitle>تعديل البرج</CardTitle>
           </CardHeader>
@@ -76,16 +82,19 @@ export function EditTowerForm({
               <Label htmlFor="label">الاسم</Label>
               <Input
                 id="label"
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                required
-                disabled={submitting}
+                {...register("label")}
+                disabled={isSubmitting}
               />
+              {errors.label && (
+                <p className="text-sm text-destructive">
+                  {errors.label.message}
+                </p>
+              )}
             </div>
           </CardContent>
           <CardFooter className="justify-between">
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "جارٍ الحفظ..." : "حفظ"}
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
             <AlertDialog>
               <AlertDialogTrigger
