@@ -23,9 +23,23 @@ import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { PageHeader } from "@/components/page-header"
 import { BatchStatusBadge, MessageStatusBadge } from "@/components/status-badge"
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Progress, ProgressLabel } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
@@ -332,19 +346,33 @@ function DraftReview({
       )}
 
       {preview.missing.length > 0 && (
-        <Card className="border-blue-500/40 bg-blue-500/5">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
-              <Building2 className="size-5" />
-              شقق غير مضمونة في الملف
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground">
-              هذه الشقق موجودة في قاعدة البيانات ولكنها غير موجودة في ملف Excel.
-              تأكد من عدم نسيان أي شقة.
-            </p>
-            <div className="rounded-lg border">
+        <Dialog>
+          <Alert className="border-blue-500/40 bg-blue-500/5 text-blue-700 dark:text-blue-400">
+            <Building2 className="size-4" />
+            <AlertTitle>شقق غير مضمونة في الملف</AlertTitle>
+            <AlertDescription className="text-blue-700/90 dark:text-blue-400/90">
+              {preview.missing.length} شقة موجودة في قاعدة البيانات ولكنها غير
+              موجودة في ملف Excel. تأكد من عدم نسيان أي شقة.
+            </AlertDescription>
+            <AlertAction>
+              <DialogTrigger
+                render={
+                  <Button variant="outline" size="sm" nativeButton={false} />
+                }
+              >
+                عرض الشقق
+              </DialogTrigger>
+            </AlertAction>
+          </Alert>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>شقق غير مضمونة في الملف</DialogTitle>
+              <DialogDescription>
+                هذه الشقق موجودة في قاعدة البيانات ولكنها غير موجودة في ملف
+                Excel.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[60vh] overflow-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -364,8 +392,8 @@ function DraftReview({
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
       )}
 
       {preview.noContacts.length > 0 && (
