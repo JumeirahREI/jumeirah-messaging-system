@@ -2,8 +2,8 @@
 
 import {
   AlertTriangle,
-  ArrowLeft,
   ArrowRight,
+  Building2,
   CheckCircle2,
   Clock,
   Mail,
@@ -213,9 +213,15 @@ function DraftReview({
 }) {
   const router = useRouter()
   const [acknowledged, setAcknowledged] = useState(false)
+  const [unmatchedAck, setUnmatchedAck] = useState(false)
   const [sending, setSending] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [search, setSearch] = useState("")
+
+  const coveragePercent = useMemo(() => {
+    if (preview.coverage.total === 0) return 0
+    return Math.round((preview.coverage.matched / preview.coverage.total) * 100)
+  }, [preview.coverage])
 
   const totalRecipients = useMemo(
     () =>
@@ -251,7 +257,7 @@ function DraftReview({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <StatCard
           icon={<Mail />}
           label="شقق مطابقة"
@@ -269,7 +275,98 @@ function DraftReview({
           value={preview.noContacts.length}
           tone={preview.noContacts.length > 0 ? "warning" : "default"}
         />
+        <Card>
+          <CardContent className="flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-muted text-foreground">
+                <Building2 />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs text-muted-foreground">
+                  تغطية المشروع
+                </span>
+                <span className="font-heading text-2xl font-semibold tabular-nums">
+                  {preview.coverage.matched}/{preview.coverage.total}
+                </span>
+              </div>
+            </div>
+            <Progress value={coveragePercent}>
+              <ProgressLabel className="sr-only">التغطية</ProgressLabel>
+            </Progress>
+          </CardContent>
+        </Card>
       </div>
+
+      {preview.unmatched.length > 0 && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <TriangleAlert className="size-5" />
+              تسميات غير مطابقة
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              هذه التسميات موجودة في ملف Excel ولكنها غير موجودة في قاعدة
+              البيانات. لن يتم إرسال رسائل لها. يجب الإقرار بذلك قبل الإرسال.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {preview.unmatched.map((l) => (
+                <span
+                  key={l}
+                  className="rounded bg-destructive/15 px-2 py-0.5 text-xs font-medium"
+                >
+                  {l}
+                </span>
+              ))}
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={unmatchedAck}
+                onCheckedChange={(v) => setUnmatchedAck(v === true)}
+              />
+              أقر بأن هذه الشقق لن يتم إرسال رسائل لها
+            </label>
+          </CardContent>
+        </Card>
+      )}
+
+      {preview.missing.length > 0 && (
+        <Card className="border-blue-500/40 bg-blue-500/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
+              <Building2 className="size-5" />
+              شقق غير مضمونة في الملف
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              هذه الشقق موجودة في قاعدة البيانات ولكنها غير موجودة في ملف Excel.
+              تأكد من عدم نسيان أي شقة.
+            </p>
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>الشقة</TableHead>
+                    <TableHead>البرج</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {preview.missing.map((m) => (
+                    <TableRow key={m.label}>
+                      <TableCell className="font-medium">{m.label}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {m.towerLabel}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {preview.noContacts.length > 0 && (
         <Card className="border-amber-500/40 bg-amber-500/5">
@@ -390,6 +487,7 @@ function DraftReview({
         <Button
           disabled={
             (preview.noContacts.length > 0 && !acknowledged) ||
+            (preview.unmatched.length > 0 && !unmatchedAck) ||
             preview.matched.length === 0 ||
             sending
           }

@@ -16,6 +16,7 @@ export const batchSessions = sqliteTable(
     sent: integer("sent").notNull().default(0),
     failed: integer("failed").notNull().default(0),
     status: text("status").$type<BatchStatus>().notNull().default("draft"),
+    excelLabels: text("excel_labels"),
     createdBy: integer("created_by")
       .notNull()
       .references(() => users.id),
@@ -31,5 +32,5 @@ export const batchSessions = sqliteTable(
   (t) => ({
     projectIdx: index("batch_sessions_project_id_idx").on(t.projectId),
     statusIdx: index("batch_sessions_status_idx").on(t.status),
-  }),
+  })
 )

@@ -15,6 +15,13 @@
       "when": 1783724774357,
       "tag": "0001_eager_harpoon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783725584825,
+      "tag": "0002_glossy_loki",
+      "breakpoints": true
     }
   ]
 }

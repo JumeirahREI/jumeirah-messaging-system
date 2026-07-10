@@ -4,6 +4,7 @@ import { Buffer } from "node:buffer"
 
 import { requireRole } from "@/lib/server/auth-helpers"
 import { processPendingMessages } from "@/lib/server/batch-processing"
+import { computeReconciliation } from "./batch-reconciliation"
 import { db } from "./db"
 import {
   deriveTowerPrefix,
@@ -219,10 +220,11 @@ export type BatchPreview = {
   batchId: number
   matched: PreviewMatched[]
   noContacts: PreviewNoContact[]
+  unmatchedCount: number
+  missingCount: number
 }
 
 export type CreateBatchError =
-  | { ok: false; error: "unmatched"; unmatched: string[] }
   | { ok: false; error: "parse"; message: string }
   | { ok: false; error: "invalid_project" }
   | { ok: false; error: "empty_parse" }
@@ -344,9 +346,15 @@ export async function createBatch(
   for (const p of parsed) {
     if (!apartmentByLabel.has(p.label)) unmatched.push(p.label)
   }
-  if (unmatched.length > 0) {
-    return { ok: false, error: "unmatched", unmatched } as const
-  }
+
+  const excelLabelSet = new Set(labels)
+  const allProjectApartments = await db
+    .select({ label: apartments.label })
+    .from(apartments)
+    .where(and(eq(apartments.projectId, pid), isNull(apartments.deletedAt)))
+  const missingCount = allProjectApartments.filter(
+    (a) => !excelLabelSet.has(a.label)
+  ).length
 
   const [batch] = await db
     .insert(batchSessions)
@@ -354,6 +362,7 @@ export async function createBatch(
       title: title.trim(),
       projectId: pid,
       status: "draft",
+      excelLabels: JSON.stringify(labels),
       createdBy: user.id,
     })
     .returning({ id: batchSessions.id })
@@ -471,6 +480,8 @@ export async function createBatch(
     batchId: batch.id,
     matched,
     noContacts,
+    unmatchedCount: unmatched.length,
+    missingCount,
   } as const
 }
 
@@ -520,9 +531,17 @@ export type DraftPreviewMatched = {
   contacts: PreviewContact[]
 }
 
+export type DraftPreviewMissing = {
+  label: string
+  towerLabel: string
+}
+
 export type DraftPreview = {
   matched: DraftPreviewMatched[]
   noContacts: PreviewNoContact[]
+  unmatched: string[]
+  missing: DraftPreviewMissing[]
+  coverage: { matched: number; total: number }
 }
 
 export async function getDraftPreview(input: {
@@ -534,7 +553,11 @@ export async function getDraftPreview(input: {
   if (typeof batchId !== "number") throw new Error("معرّف الدفعة مطلوب")
   await requireRole("operator")
   const batchRows = await db
-    .select({ id: batchSessions.id })
+    .select({
+      id: batchSessions.id,
+      projectId: batchSessions.projectId,
+      excelLabels: batchSessions.excelLabels,
+    })
     .from(batchSessions)
     .where(
       and(
@@ -545,6 +568,7 @@ export async function getDraftPreview(input: {
     )
     .limit(1)
   if (batchRows.length === 0) return null
+  const batchRow = batchRows[0]
 
   const invoiceRows = await db
     .select({
@@ -560,8 +584,35 @@ export async function getDraftPreview(input: {
     .orderBy(apartments.label)
 
   const apartmentIds = invoiceRows.map((i) => i.apartmentId)
+  const excelLabels: string[] = batchRow.excelLabels
+    ? (JSON.parse(batchRow.excelLabels) as string[])
+    : []
+  const allProjectApts = await db
+    .select({
+      label: apartments.label,
+      towerLabel: towers.label,
+    })
+    .from(apartments)
+    .innerJoin(towers, eq(apartments.towerId, towers.id))
+    .where(
+      and(
+        eq(apartments.projectId, batchRow.projectId),
+        isNull(apartments.deletedAt)
+      )
+    )
+    .orderBy(apartments.label)
+  const { unmatched, missing, coverage } = computeReconciliation(
+    excelLabels,
+    allProjectApts
+  )
   if (apartmentIds.length === 0) {
-    return { matched: [], noContacts: [] } satisfies DraftPreview
+    return {
+      matched: [],
+      noContacts: [],
+      unmatched,
+      missing,
+      coverage,
+    } satisfies DraftPreview
   }
 
   const linkRows = await db
@@ -651,7 +702,13 @@ export async function getDraftPreview(input: {
     }
   }
 
-  return { matched, noContacts } satisfies DraftPreview
+  return {
+    matched,
+    noContacts,
+    unmatched,
+    missing,
+    coverage,
+  } satisfies DraftPreview
 }
 
 export async function softDeleteBatch(input: {

@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/card"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Spinner } from "@/components/ui/spinner"
 import { batchCreateSchema, type BatchCreateFormData } from "@/lib/schemas"
 import {
@@ -26,7 +27,6 @@ import {
   previewBatchFile,
   type SheetPreviewResult,
 } from "@/lib/server/batch-service"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 
 function todayTitle(): string {
   return new Date().toISOString().slice(0, 10)
@@ -48,11 +48,10 @@ export function NewBatchForm({
   const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
   const [dragOver, setDragOver] = useState(false)
-  const [result, setResult] = useState<
-    | null
-    | { kind: "unmatched"; labels: string[] }
-    | { kind: "error"; message: string }
-  >(null)
+  const [result, setResult] = useState<null | {
+    kind: "error"
+    message: string
+  }>(null)
   const [preview, setPreview] = useState<SheetPreviewResult | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [mapping, setMapping] = useState<SheetMapping>({})
@@ -142,10 +141,7 @@ export function NewBatchForm({
     }
     const res = await createBatch(formData)
     if (!res.ok) {
-      if (res.error === "unmatched") {
-        setResult({ kind: "unmatched", labels: res.unmatched })
-        toast.error("توجد تسميات شقق غير مطابقة")
-      } else if (res.error === "parse") {
+      if (res.error === "parse") {
         setResult({ kind: "error", message: res.message })
         toast.error(res.message)
       } else if (res.error === "invalid_project") {
@@ -155,7 +151,12 @@ export function NewBatchForm({
       }
       return
     }
-    toast.success("تم إنشاء الدفعة")
+    const parts: string[] = []
+    if (res.unmatchedCount > 0)
+      parts.push(`${res.unmatchedCount} تسمية غير مطابقة`)
+    if (res.missingCount > 0) parts.push(`${res.missingCount} شقة غير مضمونة`)
+    if (parts.length > 0) toast.warning(`تم إنشاء الدفعة — ${parts.join("، ")}`)
+    else toast.success("تم إنشاء الدفعة")
     router.push(`/batches/${res.batchId}`)
   }
 
@@ -353,25 +354,6 @@ export function NewBatchForm({
             </CardFooter>
           </Card>
         </form>
-      )}
-
-      {result?.kind === "unmatched" && (
-        <Alert variant="destructive">
-          <AlertTitle>تسميات غير مطابقة</AlertTitle>
-          <AlertDescription>
-            <p>الشقق التالية غير موجودة في المشروع المحدد:</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {result.labels.map((l) => (
-                <span
-                  key={l}
-                  className="rounded bg-destructive/15 px-2 py-0.5 text-xs font-medium"
-                >
-                  {l}
-                </span>
-              ))}
-            </div>
-          </AlertDescription>
-        </Alert>
       )}
 
       {result?.kind === "error" && (

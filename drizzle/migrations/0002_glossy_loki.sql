@@ -1,0 +1,1 @@
+ALTER TABLE `batch_sessions` ADD `excel_labels` text;
