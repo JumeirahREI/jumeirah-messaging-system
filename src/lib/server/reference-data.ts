@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start"
+"use server"
 import bcrypt from "bcryptjs"
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm"
 
@@ -52,141 +52,107 @@ export type ProjectRow = {
   createdAt: string | null
 }
 
-export const listProjects = createServerFn({ method: "GET" }).handler(
-  async () => {
-    await requireRole("admin")
-    const rows = await db
-      .select({
-        id: projects.id,
-        title: projects.title,
-        createdAt: projects.createdAt,
-      })
-      .from(projects)
-      .where(isNull(projects.deletedAt))
-      .orderBy(desc(projects.createdAt))
-    return rows satisfies ProjectRow[]
-  }
-)
-
-export const getProject = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    return { id }
-  })
-  .handler(async ({ data }) => {
-    await requireRole("admin")
-    const rows = await db
-      .select({ id: projects.id, title: projects.title })
-      .from(projects)
-      .where(and(eq(projects.id, data.id), isNull(projects.deletedAt)))
-      .limit(1)
-    return rows.length > 0 ? rows[0] : null
-  })
-
-export const createProject = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const title = (input as { title?: unknown }).title
-    if (typeof title !== "string" || title.trim().length === 0) {
-      throw new Error("العنوان مطلوب")
-    }
-    return { title: title.trim() }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    return safeMutation(async () => {
-      const [row] = await db
-        .insert(projects)
-        .values({ title: data.title, ...actor(user) })
-        .returning({ id: projects.id, title: projects.title })
-      return { ok: true, data: row } as const
+export async function listProjects(): Promise<ProjectRow[]> {
+  await requireRole("admin")
+  const rows = await db
+    .select({
+      id: projects.id,
+      title: projects.title,
+      createdAt: projects.createdAt,
     })
-  })
+    .from(projects)
+    .where(isNull(projects.deletedAt))
+    .orderBy(desc(projects.createdAt))
+  return rows satisfies ProjectRow[]
+}
 
-export const updateProject = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    const title = (input as { title?: unknown }).title
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    if (typeof title !== "string" || title.trim().length === 0) {
-      throw new Error("العنوان مطلوب")
-    }
-    return { id, title: title.trim() }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    return safeMutation(async () => {
-      const row = await db
-        .update(projects)
-        .set({ title: data.title, updatedBy: user.id, updatedAt: now })
-        .where(and(eq(projects.id, data.id), isNull(projects.deletedAt)))
-        .returning({ id: projects.id, title: projects.title })
-      if (row.length === 0)
-        return { ok: false, error: "المشروع غير موجود" } as const
-      return { ok: true, data: row[0] } as const
-    })
-  })
+export async function getProject(input: {
+  id: number
+}): Promise<{ id: number; title: string } | null> {
+  await requireRole("admin")
+  const rows = await db
+    .select({ id: projects.id, title: projects.title })
+    .from(projects)
+    .where(and(eq(projects.id, input.id), isNull(projects.deletedAt)))
+    .limit(1)
+  return rows.length > 0 ? rows[0] : null
+}
 
-export const softDeleteProject = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    return { id }
+export async function createProject(input: {
+  title: string
+}): Promise<MutationResult<{ id: number; title: string }>> {
+  const user = await requireRole("admin")
+  return safeMutation(async () => {
+    const [row] = await db
+      .insert(projects)
+      .values({ title: input.title, ...actor(user) })
+      .returning({ id: projects.id, title: projects.title })
+    return { ok: true, data: row } as const
   })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    const result = await db
+}
+
+export async function updateProject(input: {
+  id: number
+  title: string
+}): Promise<MutationResult<{ id: number; title: string }>> {
+  const user = await requireRole("admin")
+  return safeMutation(async () => {
+    const row = await db
       .update(projects)
-      .set({ deletedBy: user.id, deletedAt: now })
-      .where(and(eq(projects.id, data.id), isNull(projects.deletedAt)))
-      .returning({ id: projects.id })
-    if (result.length === 0) {
+      .set({ title: input.title, updatedBy: user.id, updatedAt: now })
+      .where(and(eq(projects.id, input.id), isNull(projects.deletedAt)))
+      .returning({ id: projects.id, title: projects.title })
+    if (row.length === 0)
       return { ok: false, error: "المشروع غير موجود" } as const
-    }
-
-    const towerRows = await db
-      .select({ id: towers.id })
-      .from(towers)
-      .where(and(eq(towers.projectId, data.id), isNull(towers.deletedAt)))
-    const towerIds = towerRows.map((t) => t.id)
-    if (towerIds.length > 0) {
-      await db
-        .update(towers)
-        .set({ deletedAt: now })
-        .where(inArray(towers.id, towerIds))
-
-      const aptRows = await db
-        .select({ id: apartments.id })
-        .from(apartments)
-        .where(
-          and(
-            inArray(apartments.towerId, towerIds),
-            isNull(apartments.deletedAt)
-          )
-        )
-      const aptIds = aptRows.map((a) => a.id)
-      if (aptIds.length > 0) {
-        await db
-          .update(apartments)
-          .set({ deletedAt: now })
-          .where(inArray(apartments.id, aptIds))
-        await db
-          .update(apartmentContacts)
-          .set({ deletedAt: now })
-          .where(inArray(apartmentContacts.apartmentId, aptIds))
-      }
-    }
-
-    return { ok: true, data: result[0] } as const
+    return { ok: true, data: row[0] } as const
   })
+}
+
+export async function softDeleteProject(input: {
+  id: number
+}): Promise<MutationResult<{ id: number }>> {
+  const user = await requireRole("admin")
+  const result = await db
+    .update(projects)
+    .set({ deletedBy: user.id, deletedAt: now })
+    .where(and(eq(projects.id, input.id), isNull(projects.deletedAt)))
+    .returning({ id: projects.id })
+  if (result.length === 0) {
+    return { ok: false, error: "المشروع غير موجود" } as const
+  }
+
+  const towerRows = await db
+    .select({ id: towers.id })
+    .from(towers)
+    .where(and(eq(towers.projectId, input.id), isNull(towers.deletedAt)))
+  const towerIds = towerRows.map((t) => t.id)
+  if (towerIds.length > 0) {
+    await db
+      .update(towers)
+      .set({ deletedAt: now })
+      .where(inArray(towers.id, towerIds))
+
+    const aptRows = await db
+      .select({ id: apartments.id })
+      .from(apartments)
+      .where(
+        and(inArray(apartments.towerId, towerIds), isNull(apartments.deletedAt))
+      )
+    const aptIds = aptRows.map((a) => a.id)
+    if (aptIds.length > 0) {
+      await db
+        .update(apartments)
+        .set({ deletedAt: now })
+        .where(inArray(apartments.id, aptIds))
+      await db
+        .update(apartmentContacts)
+        .set({ deletedAt: now })
+        .where(inArray(apartmentContacts.apartmentId, aptIds))
+    }
+  }
+
+  return { ok: true, data: result[0] } as const
+}
 
 // ---------------------------------------------------------------------------
 // Towers
@@ -199,147 +165,109 @@ export type TowerRow = {
   createdAt: string | null
 }
 
-export const listTowers = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const projectId = (input as { projectId?: unknown }).projectId
-    if (typeof projectId !== "number") throw new Error("معرّف المشروع مطلوب")
-    return { projectId }
-  })
-  .handler(async ({ data }) => {
-    await requireRole("admin")
-    const rows = await db
-      .select({
+export async function listTowers(input: {
+  projectId: number
+}): Promise<TowerRow[]> {
+  await requireRole("admin")
+  const rows = await db
+    .select({
+      id: towers.id,
+      projectId: towers.projectId,
+      label: towers.label,
+      createdAt: towers.createdAt,
+    })
+    .from(towers)
+    .where(and(eq(towers.projectId, input.projectId), isNull(towers.deletedAt)))
+    .orderBy(desc(towers.createdAt))
+  return rows satisfies TowerRow[]
+}
+
+export async function getTower(input: {
+  id: number
+}): Promise<{ id: number; projectId: number; label: string } | null> {
+  await requireRole("admin")
+  const rows = await db
+    .select({
+      id: towers.id,
+      projectId: towers.projectId,
+      label: towers.label,
+    })
+    .from(towers)
+    .where(and(eq(towers.id, input.id), isNull(towers.deletedAt)))
+    .limit(1)
+  return rows.length > 0 ? rows[0] : null
+}
+
+export async function createTower(input: {
+  projectId: number
+  label: string
+}): Promise<MutationResult<{ id: number; projectId: number; label: string }>> {
+  const user = await requireRole("admin")
+  return safeMutation(async () => {
+    const [row] = await db
+      .insert(towers)
+      .values({
+        projectId: input.projectId,
+        label: input.label,
+        ...actor(user),
+      })
+      .returning({
         id: towers.id,
         projectId: towers.projectId,
         label: towers.label,
-        createdAt: towers.createdAt,
       })
-      .from(towers)
-      .where(
-        and(eq(towers.projectId, data.projectId), isNull(towers.deletedAt))
-      )
-      .orderBy(desc(towers.createdAt))
-    return rows satisfies TowerRow[]
+    return { ok: true, data: row } as const
   })
+}
 
-export const getTower = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    return { id }
-  })
-  .handler(async ({ data }) => {
-    await requireRole("admin")
-    const rows = await db
-      .select({
-        id: towers.id,
-        projectId: towers.projectId,
-        label: towers.label,
-      })
-      .from(towers)
-      .where(and(eq(towers.id, data.id), isNull(towers.deletedAt)))
-      .limit(1)
-    return rows.length > 0 ? rows[0] : null
-  })
-
-export const createTower = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const projectId = (input as { projectId?: unknown }).projectId
-    const label = (input as { label?: unknown }).label
-    if (typeof projectId !== "number") throw new Error("معرّف المشروع مطلوب")
-    if (typeof label !== "string" || label.trim().length === 0) {
-      throw new Error("الاسم مطلوب")
-    }
-    return { projectId, label: label.trim() }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    return safeMutation(async () => {
-      const [row] = await db
-        .insert(towers)
-        .values({
-          projectId: data.projectId,
-          label: data.label,
-          ...actor(user),
-        })
-        .returning({
-          id: towers.id,
-          projectId: towers.projectId,
-          label: towers.label,
-        })
-      return { ok: true, data: row } as const
-    })
-  })
-
-export const updateTower = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    const label = (input as { label?: unknown }).label
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    if (typeof label !== "string" || label.trim().length === 0) {
-      throw new Error("الاسم مطلوب")
-    }
-    return { id, label: label.trim() }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    return safeMutation(async () => {
-      const row = await db
-        .update(towers)
-        .set({ label: data.label, updatedBy: user.id, updatedAt: now })
-        .where(and(eq(towers.id, data.id), isNull(towers.deletedAt)))
-        .returning({ id: towers.id, label: towers.label })
-      if (row.length === 0)
-        return { ok: false, error: "البرج غير موجود" } as const
-      return { ok: true, data: row[0] } as const
-    })
-  })
-
-export const softDeleteTower = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    return { id }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    const result = await db
+export async function updateTower(input: {
+  id: number
+  label: string
+}): Promise<MutationResult<{ id: number; label: string }>> {
+  const user = await requireRole("admin")
+  return safeMutation(async () => {
+    const row = await db
       .update(towers)
-      .set({ deletedBy: user.id, deletedAt: now })
-      .where(and(eq(towers.id, data.id), isNull(towers.deletedAt)))
-      .returning({ id: towers.id })
-    if (result.length === 0) {
+      .set({ label: input.label, updatedBy: user.id, updatedAt: now })
+      .where(and(eq(towers.id, input.id), isNull(towers.deletedAt)))
+      .returning({ id: towers.id, label: towers.label })
+    if (row.length === 0)
       return { ok: false, error: "البرج غير موجود" } as const
-    }
-
-    const aptRows = await db
-      .select({ id: apartments.id })
-      .from(apartments)
-      .where(and(eq(apartments.towerId, data.id), isNull(apartments.deletedAt)))
-    const aptIds = aptRows.map((a) => a.id)
-    if (aptIds.length > 0) {
-      await db
-        .update(apartments)
-        .set({ deletedAt: now })
-        .where(inArray(apartments.id, aptIds))
-      await db
-        .update(apartmentContacts)
-        .set({ deletedAt: now })
-        .where(inArray(apartmentContacts.apartmentId, aptIds))
-    }
-
-    return { ok: true, data: result[0] } as const
+    return { ok: true, data: row[0] } as const
   })
+}
+
+export async function softDeleteTower(input: {
+  id: number
+}): Promise<MutationResult<{ id: number }>> {
+  const user = await requireRole("admin")
+  const result = await db
+    .update(towers)
+    .set({ deletedBy: user.id, deletedAt: now })
+    .where(and(eq(towers.id, input.id), isNull(towers.deletedAt)))
+    .returning({ id: towers.id })
+  if (result.length === 0) {
+    return { ok: false, error: "البرج غير موجود" } as const
+  }
+
+  const aptRows = await db
+    .select({ id: apartments.id })
+    .from(apartments)
+    .where(and(eq(apartments.towerId, input.id), isNull(apartments.deletedAt)))
+  const aptIds = aptRows.map((a) => a.id)
+  if (aptIds.length > 0) {
+    await db
+      .update(apartments)
+      .set({ deletedAt: now })
+      .where(inArray(apartments.id, aptIds))
+    await db
+      .update(apartmentContacts)
+      .set({ deletedAt: now })
+      .where(inArray(apartmentContacts.apartmentId, aptIds))
+  }
+
+  return { ok: true, data: result[0] } as const
+}
 
 // ---------------------------------------------------------------------------
 // Apartments
@@ -354,177 +282,143 @@ export type ApartmentRow = {
   createdAt: string | null
 }
 
-export const listApartments = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const towerId = (input as { towerId?: unknown }).towerId
-    if (typeof towerId !== "number") throw new Error("معرّف البرج مطلوب")
-    return { towerId }
-  })
-  .handler(async ({ data }) => {
-    await requireRole("admin")
-    const rows = await db
-      .select({
+export async function listApartments(input: {
+  towerId: number
+}): Promise<ApartmentRow[]> {
+  await requireRole("admin")
+  const rows = await db
+    .select({
+      id: apartments.id,
+      towerId: apartments.towerId,
+      projectId: apartments.projectId,
+      label: apartments.label,
+      unitNumber: apartments.unitNumber,
+      createdAt: apartments.createdAt,
+    })
+    .from(apartments)
+    .where(
+      and(eq(apartments.towerId, input.towerId), isNull(apartments.deletedAt))
+    )
+    .orderBy(apartments.label)
+  return rows satisfies ApartmentRow[]
+}
+
+export async function getApartment(input: { id: number }): Promise<{
+  id: number
+  towerId: number
+  projectId: number
+  label: string
+  unitNumber: string | null
+} | null> {
+  await requireRole("admin")
+  const rows = await db
+    .select({
+      id: apartments.id,
+      towerId: apartments.towerId,
+      projectId: apartments.projectId,
+      label: apartments.label,
+      unitNumber: apartments.unitNumber,
+    })
+    .from(apartments)
+    .where(and(eq(apartments.id, input.id), isNull(apartments.deletedAt)))
+    .limit(1)
+  return rows.length > 0 ? rows[0] : null
+}
+
+export async function createApartment(input: {
+  towerId: number
+  projectId: number
+  label: string
+  unitNumber: string | null
+}): Promise<
+  MutationResult<{
+    id: number
+    towerId: number
+    projectId: number
+    label: string
+    unitNumber: string | null
+  }>
+> {
+  const user = await requireRole("admin")
+  return safeMutation(async () => {
+    const [row] = await db
+      .insert(apartments)
+      .values({
+        towerId: input.towerId,
+        projectId: input.projectId,
+        label: input.label,
+        unitNumber: input.unitNumber,
+        ...actor(user),
+      })
+      .returning({
         id: apartments.id,
         towerId: apartments.towerId,
         projectId: apartments.projectId,
         label: apartments.label,
         unitNumber: apartments.unitNumber,
-        createdAt: apartments.createdAt,
       })
-      .from(apartments)
-      .where(
-        and(eq(apartments.towerId, data.towerId), isNull(apartments.deletedAt))
-      )
-      .orderBy(apartments.label)
-    return rows satisfies ApartmentRow[]
+    return { ok: true, data: row } as const
   })
+}
 
-export const getApartment = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    return { id }
-  })
-  .handler(async ({ data }) => {
-    await requireRole("admin")
-    const rows = await db
-      .select({
-        id: apartments.id,
-        towerId: apartments.towerId,
-        projectId: apartments.projectId,
-        label: apartments.label,
-        unitNumber: apartments.unitNumber,
-      })
-      .from(apartments)
-      .where(and(eq(apartments.id, data.id), isNull(apartments.deletedAt)))
-      .limit(1)
-    return rows.length > 0 ? rows[0] : null
-  })
-
-export const createApartment = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const towerId = (input as { towerId?: unknown }).towerId
-    const projectId = (input as { projectId?: unknown }).projectId
-    const label = (input as { label?: unknown }).label
-    const unitNumber = (input as { unitNumber?: unknown }).unitNumber
-    if (typeof towerId !== "number") throw new Error("معرّف البرج مطلوب")
-    if (typeof projectId !== "number") throw new Error("معرّف المشروع مطلوب")
-    if (typeof label !== "string" || label.trim().length === 0) {
-      throw new Error("الاسم مطلوب")
-    }
-    return {
-      towerId,
-      projectId,
-      label: label.trim(),
-      unitNumber:
-        typeof unitNumber === "string" && unitNumber.trim().length > 0
-          ? unitNumber.trim()
-          : null,
-    }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    return safeMutation(async () => {
-      const [row] = await db
-        .insert(apartments)
-        .values({
-          towerId: data.towerId,
-          projectId: data.projectId,
-          label: data.label,
-          unitNumber: data.unitNumber,
-          ...actor(user),
-        })
-        .returning({
-          id: apartments.id,
-          towerId: apartments.towerId,
-          projectId: apartments.projectId,
-          label: apartments.label,
-          unitNumber: apartments.unitNumber,
-        })
-      return { ok: true, data: row } as const
-    })
-  })
-
-export const updateApartment = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    const label = (input as { label?: unknown }).label
-    const unitNumber = (input as { unitNumber?: unknown }).unitNumber
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    if (typeof label !== "string" || label.trim().length === 0) {
-      throw new Error("الاسم مطلوب")
-    }
-    return {
-      id,
-      label: label.trim(),
-      unitNumber:
-        typeof unitNumber === "string" && unitNumber.trim().length > 0
-          ? unitNumber.trim()
-          : null,
-    }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    return safeMutation(async () => {
-      const row = await db
-        .update(apartments)
-        .set({
-          label: data.label,
-          unitNumber: data.unitNumber,
-          updatedBy: user.id,
-          updatedAt: now,
-        })
-        .where(and(eq(apartments.id, data.id), isNull(apartments.deletedAt)))
-        .returning({
-          id: apartments.id,
-          label: apartments.label,
-          unitNumber: apartments.unitNumber,
-        })
-      if (row.length === 0)
-        return { ok: false, error: "الشقة غير موجودة" } as const
-      return { ok: true, data: row[0] } as const
-    })
-  })
-
-export const softDeleteApartment = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    return { id }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    const result = await db
+export async function updateApartment(input: {
+  id: number
+  label: string
+  unitNumber: string | null
+}): Promise<
+  MutationResult<{
+    id: number
+    label: string
+    unitNumber: string | null
+  }>
+> {
+  const user = await requireRole("admin")
+  return safeMutation(async () => {
+    const row = await db
       .update(apartments)
-      .set({ deletedBy: user.id, deletedAt: now })
-      .where(and(eq(apartments.id, data.id), isNull(apartments.deletedAt)))
-      .returning({ id: apartments.id })
-    if (result.length === 0) {
+      .set({
+        label: input.label,
+        unitNumber: input.unitNumber,
+        updatedBy: user.id,
+        updatedAt: now,
+      })
+      .where(and(eq(apartments.id, input.id), isNull(apartments.deletedAt)))
+      .returning({
+        id: apartments.id,
+        label: apartments.label,
+        unitNumber: apartments.unitNumber,
+      })
+    if (row.length === 0)
       return { ok: false, error: "الشقة غير موجودة" } as const
-    }
-
-    await db
-      .update(apartmentContacts)
-      .set({ deletedAt: now })
-      .where(
-        and(
-          eq(apartmentContacts.apartmentId, data.id),
-          isNull(apartmentContacts.deletedAt)
-        )
-      )
-
-    return { ok: true, data: result[0] } as const
+    return { ok: true, data: row[0] } as const
   })
+}
+
+export async function softDeleteApartment(input: {
+  id: number
+}): Promise<MutationResult<{ id: number }>> {
+  const user = await requireRole("admin")
+  const result = await db
+    .update(apartments)
+    .set({ deletedBy: user.id, deletedAt: now })
+    .where(and(eq(apartments.id, input.id), isNull(apartments.deletedAt)))
+    .returning({ id: apartments.id })
+  if (result.length === 0) {
+    return { ok: false, error: "الشقة غير موجودة" } as const
+  }
+
+  await db
+    .update(apartmentContacts)
+    .set({ deletedAt: now })
+    .where(
+      and(
+        eq(apartmentContacts.apartmentId, input.id),
+        isNull(apartmentContacts.deletedAt)
+      )
+    )
+
+  return { ok: true, data: result[0] } as const
+}
 
 // ---------------------------------------------------------------------------
 // Contacts + apartment-contact links + phone numbers
@@ -532,38 +426,28 @@ export const softDeleteApartment = createServerFn({ method: "POST" })
 
 export type ContactRow = { id: number; fullname: string }
 
-export const listContacts = createServerFn({ method: "GET" }).handler(
-  async () => {
-    await requireRole("admin")
-    const rows = await db
-      .select({ id: contacts.id, fullname: contacts.fullname })
-      .from(contacts)
-      .where(isNull(contacts.deletedAt))
-      .orderBy(contacts.fullname)
-    return rows satisfies ContactRow[]
-  }
-)
+export async function listContacts(): Promise<ContactRow[]> {
+  await requireRole("admin")
+  const rows = await db
+    .select({ id: contacts.id, fullname: contacts.fullname })
+    .from(contacts)
+    .where(isNull(contacts.deletedAt))
+    .orderBy(contacts.fullname)
+  return rows satisfies ContactRow[]
+}
 
-export const createContact = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const fullname = (input as { fullname?: unknown }).fullname
-    if (typeof fullname !== "string" || fullname.trim().length === 0) {
-      throw new Error("الاسم مطلوب")
-    }
-    return { fullname: fullname.trim() }
+export async function createContact(input: {
+  fullname: string
+}): Promise<MutationResult<{ id: number; fullname: string }>> {
+  const user = await requireRole("admin")
+  return safeMutation(async () => {
+    const [row] = await db
+      .insert(contacts)
+      .values({ fullname: input.fullname, ...actor(user) })
+      .returning({ id: contacts.id, fullname: contacts.fullname })
+    return { ok: true, data: row } as const
   })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    return safeMutation(async () => {
-      const [row] = await db
-        .insert(contacts)
-        .values({ fullname: data.fullname, ...actor(user) })
-        .returning({ id: contacts.id, fullname: contacts.fullname })
-      return { ok: true, data: row } as const
-    })
-  })
+}
 
 export type ApartmentContactRow = {
   id: number
@@ -573,159 +457,100 @@ export type ApartmentContactRow = {
   isNotificationRecipient: boolean
 }
 
-export const listApartmentContacts = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const apartmentId = (input as { apartmentId?: unknown }).apartmentId
-    if (typeof apartmentId !== "number") throw new Error("معرّف الشقة مطلوب")
-    return { apartmentId }
-  })
-  .handler(async ({ data }) => {
-    await requireRole("admin")
-    const rows = await db
-      .select({
-        id: apartmentContacts.id,
-        contactId: apartmentContacts.contactId,
-        contactName: contacts.fullname,
-        role: apartmentContacts.role,
-        isNotificationRecipient: apartmentContacts.isNotificationRecipient,
-      })
-      .from(apartmentContacts)
-      .innerJoin(contacts, eq(apartmentContacts.contactId, contacts.id))
-      .where(
-        and(
-          eq(apartmentContacts.apartmentId, data.apartmentId),
-          isNull(apartmentContacts.deletedAt),
-          isNull(contacts.deletedAt)
-        )
+export async function listApartmentContacts(input: {
+  apartmentId: number
+}): Promise<ApartmentContactRow[]> {
+  await requireRole("admin")
+  const rows = await db
+    .select({
+      id: apartmentContacts.id,
+      contactId: apartmentContacts.contactId,
+      contactName: contacts.fullname,
+      role: apartmentContacts.role,
+      isNotificationRecipient: apartmentContacts.isNotificationRecipient,
+    })
+    .from(apartmentContacts)
+    .innerJoin(contacts, eq(apartmentContacts.contactId, contacts.id))
+    .where(
+      and(
+        eq(apartmentContacts.apartmentId, input.apartmentId),
+        isNull(apartmentContacts.deletedAt),
+        isNull(contacts.deletedAt)
       )
-      .orderBy(contacts.fullname)
-    return rows satisfies ApartmentContactRow[]
-  })
+    )
+    .orderBy(contacts.fullname)
+  return rows satisfies ApartmentContactRow[]
+}
 
-export const linkContact = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const apartmentId = (input as { apartmentId?: unknown }).apartmentId
-    const contactId = (input as { contactId?: unknown }).contactId
-    const role = (input as { role?: unknown }).role
-    const isNotificationRecipient = (
-      input as { isNotificationRecipient?: unknown }
-    ).isNotificationRecipient
-    if (typeof apartmentId !== "number") throw new Error("معرّف الشقة مطلوب")
-    if (typeof contactId !== "number")
-      throw new Error("معرّف جهة الاتصال مطلوب")
-    if (
-      typeof role !== "string" ||
-      (role !== "owner" && role !== "tenant" && role !== "manager")
-    ) {
-      throw new Error("الدور غير صالح")
-    }
-    const narrowedRole: ContactRole = role
-    return {
-      apartmentId,
-      contactId,
-      role: narrowedRole,
-      isNotificationRecipient:
-        typeof isNotificationRecipient === "boolean"
-          ? isNotificationRecipient
-          : true,
-    }
+export async function linkContact(input: {
+  apartmentId: number
+  contactId: number
+  role: ContactRole
+  isNotificationRecipient: boolean
+}): Promise<MutationResult<{ id: number }>> {
+  const user = await requireRole("admin")
+  return safeMutation(async () => {
+    const [row] = await db
+      .insert(apartmentContacts)
+      .values({
+        apartmentId: input.apartmentId,
+        contactId: input.contactId,
+        role: input.role,
+        isNotificationRecipient: input.isNotificationRecipient,
+        ...actor(user),
+      })
+      .returning({ id: apartmentContacts.id })
+    return { ok: true, data: row } as const
   })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    return safeMutation(async () => {
-      const [row] = await db
-        .insert(apartmentContacts)
-        .values({
-          apartmentId: data.apartmentId,
-          contactId: data.contactId,
-          role: data.role,
-          isNotificationRecipient: data.isNotificationRecipient,
-          ...actor(user),
-        })
-        .returning({ id: apartmentContacts.id })
-      return { ok: true, data: row } as const
-    })
-  })
+}
 
-export const updateContactLink = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    const role = (input as { role?: unknown }).role
-    const isNotificationRecipient = (
-      input as { isNotificationRecipient?: unknown }
-    ).isNotificationRecipient
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    if (
-      typeof role !== "string" ||
-      (role !== "owner" && role !== "tenant" && role !== "manager")
-    ) {
-      throw new Error("الدور غير صالح")
-    }
-    const narrowedRole: ContactRole = role
-    return {
-      id,
-      role: narrowedRole,
-      isNotificationRecipient:
-        typeof isNotificationRecipient === "boolean"
-          ? isNotificationRecipient
-          : true,
-    }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    return safeMutation(async () => {
-      const row = await db
-        .update(apartmentContacts)
-        .set({
-          role: data.role,
-          isNotificationRecipient: data.isNotificationRecipient,
-          updatedBy: user.id,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(apartmentContacts.id, data.id),
-            isNull(apartmentContacts.deletedAt)
-          )
-        )
-        .returning({ id: apartmentContacts.id })
-      if (row.length === 0)
-        return { ok: false, error: "الربط غير موجود" } as const
-      return { ok: true, data: row[0] } as const
-    })
-  })
-
-export const unlinkContact = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    return { id }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    const result = await db
+export async function updateContactLink(input: {
+  id: number
+  role: ContactRole
+  isNotificationRecipient: boolean
+}): Promise<MutationResult<{ id: number }>> {
+  const user = await requireRole("admin")
+  return safeMutation(async () => {
+    const row = await db
       .update(apartmentContacts)
-      .set({ deletedBy: user.id, deletedAt: now })
+      .set({
+        role: input.role,
+        isNotificationRecipient: input.isNotificationRecipient,
+        updatedBy: user.id,
+        updatedAt: now,
+      })
       .where(
         and(
-          eq(apartmentContacts.id, data.id),
+          eq(apartmentContacts.id, input.id),
           isNull(apartmentContacts.deletedAt)
         )
       )
       .returning({ id: apartmentContacts.id })
-    if (result.length === 0) {
+    if (row.length === 0)
       return { ok: false, error: "الربط غير موجود" } as const
-    }
-    return { ok: true, data: result[0] } as const
+    return { ok: true, data: row[0] } as const
   })
+}
+
+export async function unlinkContact(input: {
+  id: number
+}): Promise<MutationResult<{ id: number }>> {
+  const user = await requireRole("admin")
+  const result = await db
+    .update(apartmentContacts)
+    .set({ deletedBy: user.id, deletedAt: now })
+    .where(
+      and(
+        eq(apartmentContacts.id, input.id),
+        isNull(apartmentContacts.deletedAt)
+      )
+    )
+    .returning({ id: apartmentContacts.id })
+  if (result.length === 0) {
+    return { ok: false, error: "الربط غير موجود" } as const
+  }
+  return { ok: true, data: result[0] } as const
+}
 
 export type PhoneNumberRow = {
   id: number
@@ -733,33 +558,26 @@ export type PhoneNumberRow = {
   number: string
 }
 
-export const listPhoneNumbers = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const contactId = (input as { contactId?: unknown }).contactId
-    if (typeof contactId !== "number")
-      throw new Error("معرّف جهة الاتصال مطلوب")
-    return { contactId }
-  })
-  .handler(async ({ data }) => {
-    await requireRole("admin")
-    const rows = await db
-      .select({
-        id: phoneNumbers.id,
-        contactId: phoneNumbers.contactId,
-        number: phoneNumbers.number,
-      })
-      .from(phoneNumbers)
-      .where(
-        and(
-          eq(phoneNumbers.contactId, data.contactId),
-          isNull(phoneNumbers.deletedAt)
-        )
+export async function listPhoneNumbers(input: {
+  contactId: number
+}): Promise<PhoneNumberRow[]> {
+  await requireRole("admin")
+  const rows = await db
+    .select({
+      id: phoneNumbers.id,
+      contactId: phoneNumbers.contactId,
+      number: phoneNumbers.number,
+    })
+    .from(phoneNumbers)
+    .where(
+      and(
+        eq(phoneNumbers.contactId, input.contactId),
+        isNull(phoneNumbers.deletedAt)
       )
-      .orderBy(phoneNumbers.number)
-    return rows satisfies PhoneNumberRow[]
-  })
+    )
+    .orderBy(phoneNumbers.number)
+  return rows satisfies PhoneNumberRow[]
+}
 
 export type ApartmentPhoneNumberRow = {
   id: number
@@ -767,118 +585,85 @@ export type ApartmentPhoneNumberRow = {
   number: string
 }
 
-export const listPhoneNumbersForApartment = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const apartmentId = (input as { apartmentId?: unknown }).apartmentId
-    if (typeof apartmentId !== "number") throw new Error("معرّف الشقة مطلوب")
-    return { apartmentId }
-  })
-  .handler(async ({ data }) => {
-    await requireRole("admin")
-    const rows = await db
-      .select({
+export async function listPhoneNumbersForApartment(input: {
+  apartmentId: number
+}): Promise<ApartmentPhoneNumberRow[]> {
+  await requireRole("admin")
+  const rows = await db
+    .select({
+      id: phoneNumbers.id,
+      contactId: phoneNumbers.contactId,
+      number: phoneNumbers.number,
+    })
+    .from(phoneNumbers)
+    .innerJoin(
+      apartmentContacts,
+      eq(apartmentContacts.contactId, phoneNumbers.contactId)
+    )
+    .where(
+      and(
+        eq(apartmentContacts.apartmentId, input.apartmentId),
+        isNull(apartmentContacts.deletedAt),
+        isNull(phoneNumbers.deletedAt)
+      )
+    )
+    .orderBy(phoneNumbers.number)
+  return rows satisfies ApartmentPhoneNumberRow[]
+}
+
+export async function addPhoneNumber(input: {
+  contactId: number
+  number: string
+}): Promise<MutationResult<{ id: number; contactId: number; number: string }>> {
+  const user = await requireRole("admin")
+  return safeMutation(async () => {
+    const [row] = await db
+      .insert(phoneNumbers)
+      .values({
+        contactId: input.contactId,
+        number: input.number,
+        ...actor(user),
+      })
+      .returning({
         id: phoneNumbers.id,
         contactId: phoneNumbers.contactId,
         number: phoneNumbers.number,
       })
-      .from(phoneNumbers)
-      .innerJoin(
-        apartmentContacts,
-        eq(apartmentContacts.contactId, phoneNumbers.contactId)
-      )
-      .where(
-        and(
-          eq(apartmentContacts.apartmentId, data.apartmentId),
-          isNull(apartmentContacts.deletedAt),
-          isNull(phoneNumbers.deletedAt)
-        )
-      )
-      .orderBy(phoneNumbers.number)
-    return rows satisfies ApartmentPhoneNumberRow[]
+    return { ok: true, data: row } as const
   })
+}
 
-export const addPhoneNumber = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const contactId = (input as { contactId?: unknown }).contactId
-    const number = (input as { number?: unknown }).number
-    if (typeof contactId !== "number")
-      throw new Error("معرّف جهة الاتصال مطلوب")
-    if (typeof number !== "string" || number.trim().length === 0) {
-      throw new Error("الرقم مطلوب")
-    }
-    return { contactId, number: number.trim() }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    return safeMutation(async () => {
-      const [row] = await db
-        .insert(phoneNumbers)
-        .values({
-          contactId: data.contactId,
-          number: data.number,
-          ...actor(user),
-        })
-        .returning({
-          id: phoneNumbers.id,
-          contactId: phoneNumbers.contactId,
-          number: phoneNumbers.number,
-        })
-      return { ok: true, data: row } as const
-    })
-  })
-
-export const updatePhoneNumber = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    const number = (input as { number?: unknown }).number
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    if (typeof number !== "string" || number.trim().length === 0) {
-      throw new Error("الرقم مطلوب")
-    }
-    return { id, number: number.trim() }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    return safeMutation(async () => {
-      const row = await db
-        .update(phoneNumbers)
-        .set({ number: data.number, updatedBy: user.id, updatedAt: now })
-        .where(
-          and(eq(phoneNumbers.id, data.id), isNull(phoneNumbers.deletedAt))
-        )
-        .returning({ id: phoneNumbers.id, number: phoneNumbers.number })
-      if (row.length === 0)
-        return { ok: false, error: "الرقم غير موجود" } as const
-      return { ok: true, data: row[0] } as const
-    })
-  })
-
-export const deletePhoneNumber = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    return { id }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    const result = await db
+export async function updatePhoneNumber(input: {
+  id: number
+  number: string
+}): Promise<MutationResult<{ id: number; number: string }>> {
+  const user = await requireRole("admin")
+  return safeMutation(async () => {
+    const row = await db
       .update(phoneNumbers)
-      .set({ deletedBy: user.id, deletedAt: now })
-      .where(and(eq(phoneNumbers.id, data.id), isNull(phoneNumbers.deletedAt)))
-      .returning({ id: phoneNumbers.id })
-    if (result.length === 0) {
+      .set({ number: input.number, updatedBy: user.id, updatedAt: now })
+      .where(and(eq(phoneNumbers.id, input.id), isNull(phoneNumbers.deletedAt)))
+      .returning({ id: phoneNumbers.id, number: phoneNumbers.number })
+    if (row.length === 0)
       return { ok: false, error: "الرقم غير موجود" } as const
-    }
-    return { ok: true, data: result[0] } as const
+    return { ok: true, data: row[0] } as const
   })
+}
+
+export async function deletePhoneNumber(input: {
+  id: number
+}): Promise<MutationResult<{ id: number }>> {
+  const user = await requireRole("admin")
+  const result = await db
+    .update(phoneNumbers)
+    .set({ deletedBy: user.id, deletedAt: now })
+    .where(and(eq(phoneNumbers.id, input.id), isNull(phoneNumbers.deletedAt)))
+    .returning({ id: phoneNumbers.id })
+  if (result.length === 0) {
+    return { ok: false, error: "الرقم غير موجود" } as const
+  }
+  return { ok: true, data: result[0] } as const
+}
 
 // ---------------------------------------------------------------------------
 // Users
@@ -892,7 +677,7 @@ export type UserRow = {
   createdAt: string | null
 }
 
-export const listUsers = createServerFn({ method: "GET" }).handler(async () => {
+export async function listUsers(): Promise<UserRow[]> {
   await requireRole("admin")
   const rows = await db
     .select({
@@ -906,203 +691,179 @@ export const listUsers = createServerFn({ method: "GET" }).handler(async () => {
     .where(isNull(users.deletedAt))
     .orderBy(desc(users.createdAt))
   return rows satisfies UserRow[]
-})
+}
 
-export const getUser = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    return { id }
-  })
-  .handler(async ({ data }) => {
-    await requireRole("admin")
-    const rows = await db
-      .select({
+export async function getUser(input: { id: number }): Promise<{
+  id: number
+  fullname: string
+  username: string
+  isAdmin: boolean
+} | null> {
+  await requireRole("admin")
+  const rows = await db
+    .select({
+      id: users.id,
+      fullname: users.fullname,
+      username: users.username,
+      isAdmin: users.isAdmin,
+    })
+    .from(users)
+    .where(and(eq(users.id, input.id), isNull(users.deletedAt)))
+    .limit(1)
+  return rows.length > 0 ? rows[0] : null
+}
+
+export async function createUser(input: {
+  fullname: string
+  username: string
+  password: string
+  isAdmin: boolean
+}): Promise<
+  MutationResult<{
+    id: number
+    fullname: string
+    username: string
+    isAdmin: boolean
+  }>
+> {
+  const user = await requireRole("admin")
+  const existing = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.username, input.username))
+    .limit(1)
+  if (existing.length > 0) {
+    return { ok: false, error: "اسم المستخدم مستخدم مسبقًا" } as const
+  }
+  return safeMutation(async () => {
+    const hash = await bcrypt.hash(input.password, 12)
+    const [row] = await db
+      .insert(users)
+      .values({
+        fullname: input.fullname,
+        username: input.username,
+        password: hash,
+        isAdmin: input.isAdmin,
+        ...actor(user),
+      })
+      .returning({
         id: users.id,
         fullname: users.fullname,
         username: users.username,
         isAdmin: users.isAdmin,
       })
-      .from(users)
-      .where(and(eq(users.id, data.id), isNull(users.deletedAt)))
-      .limit(1)
-    return rows.length > 0 ? rows[0] : null
+    return { ok: true, data: row } as const
   })
+}
 
-export const createUser = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const fullname = (input as { fullname?: unknown }).fullname
-    const username = (input as { username?: unknown }).username
-    const password = (input as { password?: unknown }).password
-    const isAdmin = (input as { isAdmin?: unknown }).isAdmin
-    if (typeof fullname !== "string" || fullname.trim().length === 0) {
-      throw new Error("الاسم الكامل مطلوب")
-    }
-    if (typeof username !== "string" || username.trim().length === 0) {
-      throw new Error("اسم المستخدم مطلوب")
-    }
-    if (typeof password !== "string" || password.length < 6) {
-      throw new Error("كلمة المرور يجب أن تكون 6 أحرف على الأقل")
-    }
-    return {
-      fullname: fullname.trim(),
-      username: username.trim(),
-      password,
-      isAdmin: typeof isAdmin === "boolean" ? isAdmin : false,
-    }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    return safeMutation(async () => {
-      const hash = await bcrypt.hash(data.password, 12)
-      const [row] = await db
-        .insert(users)
-        .values({
-          fullname: data.fullname,
-          username: data.username,
-          password: hash,
-          isAdmin: data.isAdmin,
-          ...actor(user),
-        })
-        .returning({
-          id: users.id,
-          fullname: users.fullname,
-          username: users.username,
-          isAdmin: users.isAdmin,
-        })
-      return { ok: true, data: row } as const
-    })
-  })
-
-export const updateUser = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    const fullname = (input as { fullname?: unknown }).fullname
-    const username = (input as { username?: unknown }).username
-    const isAdmin = (input as { isAdmin?: unknown }).isAdmin
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    if (typeof fullname !== "string" || fullname.trim().length === 0) {
-      throw new Error("الاسم الكامل مطلوب")
-    }
-    if (typeof username !== "string" || username.trim().length === 0) {
-      throw new Error("اسم المستخدم مطلوب")
-    }
-    return {
-      id,
-      fullname: fullname.trim(),
-      username: username.trim(),
-      isAdmin: typeof isAdmin === "boolean" ? isAdmin : false,
-    }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    return safeMutation(async () => {
-      if (data.isAdmin === false) {
-        const target = await db
-          .select({ isAdmin: users.isAdmin })
+export async function updateUser(input: {
+  id: number
+  fullname: string
+  username: string
+  isAdmin: boolean
+}): Promise<
+  MutationResult<{
+    id: number
+    fullname: string
+    username: string
+    isAdmin: boolean
+  }>
+> {
+  const user = await requireRole("admin")
+  const existing = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.username, input.username))
+    .limit(1)
+  if (existing.length > 0 && existing[0].id !== input.id) {
+    return { ok: false, error: "اسم المستخدم مستخدم مسبقًا" } as const
+  }
+  return safeMutation(async () => {
+    if (input.isAdmin === false) {
+      const target = await db
+        .select({ isAdmin: users.isAdmin })
+        .from(users)
+        .where(and(eq(users.id, input.id), isNull(users.deletedAt)))
+        .limit(1)
+      if (target.length > 0 && target[0].isAdmin) {
+        const adminCount = await db
+          .select({ count: sql<number>`count(*)` })
           .from(users)
-          .where(and(eq(users.id, data.id), isNull(users.deletedAt)))
-          .limit(1)
-        if (target.length > 0 && target[0].isAdmin) {
-          const adminCount = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(users)
-            .where(and(eq(users.isAdmin, true), isNull(users.deletedAt)))
-          if ((adminCount[0]?.count ?? 0) <= 1) {
-            return {
-              ok: false,
-              error: "لا يمكن تخفيض صلاحيات آخر مسؤول",
-            } as const
-          }
+          .where(and(eq(users.isAdmin, true), isNull(users.deletedAt)))
+        if ((adminCount[0]?.count ?? 0) <= 1) {
+          return {
+            ok: false,
+            error: "لا يمكن تخفيض صلاحيات آخر مسؤول",
+          } as const
         }
       }
-      const row = await db
-        .update(users)
-        .set({
-          fullname: data.fullname,
-          username: data.username,
-          isAdmin: data.isAdmin,
-          updatedBy: user.id,
-          updatedAt: now,
-        })
-        .where(and(eq(users.id, data.id), isNull(users.deletedAt)))
-        .returning({
-          id: users.id,
-          fullname: users.fullname,
-          username: users.username,
-          isAdmin: users.isAdmin,
-        })
-      if (row.length === 0)
-        return { ok: false, error: "المستخدم غير موجود" } as const
-      return { ok: true, data: row[0] } as const
-    })
-  })
-
-export const resetUserPassword = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    const password = (input as { password?: unknown }).password
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    if (typeof password !== "string" || password.length < 6) {
-      throw new Error("كلمة المرور يجب أن تكون 6 أحرف على الأقل")
     }
-    return { id, password }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    const hash = await bcrypt.hash(data.password, 12)
     const row = await db
       .update(users)
-      .set({ password: hash, updatedBy: user.id, updatedAt: now })
-      .where(and(eq(users.id, data.id), isNull(users.deletedAt)))
-      .returning({ id: users.id })
+      .set({
+        fullname: input.fullname,
+        username: input.username,
+        isAdmin: input.isAdmin,
+        updatedBy: user.id,
+        updatedAt: now,
+      })
+      .where(and(eq(users.id, input.id), isNull(users.deletedAt)))
+      .returning({
+        id: users.id,
+        fullname: users.fullname,
+        username: users.username,
+        isAdmin: users.isAdmin,
+      })
     if (row.length === 0)
       return { ok: false, error: "المستخدم غير موجود" } as const
     return { ok: true, data: row[0] } as const
   })
+}
 
-export const softDeleteUser = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    if (typeof input !== "object" || input === null)
-      throw new Error("إدخال غير صالح")
-    const id = (input as { id?: unknown }).id
-    if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-    return { id }
-  })
-  .handler(async ({ data }) => {
-    const user = await requireRole("admin")
-    if (data.id === user.id) {
-      return { ok: false, error: "لا يمكن حذف حسابك الحالي" } as const
-    }
-    const target = await db
-      .select({ isAdmin: users.isAdmin })
+export async function resetUserPassword(input: {
+  id: number
+  password: string
+}): Promise<MutationResult<{ id: number }>> {
+  const user = await requireRole("admin")
+  const hash = await bcrypt.hash(input.password, 12)
+  const row = await db
+    .update(users)
+    .set({ password: hash, updatedBy: user.id, updatedAt: now })
+    .where(and(eq(users.id, input.id), isNull(users.deletedAt)))
+    .returning({ id: users.id })
+  if (row.length === 0)
+    return { ok: false, error: "المستخدم غير موجود" } as const
+  return { ok: true, data: row[0] } as const
+}
+
+export async function softDeleteUser(input: {
+  id: number
+}): Promise<MutationResult<{ id: number }>> {
+  const user = await requireRole("admin")
+  if (input.id === user.id) {
+    return { ok: false, error: "لا يمكن حذف حسابك الحالي" } as const
+  }
+  const target = await db
+    .select({ isAdmin: users.isAdmin })
+    .from(users)
+    .where(and(eq(users.id, input.id), isNull(users.deletedAt)))
+    .limit(1)
+  if (target.length > 0 && target[0].isAdmin) {
+    const adminCount = await db
+      .select({ count: sql<number>`count(*)` })
       .from(users)
-      .where(and(eq(users.id, data.id), isNull(users.deletedAt)))
-      .limit(1)
-    if (target.length > 0 && target[0].isAdmin) {
-      const adminCount = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(users)
-        .where(and(eq(users.isAdmin, true), isNull(users.deletedAt)))
-      if ((adminCount[0]?.count ?? 0) <= 1) {
-        return { ok: false, error: "لا يمكن حذف آخر مسؤول" } as const
-      }
+      .where(and(eq(users.isAdmin, true), isNull(users.deletedAt)))
+    if ((adminCount[0]?.count ?? 0) <= 1) {
+      return { ok: false, error: "لا يمكن حذف آخر مسؤول" } as const
     }
-    const result = await db
-      .update(users)
-      .set({ deletedBy: user.id, deletedAt: now })
-      .where(and(eq(users.id, data.id), isNull(users.deletedAt)))
-      .returning({ id: users.id })
-    if (result.length === 0) {
-      return { ok: false, error: "المستخدم غير موجود" } as const
-    }
-    return { ok: true, data: result[0] } as const
-  })
+  }
+  const result = await db
+    .update(users)
+    .set({ deletedBy: user.id, deletedAt: now })
+    .where(and(eq(users.id, input.id), isNull(users.deletedAt)))
+    .returning({ id: users.id })
+  if (result.length === 0) {
+    return { ok: false, error: "المستخدم غير موجود" } as const
+  }
+  return { ok: true, data: result[0] } as const
+}
