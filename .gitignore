@@ -5,19 +5,21 @@ dist-ssr
 *.local
 .env*
 !.env.example
-.tanstack
-.wrangler
-.output
-.vinxi
 .netlify
+.tanstack
 __unconfig*
 todos.json
 .playwright-mcp/
+
+# Next.js
+.next/
+out/
+next-env.d.ts
 
 # Local SQLite databases (dev)
 *.db
 *.sqlite
 *.sqlite3
 
-# typescript
+# TypeScript
 *.tsbuildinfo

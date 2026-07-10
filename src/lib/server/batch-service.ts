@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start"
 import { and, eq, inArray, isNull, sql } from "drizzle-orm"
 import { Buffer } from "node:buffer"
 
-import { requireRole } from "./auth.server"
+import { requireRole } from "@/lib/server/auth-helpers"
 import { db } from "./db"
 import { isExcelParseError, parseInvoiceExcel } from "./excel-parser"
 import type { BatchStatus } from "./schema"

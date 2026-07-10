@@ -1,4 +1,7 @@
-import { Link, useRouterState } from "@tanstack/react-router"
+"use client"
+
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 
 import {
   Breadcrumb,
@@ -27,7 +30,7 @@ function labelFor(segment: string): string {
 }
 
 export function AppHeader() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const pathname = usePathname()
   const segments = pathname.split("/").filter(Boolean)
 
   const crumbs: { label: string; to: string | null }[] = []
@@ -55,15 +58,7 @@ export function AppHeader() {
               {i > 0 && <BreadcrumbSeparator />}
               <BreadcrumbItem>
                 {crumb.to ? (
-                  <BreadcrumbLink
-                    render={
-                      crumb.to === "/" ? (
-                        <Link to="/" search={{ error: undefined }} />
-                      ) : (
-                        <Link to={crumb.to} />
-                      )
-                    }
-                  >
+                  <BreadcrumbLink render={<Link href={crumb.to} />}>
                     {crumb.label}
                   </BreadcrumbLink>
                 ) : (

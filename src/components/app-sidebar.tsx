@@ -1,4 +1,5 @@
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router"
+"use client"
+
 import {
   LayoutDashboard,
   LogOut,
@@ -10,8 +11,13 @@ import {
   Users,
 } from "lucide-react"
 import { useTheme } from "next-themes"
+import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
+import { useTransition } from "react"
 import { toast } from "sonner"
 
+import { logoutAction } from "@/app/login/actions"
+import type { SessionUser } from "@/auth.config"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -35,8 +41,6 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar"
-import type { SessionUser } from "@/lib/server/auth"
-import { logout } from "@/lib/server/auth"
 
 function NavItem({
   to,
@@ -49,12 +53,12 @@ function NavItem({
   label: string
   exact?: boolean
 }) {
-  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const pathname = usePathname()
   const isActive = exact ? pathname === to : pathname.startsWith(to)
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
-        render={<Link to={to} />}
+        render={<Link href={to} />}
         isActive={isActive}
         tooltip={label}
       >
@@ -66,7 +70,8 @@ function NavItem({
 }
 
 function UserMenu({ session }: { session: SessionUser }) {
-  const navigate = useNavigate()
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const { resolvedTheme, setTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
   const initials = session.fullname
@@ -75,10 +80,11 @@ function UserMenu({ session }: { session: SessionUser }) {
     .slice(0, 2)
     .join("")
 
-  async function handleLogout() {
-    await logout()
-    toast.success("تم تسجيل الخروج")
-    navigate({ to: "/login", search: { redirect: undefined } })
+  function handleLogout() {
+    startTransition(async () => {
+      toast.success("تم تسجيل الخروج")
+      await logoutAction()
+    })
   }
 
   return (
@@ -126,7 +132,11 @@ function UserMenu({ session }: { session: SessionUser }) {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem variant="destructive" onClick={handleLogout}>
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={handleLogout}
+            disabled={isPending}
+          >
             <LogOut data-icon="inline-start" />
             تسجيل الخروج
           </DropdownMenuItem>
@@ -143,7 +153,7 @@ export function AppSidebar({ session }: { session: SessionUser }) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              render={<Link to="/" search={{ error: undefined }} />}
+              render={<Link href="/" />}
               size="lg"
               className="gap-3"
             >

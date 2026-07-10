@@ -1,14 +1,14 @@
 [build]
   command = "bun run build"
-  publish = "dist/client"
+  publish = ".next"
 
 [build.environment]
   NODE_VERSION = "22"
 
-# TanStack Start Netlify preset generates the serverless functions
-# under dist/server/. Environment variables below must be set in the
-# Netlify dashboard (Site settings → Environment variables) or via CLI:
+# @netlify/nextjs plugin handles SSR + static optimization.
+# Environment variables set in Netlify dashboard or via CLI:
 #   TURSO_DATABASE_URL  — libSQL/Turso remote database URL
 #   TURSO_AUTH_TOKEN    — Turso auth token
-#   SESSION_SECRET      — JWT signing secret (>= 32 chars)
+#   AUTH_SECRET         — NextAuth.js signing secret (>= 32 chars)
+#   AUTH_URL            — NextAuth.js base URL (production)
 #   SMS_FAIL_RATE       — (optional) 0..1 simulated failure rate for FakeSmsGateway

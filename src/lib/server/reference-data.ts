@@ -2,8 +2,8 @@ import { createServerFn } from "@tanstack/react-start"
 import bcrypt from "bcryptjs"
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm"
 
-import type { SessionUser } from "./auth.server"
-import { requireRole } from "./auth.server"
+import type { SessionUser } from "@/lib/server/auth-helpers"
+import { requireRole } from "@/lib/server/auth-helpers"
 import { db } from "./db"
 import type { ContactRole } from "./schema"
 import {
