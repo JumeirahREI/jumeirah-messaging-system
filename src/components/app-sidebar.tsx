@@ -23,7 +23,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -104,20 +103,6 @@ function UserMenu({ session }: { session: SessionUser }) {
         </span>
       </SidebarMenuButton>
       <DropdownMenuContent side="top" align="start" className="w-56">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="flex items-center gap-2">
-            <Avatar className="size-8">
-              <AvatarFallback>{initials}</AvatarFallback>
-            </Avatar>
-            <span className="flex flex-col">
-              <span className="text-sm font-medium">{session.fullname}</span>
-              <span className="text-xs text-muted-foreground">
-                {session.isAdmin ? "مسؤول" : "مشغّل"}
-              </span>
-            </span>
-          </DropdownMenuLabel>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem onClick={() => setTheme(isDark ? "light" : "dark")}>
             {isDark ? (

@@ -48,9 +48,9 @@ export function AppHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
+    <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 bg-background/80 px-4 backdrop-blur-sm sm:px-6">
       <SidebarTrigger />
-      <Separator orientation="vertical" className="mx-1 h-full" />
+      <Separator orientation="vertical" className="mx-1 h-6 self-center" />
       <Breadcrumb>
         <BreadcrumbList>
           {crumbs.map((crumb, i) => (

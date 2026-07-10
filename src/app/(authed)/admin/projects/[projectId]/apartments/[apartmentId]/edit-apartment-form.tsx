@@ -38,13 +38,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import {
   Table,
   TableBody,
@@ -589,38 +583,35 @@ function AddContactDialog({
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="existing">جهة اتصال موجودة</Label>
-            <Select
+            <NativeSelect
+              id="existing"
+              className="w-full"
               value={contactId !== undefined ? String(contactId) : ""}
-              onValueChange={(v) =>
-                setValue("contactId", v && v !== "" ? Number(v) : undefined)
+              onChange={(e) =>
+                setValue(
+                  "contactId",
+                  e.target.value && e.target.value !== ""
+                    ? Number(e.target.value)
+                    : undefined
+                )
               }
               disabled={isSubmitting}
             >
-              <SelectTrigger id="existing">
-                <SelectValue placeholder="اختر...">
-                  {(value: string | null) => {
-                    if (!value || value === "__none") return null
-                    return (
-                      available.find((c) => String(c.id) === value)?.fullname ??
-                      null
-                    )
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {available.length === 0 ? (
-                  <SelectItem value="__none" disabled>
-                    لا توجد متاحة
-                  </SelectItem>
-                ) : (
-                  available.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.fullname}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+              <NativeSelectOption value="" disabled>
+                اختر...
+              </NativeSelectOption>
+              {available.length === 0 ? (
+                <NativeSelectOption value="__none" disabled>
+                  لا توجد متاحة
+                </NativeSelectOption>
+              ) : (
+                available.map((c) => (
+                  <NativeSelectOption key={c.id} value={String(c.id)}>
+                    {c.fullname}
+                  </NativeSelectOption>
+                ))
+              )}
+            </NativeSelect>
           </div>
 
           <div className="flex items-center gap-3">
@@ -642,24 +633,20 @@ function AddContactDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="role">الدور</Label>
-              <Select
+              <NativeSelect
+                id="role"
+                className="w-full"
                 value={role}
-                onValueChange={(v) => v && setValue("role", v as ContactRole)}
+                onChange={(e) =>
+                  e.target.value &&
+                  setValue("role", e.target.value as ContactRole)
+                }
                 disabled={isSubmitting}
               >
-                <SelectTrigger id="role">
-                  <SelectValue>
-                    {(value: string | null) =>
-                      value ? roleLabel(value as ContactRole) : null
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="owner">مالك</SelectItem>
-                  <SelectItem value="tenant">مستأجر</SelectItem>
-                  <SelectItem value="manager">مدير</SelectItem>
-                </SelectContent>
-              </Select>
+                <NativeSelectOption value="owner">مالك</NativeSelectOption>
+                <NativeSelectOption value="tenant">مستأجر</NativeSelectOption>
+                <NativeSelectOption value="manager">مدير</NativeSelectOption>
+              </NativeSelect>
             </div>
             <label
               htmlFor="notify"
@@ -820,26 +807,24 @@ function EditContactDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label>الدور</Label>
-              <Select
+              <NativeSelect
+                className="w-full"
                 value={role}
-                onValueChange={(v) => v && setRole(v as ContactRole)}
+                onChange={(e) =>
+                  e.target.value && setRole(e.target.value as ContactRole)
+                }
                 disabled={busy}
               >
-                <SelectTrigger>
-                  <SelectValue>
-                    {(value: string | null) =>
-                      value ? roleLabel(value as ContactRole) : null
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="owner">{roleLabel("owner")}</SelectItem>
-                  <SelectItem value="tenant">{roleLabel("tenant")}</SelectItem>
-                  <SelectItem value="manager">
-                    {roleLabel("manager")}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                <NativeSelectOption value="owner">
+                  {roleLabel("owner")}
+                </NativeSelectOption>
+                <NativeSelectOption value="tenant">
+                  {roleLabel("tenant")}
+                </NativeSelectOption>
+                <NativeSelectOption value="manager">
+                  {roleLabel("manager")}
+                </NativeSelectOption>
+              </NativeSelect>
             </div>
             <label className="flex cursor-pointer items-center gap-2 pt-7">
               <Checkbox

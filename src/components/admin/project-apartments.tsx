@@ -8,13 +8,7 @@ import { EmptyState } from "@/components/admin/empty-state"
 import { SearchInput, useSearchFilter } from "@/components/admin/search-input"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import type {
   ApartmentWithTowerRow,
   TowerRow,
@@ -75,33 +69,21 @@ export function ProjectApartments({
             placeholder="ابحث بالاسم أو رقم الوحدة أو البرج..."
             className="sm:max-w-xs"
           />
-          <Select
+          <NativeSelect
+            className="sm:w-44"
             value={towerFilter}
-            onValueChange={(v) => {
-              setTowerFilter(v ?? "all")
+            onChange={(e) => {
+              setTowerFilter(e.target.value || "all")
               setVisible(PAGE_SIZE)
             }}
           >
-            <SelectTrigger className="sm:w-44">
-              <SelectValue placeholder="كل الأبراج">
-                {(value: string | null) => {
-                  if (!value || value === "all") return "كل الأبراج"
-                  return (
-                    towers.find((t) => String(t.id) === value)?.label ??
-                    "كل الأبراج"
-                  )
-                }}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">كل الأبراج</SelectItem>
-              {towers.map((t) => (
-                <SelectItem key={t.id} value={String(t.id)}>
-                  {t.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <NativeSelectOption value="all">كل الأبراج</NativeSelectOption>
+            {towers.map((t) => (
+              <NativeSelectOption key={t.id} value={String(t.id)}>
+                {t.label}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
         </div>
         <Button size="sm" nativeButton={false} render={<Link href={newHref} />}>
           <Plus className="size-4" />

@@ -19,13 +19,6 @@ import {
 } from "@/components/ui/card"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { batchCreateSchema, type BatchCreateFormData } from "@/lib/schemas"
 import {
@@ -33,6 +26,7 @@ import {
   previewBatchFile,
   type SheetPreviewResult,
 } from "@/lib/server/batch-service"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 
 function todayTitle(): string {
   return new Date().toISOString().slice(0, 10)
@@ -209,31 +203,27 @@ export function NewBatchForm({
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="project">المشروع</FieldLabel>
-                  <Select
+                  <NativeSelect
+                    id="project"
+                    className="w-full"
                     value={projectId}
-                    onValueChange={(v) =>
-                      v && setValue("projectId", v, { shouldValidate: true })
+                    onChange={(e) =>
+                      e.target.value &&
+                      setValue("projectId", e.target.value, {
+                        shouldValidate: true,
+                      })
                     }
                     disabled={isSubmitting}
                   >
-                    <SelectTrigger id="project">
-                      <SelectValue placeholder="اختر مشروعًا">
-                        {(value: string | null) =>
-                          value
-                            ? (projects.find((p) => String(p.id) === value)
-                                ?.title ?? null)
-                            : null
-                        }
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {projects.map((p) => (
-                        <SelectItem key={p.id} value={String(p.id)}>
-                          {p.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <NativeSelectOption value="" disabled>
+                      اختر المشروع
+                    </NativeSelectOption>
+                    {projects.map((p) => (
+                      <NativeSelectOption key={p.id} value={String(p.id)}>
+                        {p.title}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
                   {errors.projectId && (
                     <p className="text-sm text-destructive">
                       {errors.projectId.message}
@@ -320,34 +310,36 @@ export function NewBatchForm({
                           <Building2 className="size-4 text-muted-foreground" />
                           البرج {tower.label}
                         </FieldLabel>
-                        <Select
+                        <NativeSelect
+                          className="w-full"
                           value={selectedSheet ?? ""}
-                          onValueChange={(v) =>
-                            handleMappingChange(tower.id, v || null)
+                          onChange={(e) =>
+                            handleMappingChange(
+                              tower.id,
+                              e.target.value || null
+                            )
                           }
                           disabled={isSubmitting}
                         >
-                          <SelectTrigger>
-                            <SelectValue placeholder="بدون ورقة" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {previewData.sheets.map((sheetName) => {
-                              const isUsed =
-                                usedSheets.has(sheetName) &&
-                                selectedSheet !== sheetName
-                              return (
-                                <SelectItem
-                                  key={sheetName}
-                                  value={sheetName}
-                                  disabled={isUsed}
-                                >
-                                  {sheetName}
-                                  {isUsed && " (مستخدمة)"}
-                                </SelectItem>
-                              )
-                            })}
-                          </SelectContent>
-                        </Select>
+                          <NativeSelectOption value="">
+                            بدون ورقة
+                          </NativeSelectOption>
+                          {previewData.sheets.map((sheetName) => {
+                            const isUsed =
+                              usedSheets.has(sheetName) &&
+                              selectedSheet !== sheetName
+                            return (
+                              <NativeSelectOption
+                                key={sheetName}
+                                value={sheetName}
+                                disabled={isUsed}
+                              >
+                                {sheetName}
+                                {isUsed && " (مستخدمة)"}
+                              </NativeSelectOption>
+                            )
+                          })}
+                        </NativeSelect>
                       </Field>
                     )
                   })}

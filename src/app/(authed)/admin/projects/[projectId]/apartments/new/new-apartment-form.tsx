@@ -17,16 +17,10 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { apartmentSchema, type ApartmentFormData } from "@/lib/schemas"
 import type { TowerRow } from "@/lib/server/reference-data"
 import { createApartment } from "@/lib/server/reference-data"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 
 export function NewApartmentForm({
   projectId,
@@ -89,33 +83,30 @@ export function NewApartmentForm({
             <CardContent className="grid gap-4">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="tower">البرج</Label>
-                <Select
+                <NativeSelect
+                  id="tower"
+                  className="w-full"
                   value={towerId ? String(towerId) : ""}
-                  onValueChange={(v) =>
-                    setValue("towerId", v ? Number(v) : 0, {
-                      shouldValidate: true,
-                    })
+                  onChange={(e) =>
+                    setValue(
+                      "towerId",
+                      e.target.value ? Number(e.target.value) : 0,
+                      {
+                        shouldValidate: true,
+                      }
+                    )
                   }
                   disabled={isSubmitting || towers.length === 0}
                 >
-                  <SelectTrigger id="tower">
-                    <SelectValue placeholder="اختر البرج...">
-                      {(value: string | null) =>
-                        value
-                          ? (towers.find((t) => String(t.id) === value)
-                              ?.label ?? null)
-                          : null
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {towers.map((t) => (
-                      <SelectItem key={t.id} value={String(t.id)}>
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <NativeSelectOption value="" disabled>
+                    اختر البرج...
+                  </NativeSelectOption>
+                  {towers.map((t) => (
+                    <NativeSelectOption key={t.id} value={String(t.id)}>
+                      {t.label}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
                 {errors.towerId && (
                   <p className="text-sm text-destructive">
                     {errors.towerId.message}

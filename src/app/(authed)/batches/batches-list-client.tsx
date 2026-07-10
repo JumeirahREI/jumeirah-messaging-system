@@ -26,13 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import {
   Table,
   TableBody,
@@ -117,9 +111,11 @@ export function BatchesListClient({
       />
 
       <div className="flex flex-wrap items-center gap-3">
-        <Select
+        <NativeSelect
+          className="w-40"
           value={status}
-          onValueChange={(v) => {
+          onChange={(e) => {
+            const v = e.target.value
             if (
               v === "all" ||
               v === "draft" ||
@@ -130,26 +126,11 @@ export function BatchesListClient({
             }
           }}
         >
-          <SelectTrigger className="w-40">
-            <SelectValue>
-              {(value: string | null) => {
-                const labels: Record<string, string> = {
-                  all: "الكل",
-                  draft: "مسودة",
-                  sending: "جارٍ الإرسال",
-                  completed: "مكتملة",
-                }
-                return value ? (labels[value] ?? value) : null
-              }}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">الكل</SelectItem>
-            <SelectItem value="draft">مسودة</SelectItem>
-            <SelectItem value="sending">جارٍ الإرسال</SelectItem>
-            <SelectItem value="completed">مكتملة</SelectItem>
-          </SelectContent>
-        </Select>
+          <NativeSelectOption value="all">الكل</NativeSelectOption>
+          <NativeSelectOption value="draft">مسودة</NativeSelectOption>
+          <NativeSelectOption value="sending">جارٍ الإرسال</NativeSelectOption>
+          <NativeSelectOption value="completed">مكتملة</NativeSelectOption>
+        </NativeSelect>
         <label className="flex items-center gap-2 text-sm">
           <Checkbox
             checked={archived}
