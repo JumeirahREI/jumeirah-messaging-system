@@ -1,6 +1,6 @@
 "use client"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, ArrowRight } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
@@ -51,8 +51,8 @@ export default function NewProjectPage() {
             nativeButton={false}
             render={<Link href="/admin/projects" />}
           >
+            <ArrowRight className="size-4" />
             رجوع
-            <ArrowLeft className="size-4" />
           </Button>
         }
       />

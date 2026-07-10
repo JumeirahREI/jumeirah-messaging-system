@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { softDeleteProject } from "@/lib/server/reference-data"
+import { Trash2 } from "lucide-react"
 
 export function DeleteProjectButton({ projectId }: { projectId: number }) {
   const router = useRouter()
@@ -39,11 +40,13 @@ export function DeleteProjectButton({ projectId }: { projectId: number }) {
         render={
           <Button
             type="button"
-            variant="destructive"
-            size="sm"
+            variant="ghost"
+            size="icon-sm"
             disabled={deleting}
+            className="hover:bg-destructive/10 hover:text-destructive"
+            aria-label="حذف المشروع"
           >
-            حذف المشروع
+            <Trash2 />
           </Button>
         }
       />

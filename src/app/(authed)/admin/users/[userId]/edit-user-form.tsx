@@ -1,5 +1,6 @@
 "use client"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
@@ -176,10 +177,13 @@ export function EditUserForm({
                   render={
                     <Button
                       type="button"
-                      variant="destructive"
+                      variant="ghost"
+                      size="icon-sm"
                       disabled={deleting}
+                      className="hover:bg-destructive/10 hover:text-destructive"
+                      aria-label="حذف"
                     >
-                      حذف
+                      <Trash2 />
                     </Button>
                   }
                 />

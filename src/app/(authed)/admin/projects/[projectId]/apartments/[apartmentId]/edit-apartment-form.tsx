@@ -178,10 +178,13 @@ export function EditApartmentForm({
                 render={
                   <Button
                     type="button"
-                    variant="destructive"
+                    variant="ghost"
+                    size="icon-sm"
                     disabled={deleting}
+                    className="hover:bg-destructive/10 hover:text-destructive"
+                    aria-label="حذف"
                   >
-                    حذف
+                    <Trash2 />
                   </Button>
                 }
               />
@@ -395,7 +398,7 @@ function UnlinkContactButton({
             variant="ghost"
             size="icon-sm"
             disabled={busy}
-            className="text-destructive hover:text-destructive"
+            className="hover:bg-destructive/10 hover:text-destructive"
           >
             <X className="size-4" />
           </Button>
@@ -905,13 +908,14 @@ function EditContactDialog({
                             تعديل
                           </Button>
                           <Button
-                            size="sm"
+                            size="icon-sm"
                             variant="ghost"
                             onClick={() => handleDeleteNumber(p.id)}
                             disabled={busy}
-                            className="text-destructive hover:text-destructive"
+                            className="hover:bg-destructive/10 hover:text-destructive"
+                            aria-label="حذف الرقم"
                           >
-                            <Trash2 className="size-4" />
+                            <Trash2 />
                           </Button>
                         </div>
                       </>

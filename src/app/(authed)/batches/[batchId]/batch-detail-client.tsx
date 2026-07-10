@@ -3,12 +3,14 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   Clock,
   Mail,
   RefreshCw,
   Search,
   Send,
+  Trash2,
   TriangleAlert,
   XCircle,
 } from "lucide-react"
@@ -75,8 +77,8 @@ export function BatchDetailClient({
               nativeButton={false}
               render={<Link href="/batches" />}
             >
+              <ArrowRight data-icon="inline-start" />
               رجوع
-              <ArrowLeft data-icon="inline-start" />
             </Button>
           </>
         }
@@ -141,9 +143,14 @@ function DeleteBatchButton({ id }: { id: number }) {
 
   return (
     <>
-      <Button variant="destructive" size="sm" onClick={() => setOpen(true)}>
-        <XCircle data-icon="inline-start" />
-        حذف
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => setOpen(true)}
+        className="hover:bg-destructive/10 hover:text-destructive"
+        aria-label="حذف"
+      >
+        <Trash2 />
       </Button>
       <ConfirmDialog
         open={open}

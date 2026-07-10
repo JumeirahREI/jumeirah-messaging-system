@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowLeft, Send, TriangleAlert } from "lucide-react"
+import { ArrowLeft, ArrowRight, Send, TriangleAlert } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -82,8 +82,8 @@ export function WarningClient({
             nativeButton={false}
             render={<Link href={`/batches/${batch.id}`} />}
           >
+            <ArrowRight data-icon="inline-start" />
             رجوع
-            <ArrowLeft data-icon="inline-start" />
           </Button>
         }
       />

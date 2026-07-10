@@ -43,7 +43,7 @@ export default function RootLayout({
         >
           <SWRProvider>
             {children}
-            <Toaster position="top-center" richColors />
+            <Toaster position="bottom-left" richColors />
           </SWRProvider>
         </ThemeProvider>
       </body>
