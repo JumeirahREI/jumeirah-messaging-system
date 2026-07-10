@@ -14,7 +14,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -38,13 +38,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useBatchStatus } from "@/lib/hooks/use-batch-status"
 import type {
   BatchDetail,
   BatchStatusResponse,
   DraftPreview,
 } from "@/lib/server/batch-service"
 import {
-  getBatchStatus,
   retryFailed,
   sendBatch,
   softDeleteBatch,
@@ -59,25 +59,7 @@ export function BatchDetailClient({
   preview: DraftPreview | null
 }) {
   const router = useRouter()
-  const [status, setStatus] = useState<BatchStatusResponse | null>(null)
-
-  useEffect(() => {
-    if (batch.status === "sending" || batch.status === "completed") {
-      let cancelled = false
-      const poll = async () => {
-        const res = await getBatchStatus({ batchId: batch.id })
-        if (cancelled || !res) return
-        setStatus(res)
-        if (res.status === "sending") {
-          setTimeout(poll, 3000)
-        }
-      }
-      poll()
-      return () => {
-        cancelled = true
-      }
-    }
-  }, [batch.id, batch.status])
+  const { data: status } = useBatchStatus(batch.id, batch.status)
 
   return (
     <div className="flex flex-col gap-6">
@@ -601,9 +583,7 @@ function ProgressView({
           )}
           <Button
             variant="outline"
-            render={
-              <Link href={`/batches/${batch.id}/warning`} />
-            }
+            render={<Link href={`/batches/${batch.id}/warning`} />}
           >
             <TriangleAlert data-icon="inline-start" />
             إرسال تحذير متابعة

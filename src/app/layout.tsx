@@ -1,3 +1,4 @@
+import { SWRProvider } from "@/components/swr-provider"
 import { Toaster } from "@/components/ui/sonner"
 import type { Metadata } from "next"
 import { ThemeProvider } from "next-themes"
@@ -38,8 +39,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
-          <Toaster position="top-center" richColors />
+          <SWRProvider>
+            {children}
+            <Toaster position="top-center" richColors />
+          </SWRProvider>
         </ThemeProvider>
       </body>
     </html>
