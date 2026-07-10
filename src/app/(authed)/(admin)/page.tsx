@@ -1,5 +1,5 @@
-import Link from "next/link"
 import { Building2, Users } from "lucide-react"
+import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 
@@ -11,11 +11,19 @@ export default function AdminIndexPage() {
         إدارة المشاريع، الأبراج، الشقق، جهات الاتصال، والمستخدمين.
       </p>
       <div className="flex flex-wrap gap-3">
-        <Button variant="outline" render={<Link href="/admin/projects" />}>
+        <Button
+          variant="outline"
+          nativeButton={false}
+          render={<Link href="/admin/projects" />}
+        >
           <Building2 className="size-4" />
           المشاريع والأبراج والشقق
         </Button>
-        <Button variant="outline" render={<Link href="/admin/users" />}>
+        <Button
+          variant="outline"
+          nativeButton={false}
+          render={<Link href="/admin/users" />}
+        >
           <Users className="size-4" />
           المستخدمون
         </Button>

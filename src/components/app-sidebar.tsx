@@ -1,7 +1,6 @@
 "use client"
 
 import {
-  LayoutDashboard,
   LogOut,
   MessageSquare,
   MoonIcon,
@@ -89,7 +88,7 @@ function UserMenu({ session }: { session: SessionUser }) {
   return (
     <DropdownMenu>
       <SidebarMenuButton
-        render={<DropdownMenuTrigger className="w-full py-4!" />}
+        render={<DropdownMenuTrigger className="w-full py-7!" />}
         tooltip={session.fullname}
       >
         <Avatar className="size-7">
@@ -147,12 +146,12 @@ function UserMenu({ session }: { session: SessionUser }) {
 
 export function AppSidebar({ session }: { session: SessionUser }) {
   return (
-    <Sidebar side="right">
+    <Sidebar side="right" dir="rtl">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              render={<Link href="/" />}
+              render={<Link href="/batches" />}
               size="lg"
               className="gap-3"
             >
@@ -177,12 +176,6 @@ export function AppSidebar({ session }: { session: SessionUser }) {
           <SidebarGroupLabel>عام</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <NavItem
-                to="/"
-                icon={<LayoutDashboard />}
-                label="لوحة التحكم"
-                exact
-              />
               <NavItem
                 to="/batches"
                 icon={<MessageSquare />}

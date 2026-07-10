@@ -12,7 +12,8 @@
     "check": "prettier --check \"**/*.{ts,tsx,js,jsx}\"",
     "typecheck": "tsc --noEmit",
     "db:push": "drizzle-kit push",
-    "db:seed": "bun run drizzle/seed.ts"
+    "db:seed": "bun run drizzle/seed.ts",
+    "db:seed:apartments": "bun run drizzle/seed-apartments.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

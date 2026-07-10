@@ -20,7 +20,10 @@ export default async function ProjectsListPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-medium">المشاريع</h1>
-        <Button render={<Link href="/admin/projects/new" />}>
+        <Button
+          nativeButton={false}
+          render={<Link href="/admin/projects/new" />}
+        >
           <Plus className="size-4" />
           مشروع جديد
         </Button>

@@ -622,29 +622,6 @@ export async function archiveBatch(input: {
   return { ok: true, data: rows[0] } as const
 }
 
-export async function getRecentBatches(): Promise<BatchRow[]> {
-  await requireRole("operator")
-  const rows = await db
-    .select({
-      id: batchSessions.id,
-      title: batchSessions.title,
-      projectId: batchSessions.projectId,
-      projectTitle: projects.title,
-      status: batchSessions.status,
-      sent: batchSessions.sent,
-      failed: batchSessions.failed,
-      createdAt: batchSessions.createdAt,
-    })
-    .from(batchSessions)
-    .innerJoin(projects, eq(batchSessions.projectId, projects.id))
-    .where(
-      and(isNull(batchSessions.deletedAt), isNull(batchSessions.archivedAt))
-    )
-    .orderBy(sql`${batchSessions.createdAt} DESC`)
-    .limit(10)
-  return rows satisfies BatchRow[]
-}
-
 export async function sendBatch(input: {
   batchId: number
 }): Promise<{ ok: true; batchId: number } | { ok: false; error: string }> {

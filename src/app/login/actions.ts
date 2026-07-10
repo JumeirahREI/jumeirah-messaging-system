@@ -1,7 +1,7 @@
 "use server"
 
-import { redirect } from "next/navigation"
 import { signIn, signOut } from "@/auth"
+import { redirect } from "next/navigation"
 
 export async function loginAction(
   _prevState: { error?: string } | null,
@@ -21,7 +21,7 @@ export async function loginAction(
   } catch {
     return { error: "بيانات الدخول غير صحيحة" }
   }
-  redirect("/")
+  redirect("/batches")
 }
 
 export async function logoutAction(): Promise<void> {

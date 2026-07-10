@@ -109,7 +109,7 @@ export function BatchesListClient({
         title="الدفعات"
         description="إدارة دفعات الإرسال والمتابعة"
         actions={
-          <Button render={<Link href="/batches/new" />}>
+          <Button nativeButton={false} render={<Link href="/batches/new" />}>
             <Plus data-icon="inline-start" />
             دفعة جديدة
           </Button>
@@ -157,7 +157,7 @@ export function BatchesListClient({
           title="لا توجد دفعات"
           description="ابدأ بإنشاء دفعة جديدة لرفع ملف الفواتير وإرسال الرسائل."
           action={
-            <Button render={<Link href="/batches/new" />}>
+            <Button nativeButton={false} render={<Link href="/batches/new" />}>
               <Plus data-icon="inline-start" />
               دفعة جديدة
             </Button>

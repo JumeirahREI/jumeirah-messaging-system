@@ -70,7 +70,11 @@ export function BatchDetailClient({
           <>
             <BatchStatusBadge status={batch.status} />
             {batch.status === "draft" && <DeleteBatchButton id={batch.id} />}
-            <Button variant="outline" render={<Link href="/batches" />}>
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link href="/batches" />}
+            >
               <ArrowRight data-icon="inline-start" />
               رجوع
             </Button>

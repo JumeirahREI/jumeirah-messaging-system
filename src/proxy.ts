@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server"
 import NextAuth from "next-auth"
+import { NextResponse } from "next/server"
 
 import { authConfig } from "@/auth.config"
 
@@ -17,7 +17,7 @@ export default auth((req) => {
 
   if (isPublicRoute) {
     if (hasSession && pathname === "/login") {
-      return NextResponse.redirect(new URL("/", req.nextUrl))
+      return NextResponse.redirect(new URL("/batches", req.nextUrl))
     }
     return NextResponse.next()
   }
@@ -28,7 +28,7 @@ export default auth((req) => {
 
   const isAdminRoute = pathname.startsWith("/admin")
   if (isAdminRoute && !req.auth?.user?.isAdmin) {
-    return NextResponse.redirect(new URL("/", req.nextUrl))
+    return NextResponse.redirect(new URL("/batches", req.nextUrl))
   }
 
   return NextResponse.next()
