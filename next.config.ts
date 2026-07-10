@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
     turbopackFileSystemCacheForDev: true,
   },
   transpilePackages: ["@base-ui/react"],
+  serverExternalPackages: ["@libsql/client"],
 }
 
 export default nextConfig
