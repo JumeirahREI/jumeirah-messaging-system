@@ -79,6 +79,7 @@ export function WarningClient({
         actions={
           <Button
             variant="outline"
+            nativeButton={false}
             render={<Link href={`/batches/${batch.id}`} />}
           >
             <ArrowRight data-icon="inline-start" />

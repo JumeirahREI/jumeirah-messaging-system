@@ -587,6 +587,7 @@ function ProgressView({
           )}
           <Button
             variant="outline"
+            nativeButton={false}
             render={<Link href={`/batches/${batch.id}/warning`} />}
           >
             <TriangleAlert data-icon="inline-start" />

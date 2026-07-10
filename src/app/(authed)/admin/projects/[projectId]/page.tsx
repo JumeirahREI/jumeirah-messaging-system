@@ -39,6 +39,7 @@ export default async function EditProjectPage({
           <h2 className="text-lg font-medium">الأبراج</h2>
           <Button
             size="sm"
+            nativeButton={false}
             render={<Link href={`/admin/projects/${projectId}/towers/new`} />}
           >
             برج جديد

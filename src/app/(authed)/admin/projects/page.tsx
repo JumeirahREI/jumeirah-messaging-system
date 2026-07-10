@@ -10,44 +10,49 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { listUsers } from "@/lib/server/reference-data"
+import { listProjects } from "@/lib/server/reference-data"
+import { formatArabicDate } from "@/lib/utils"
 
-export default async function UsersListPage() {
-  const users = await listUsers()
+export default async function ProjectsListPage() {
+  const projects = await listProjects()
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-medium">المستخدمون</h1>
-        <Button nativeButton={false} render={<Link href="/admin/users/new" />}>
+        <h1 className="text-xl font-medium">المشاريع</h1>
+        <Button
+          nativeButton={false}
+          render={<Link href="/admin/projects/new" />}
+        >
           <Plus className="size-4" />
-          مستخدم جديد
+          مشروع جديد
         </Button>
       </div>
-      {users.length === 0 ? (
-        <p className="text-muted-foreground">لا يوجد مستخدمون.</p>
+      {projects.length === 0 ? (
+        <p className="text-muted-foreground">لا توجد مشاريع بعد.</p>
       ) : (
         <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>الاسم</TableHead>
-                <TableHead>اسم المستخدم</TableHead>
-                <TableHead>الدور</TableHead>
+                <TableHead>العنوان</TableHead>
+                <TableHead>تاريخ الإنشاء</TableHead>
                 <TableHead className="text-end">إجراءات</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-medium">{u.fullname}</TableCell>
-                  <TableCell>{u.username}</TableCell>
-                  <TableCell>{u.isAdmin ? "مسؤول" : "مشغّل"}</TableCell>
+              {projects.map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell className="font-medium">{p.title}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {formatArabicDate(p.createdAt)}
+                  </TableCell>
                   <TableCell className="text-end">
                     <Button
                       variant="ghost"
                       size="sm"
-                      render={<Link href={`/admin/users/${u.id}`} />}
+                      nativeButton={false}
+                      render={<Link href={`/admin/projects/${p.id}`} />}
                     >
                       تعديل
                     </Button>

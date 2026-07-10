@@ -35,6 +35,7 @@ export default async function EditTowerPage({
           <h2 className="text-lg font-medium">الشقق</h2>
           <Button
             size="sm"
+            nativeButton={false}
             render={
               <Link
                 href={`/admin/projects/${projectId}/towers/${towerId}/apartments/new`}
@@ -67,6 +68,7 @@ export default async function EditTowerPage({
                       <Button
                         variant="ghost"
                         size="sm"
+                        nativeButton={false}
                         render={
                           <Link
                             href={`/admin/projects/${projectId}/towers/${towerId}/apartments/${a.id}`}
