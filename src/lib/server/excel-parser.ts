@@ -162,7 +162,7 @@ function isTotalRow(typeValue: CellValue): boolean {
   return typeof typeValue === "string" && TOTAL_MARKERS.has(typeValue.trim())
 }
 
-function deriveTowerPrefix(sheetName: string): string {
+export function deriveTowerPrefix(sheetName: string): string {
   const match = /[A-Za-z]+$/.exec(sheetName.trim())
   return match ? match[0] : ""
 }
@@ -191,8 +191,15 @@ type Group = {
   sheet: Worksheet
 }
 
+export async function getSheetNames(buffer: Buffer): Promise<string[]> {
+  const workbook = new Workbook()
+  await workbook.xlsx.load(buffer as unknown as ArrayBuffer)
+  return workbook.worksheets.map((ws) => ws.name)
+}
+
 export async function parseInvoiceExcel(
-  buffer: Buffer
+  buffer: Buffer,
+  sheetTowerMap?: Map<string, string>
 ): Promise<ParsedInvoice[]> {
   const workbook = new Workbook()
   // exceljs expects ArrayBuffer; Buffer is compatible at runtime
@@ -208,7 +215,9 @@ export async function parseInvoiceExcel(
   const order: string[] = []
 
   for (const sheet of workbook.worksheets) {
-    const towerPrefix = deriveTowerPrefix(sheet.name)
+    if (sheetTowerMap !== undefined && !sheetTowerMap.has(sheet.name)) continue
+    const towerPrefix =
+      sheetTowerMap?.get(sheet.name) ?? deriveTowerPrefix(sheet.name)
     const resolveCell = buildMergeResolver(sheet)
     const rowCount = sheet.rowCount
     if (rowCount === 0) continue

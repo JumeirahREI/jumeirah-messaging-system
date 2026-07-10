@@ -1,9 +1,9 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { FileSpreadsheet, Upload, X } from "lucide-react"
+import { Building2, FileSpreadsheet, Upload, X } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 
@@ -28,7 +28,11 @@ import {
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { batchCreateSchema, type BatchCreateFormData } from "@/lib/schemas"
-import { createBatch } from "@/lib/server/batch-service"
+import {
+  createBatch,
+  previewBatchFile,
+  type SheetPreviewResult,
+} from "@/lib/server/batch-service"
 
 function todayTitle(): string {
   return new Date().toISOString().slice(0, 10)
@@ -39,6 +43,8 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
+
+type SheetMapping = Record<number, string | null>
 
 export function NewBatchForm({
   projects,
@@ -53,6 +59,9 @@ export function NewBatchForm({
     | { kind: "unmatched"; labels: string[] }
     | { kind: "error"; message: string }
   >(null)
+  const [preview, setPreview] = useState<SheetPreviewResult | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [mapping, setMapping] = useState<SheetMapping>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const {
@@ -71,6 +80,31 @@ export function NewBatchForm({
 
   const projectId = watch("projectId")
 
+  useEffect(() => {
+    if (!file || !projectId) {
+      setPreview(null)
+      setMapping({})
+      return
+    }
+    let cancelled = false
+    setPreviewLoading(true)
+    const fd = new FormData()
+    fd.set("projectId", projectId)
+    fd.set("file", file)
+    previewBatchFile(fd)
+      .then((res) => {
+        if (cancelled) return
+        setPreview(res)
+        if (res.ok) setMapping(res.autoMapping)
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [file, projectId])
+
   function handleFileSelect(selected: File | null) {
     if (selected && !selected.name.endsWith(".xlsx")) {
       toast.error("الملف يجب أن يكون بصيغة .xlsx")
@@ -87,6 +121,10 @@ export function NewBatchForm({
     if (dropped) handleFileSelect(dropped)
   }
 
+  function handleMappingChange(towerId: number, sheetName: string | null) {
+    setMapping((prev) => ({ ...prev, [towerId]: sheetName }))
+  }
+
   async function onSubmit(data: BatchCreateFormData) {
     if (projects.length === 0) {
       toast.error("لا توجد مشاريع. أنشئ مشروعًا أولًا.")
@@ -101,6 +139,13 @@ export function NewBatchForm({
     formData.set("title", data.title)
     formData.set("projectId", data.projectId)
     formData.set("file", file)
+    const activeMapping: Record<string, string> = {}
+    for (const [towerId, sheetName] of Object.entries(mapping)) {
+      if (sheetName) activeMapping[towerId] = sheetName
+    }
+    if (Object.keys(activeMapping).length > 0) {
+      formData.set("sheetMapping", JSON.stringify(activeMapping))
+    }
     const res = await createBatch(formData)
     if (!res.ok) {
       if (res.error === "unmatched") {
@@ -119,6 +164,13 @@ export function NewBatchForm({
     toast.success("تم إنشاء الدفعة")
     router.push(`/batches/${res.batchId}`)
   }
+
+  const previewData = preview?.ok ? preview : null
+  const usedSheets = new Set(
+    Object.entries(mapping)
+      .filter(([, sheet]) => sheet !== null)
+      .map(([, sheet]) => sheet!)
+  )
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
@@ -246,6 +298,59 @@ export function NewBatchForm({
                     </button>
                   )}
                 </Field>
+                {previewLoading && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Spinner />
+                    جارٍ قراءة أوراق الملف...
+                  </div>
+                )}
+                {preview && !preview.ok && (
+                  <Alert variant="destructive">
+                    <AlertTitle>خطأ في قراءة الملف</AlertTitle>
+                    <AlertDescription>{preview.error}</AlertDescription>
+                  </Alert>
+                )}
+                {previewData &&
+                  previewData.towers.length > 0 &&
+                  previewData.towers.map((tower) => {
+                    const selectedSheet = mapping[tower.id] ?? null
+                    return (
+                      <Field key={tower.id}>
+                        <FieldLabel className="flex items-center gap-1.5">
+                          <Building2 className="size-4 text-muted-foreground" />
+                          البرج {tower.label}
+                        </FieldLabel>
+                        <Select
+                          value={selectedSheet ?? ""}
+                          onValueChange={(v) =>
+                            handleMappingChange(tower.id, v || null)
+                          }
+                          disabled={isSubmitting}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="بدون ورقة" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {previewData.sheets.map((sheetName) => {
+                              const isUsed =
+                                usedSheets.has(sheetName) &&
+                                selectedSheet !== sheetName
+                              return (
+                                <SelectItem
+                                  key={sheetName}
+                                  value={sheetName}
+                                  disabled={isUsed}
+                                >
+                                  {sheetName}
+                                  {isUsed && " (مستخدمة)"}
+                                </SelectItem>
+                              )
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                    )
+                  })}
               </FieldGroup>
             </CardContent>
             <CardFooter>

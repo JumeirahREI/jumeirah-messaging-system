@@ -39,6 +39,8 @@ requirements, schema, and build order.
 - **shadcn/ui** is the component system. Add components via the `shadcn` skill
   or `bunx shadcn@latest add <component>`. Never edit generated primitive
   internals unless fixing a bug — wrap them in feature components instead.
+- **Never nest Card inside Card.** One Card per section. Extra fields go
+  directly in the same `FieldGroup`, not in a bordered sub-container.
 
 ## Stack & Conventions
 

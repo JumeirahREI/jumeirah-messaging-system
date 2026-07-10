@@ -5,7 +5,12 @@ import { Buffer } from "node:buffer"
 import { requireRole } from "@/lib/server/auth-helpers"
 import { processPendingMessages } from "@/lib/server/batch-processing"
 import { db } from "./db"
-import { isExcelParseError, parseInvoiceExcel } from "./excel-parser"
+import {
+  deriveTowerPrefix,
+  getSheetNames,
+  isExcelParseError,
+  parseInvoiceExcel,
+} from "./excel-parser"
 import type { BatchStatus } from "./schema"
 import {
   apartmentContacts,
@@ -16,6 +21,7 @@ import {
   messages,
   phoneNumbers,
   projects,
+  towers,
 } from "./schema"
 import { renderNotification, renderWarning } from "./template-renderer"
 
@@ -129,6 +135,64 @@ export async function listProjectsForBatch(): Promise<
   return rows
 }
 
+export async function listTowersForBatch(
+  projectId: number
+): Promise<{ id: number; label: string }[]> {
+  await requireRole("operator")
+  const rows = await db
+    .select({ id: towers.id, label: towers.label })
+    .from(towers)
+    .where(and(eq(towers.projectId, projectId), isNull(towers.deletedAt)))
+    .orderBy(towers.label)
+  return rows
+}
+
+export type SheetPreviewTower = { id: number; label: string }
+
+export type SheetPreviewResult =
+  | {
+      ok: true
+      sheets: string[]
+      towers: SheetPreviewTower[]
+      autoMapping: Record<number, string | null>
+    }
+  | { ok: false; error: string }
+
+export async function previewBatchFile(
+  formData: FormData
+): Promise<SheetPreviewResult> {
+  const projectId = formData.get("projectId")
+  const file = formData.get("file")
+  const pid = Number(projectId)
+  if (Number.isNaN(pid)) return { ok: false, error: "معرّف المشروع مطلوب" }
+  if (!(file instanceof File)) return { ok: false, error: "الملف مطلوب" }
+
+  await requireRole("operator")
+
+  const towerRows = await db
+    .select({ id: towers.id, label: towers.label })
+    .from(towers)
+    .where(and(eq(towers.projectId, pid), isNull(towers.deletedAt)))
+    .orderBy(towers.label)
+
+  const arrayBuffer = await file.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+  let sheets: string[]
+  try {
+    sheets = await getSheetNames(buffer)
+  } catch {
+    return { ok: false, error: "تعذّر قراءة أوراق الملف" }
+  }
+
+  const autoMapping: Record<number, string | null> = {}
+  for (const tower of towerRows) {
+    const matched = sheets.find((s) => deriveTowerPrefix(s) === tower.label)
+    autoMapping[tower.id] = matched ?? null
+  }
+
+  return { ok: true, sheets, towers: towerRows, autoMapping }
+}
+
 export type PreviewContact = {
   contactId: number
   contactName: string
@@ -212,9 +276,35 @@ export async function createBatch(
 
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
+
+  const sheetMappingRaw = formData.get("sheetMapping")
+  let sheetTowerMap: Map<string, string> | undefined
+  if (typeof sheetMappingRaw === "string" && sheetMappingRaw.length > 0) {
+    const parsedMapping = JSON.parse(sheetMappingRaw) as Record<string, string>
+    const towerIds = Object.keys(parsedMapping).map(Number)
+    if (towerIds.length > 0) {
+      const towerRows = await db
+        .select({ id: towers.id, label: towers.label })
+        .from(towers)
+        .where(
+          and(
+            eq(towers.projectId, pid),
+            inArray(towers.id, towerIds),
+            isNull(towers.deletedAt)
+          )
+        )
+      const towerLabelById = new Map(towerRows.map((t) => [t.id, t.label]))
+      sheetTowerMap = new Map()
+      for (const [towerIdStr, sheetName] of Object.entries(parsedMapping)) {
+        const towerLabel = towerLabelById.get(Number(towerIdStr))
+        if (towerLabel) sheetTowerMap.set(sheetName, towerLabel)
+      }
+    }
+  }
+
   let parsed
   try {
-    parsed = await parseInvoiceExcel(buffer)
+    parsed = await parseInvoiceExcel(buffer, sheetTowerMap)
   } catch (e) {
     if (isExcelParseError(e)) {
       return {
