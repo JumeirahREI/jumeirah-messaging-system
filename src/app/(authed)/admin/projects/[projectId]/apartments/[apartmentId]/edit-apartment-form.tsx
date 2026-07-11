@@ -49,6 +49,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { toDisplayFormat } from "@/lib/phone"
 import { apartmentSchema, type ApartmentFormData } from "@/lib/schemas"
 import type {
   ApartmentContactRow,
@@ -353,7 +354,7 @@ function ContactCard({
                 className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 font-mono text-xs"
               >
                 <Phone className="size-3 text-muted-foreground" />
-                {p.number}
+                {toDisplayFormat(p.number)}
               </span>
             ))}
           </div>
@@ -455,7 +456,7 @@ function ContactRow({
                 className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 font-mono text-xs"
               >
                 <Phone className="size-3 text-muted-foreground" />
-                {p.number}
+                {toDisplayFormat(p.number)}
               </span>
             ))}
           </div>

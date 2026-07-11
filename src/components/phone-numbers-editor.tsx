@@ -25,7 +25,7 @@ export function PhoneNumbersEditor({
               onChange={(e) =>
                 onChange(phones.map((x, j) => (j === i ? e.target.value : x)))
               }
-              placeholder="مثال: 967777111222"
+              placeholder="مثال: 771811986"
               disabled={disabled}
               className="flex-1 font-mono"
             />

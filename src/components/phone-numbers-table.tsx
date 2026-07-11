@@ -7,6 +7,7 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { toDisplayFormat } from "@/lib/phone"
 import { phoneNumberSchema, type PhoneNumberFormData } from "@/lib/schemas"
 import type { PhoneNumberRow } from "@/lib/server/reference-data"
 import {
@@ -121,14 +122,16 @@ export function PhoneNumbersTable({
                 </>
               ) : (
                 <>
-                  <span className="font-mono text-sm">{p.number}</span>
+                  <span className="font-mono text-sm">
+                    {toDisplayFormat(p.number)}
+                  </span>
                   <div className="ms-auto flex gap-1">
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => {
                         setEditingId(p.id)
-                        setEditValue(p.number)
+                        setEditValue(toDisplayFormat(p.number))
                       }}
                       disabled={busy}
                     >
@@ -157,7 +160,7 @@ export function PhoneNumbersTable({
         onSubmit={handleSubmit(handleAddNumber)}
       >
         <Input
-          placeholder="رقم جديد"
+          placeholder="مثال: 771811986"
           {...register("number")}
           disabled={busy || isSubmitting}
           className="min-w-40 flex-1 font-mono"
@@ -168,7 +171,11 @@ export function PhoneNumbersTable({
         </Button>
       </form>
       {errors.number && (
-        <p className="text-sm text-destructive">{errors.number.message}</p>
+        <p className="text-sm text-destructive">
+          {typeof errors.number.message === "string"
+            ? errors.number.message
+            : "رقم غير صالح"}
+        </p>
       )}
     </div>
   )

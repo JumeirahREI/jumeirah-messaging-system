@@ -64,6 +64,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useBatchStatus } from "@/lib/hooks/use-batch-status"
+import { toDisplayFormat } from "@/lib/phone"
 import type {
   BatchDetail,
   BatchStatusMessage,
@@ -546,7 +547,10 @@ function DraftReview({
                       {m.contacts.map((c) => c.contactName).join("، ")}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground tabular-nums">
-                      {m.contacts.flatMap((c) => c.phoneNumbers).join("، ")}
+                      {m.contacts
+                        .flatMap((c) => c.phoneNumbers)
+                        .map(toDisplayFormat)
+                        .join("، ")}
                     </TableCell>
                     <TableCell className="tabular-nums">
                       {m.total.toLocaleString("en-US")}
@@ -798,7 +802,7 @@ function ProgressView({
                       </TableCell>
                       <TableCell>{m.contactName ?? "—"}</TableCell>
                       <TableCell className="tabular-nums">
-                        {m.phoneNumber}
+                        {toDisplayFormat(m.phoneNumber)}
                       </TableCell>
                       <TableCell>
                         {m.templateType === "notification" ? "إشعار" : "تحذير"}
@@ -941,7 +945,7 @@ function InvoiceMessagePanelContent({
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground tabular-nums">
                 <Phone className="size-4" />
-                {m.phoneNumber}
+                {toDisplayFormat(m.phoneNumber)}
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <MessageSquare className="size-4" />

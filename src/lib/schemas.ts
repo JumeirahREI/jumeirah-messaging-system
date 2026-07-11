@@ -1,5 +1,11 @@
 import { z } from "zod"
 
+import {
+  extractLocalNumber,
+  isValidYemeniPhone,
+  toStorageFormat,
+} from "@/lib/phone"
+
 export const loginSchema = z.object({
   username: z.string().min(1, "اسم المستخدم مطلوب"),
   password: z.string().min(1, "كلمة المرور مطلوبة"),
@@ -41,23 +47,13 @@ export const phoneNumberSchema = z.object({
   number: z
     .string()
     .min(1, "الرقم مطلوب")
-    .transform(sanitizePhoneNumber)
-    .refine(isValidYemeniPhone, "رقم هاتف غير صالح. يجب أن يبدأ بـ +967 أو 7"),
+    .transform(extractLocalNumber)
+    .refine(
+      (v) => isValidYemeniPhone(v),
+      "رقم هاتف غير صالح. يجب أن يبدأ بـ 7 ثم 0 أو 1 أو 3 أو 7 أو 8، ويتكون من 9 أرقام"
+    )
+    .transform(toStorageFormat),
 })
-
-function sanitizePhoneNumber(raw: string): string {
-  const stripped = raw.replace(/[\s\-()]/g, "")
-  if (stripped.startsWith("00967")) return `+967${stripped.slice(5)}`
-  if (stripped.startsWith("967")) return `+${stripped}`
-  if (stripped.startsWith("7") && stripped.length === 9)
-    return `+967${stripped}`
-  if (stripped.startsWith("+967")) return stripped
-  return stripped
-}
-
-function isValidYemeniPhone(number: string): boolean {
-  return /^\+967[0-9]{9}$/.test(number)
-}
 
 export const userCreateSchema = z.object({
   fullname: z.string().min(1, "الاسم الكامل مطلوب"),
