@@ -4,6 +4,10 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  # ALAWAEL_SEND_URL is a public API endpoint (also hardcoded as DEFAULT_SEND_URL
+  # in sms-gateway.ts). ALAWAEL_USERNAME is "Jumeirah" — the company/project name
+  # that appears in docs, logo, and UI. Neither is a real secret.
+  SECRETS_SCAN_OMIT_KEYS = "ALAWAEL_SEND_URL,ALAWAEL_USERNAME"
 
 # @netlify/nextjs plugin handles SSR + static optimization.
 # Environment variables set in Netlify dashboard or via CLI:
