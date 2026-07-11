@@ -7,11 +7,14 @@ import {
   CheckCircle2,
   Clock,
   Mail,
+  MessageSquare,
+  Phone,
   RefreshCw,
   Search,
   Send,
   Trash2,
   TriangleAlert,
+  User,
   XCircle,
 } from "lucide-react"
 import Link from "next/link"
@@ -47,6 +50,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Progress, ProgressLabel } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -58,9 +62,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { useBatchStatus } from "@/lib/hooks/use-batch-status"
 import type {
   BatchDetail,
+  BatchStatusMessage,
   BatchStatusResponse,
   DraftPreview,
 } from "@/lib/server/batch-service"
@@ -654,6 +660,10 @@ function ProgressView({
     "all"
   )
   const [search, setSearch] = useState("")
+  const [selectedApartment, setSelectedApartment] = useState<string | null>(
+    null
+  )
+  const isMobile = useIsMobile()
 
   const percent =
     status.total > 0
@@ -724,89 +734,104 @@ function ProgressView({
         </CardContent>
       </Card>
 
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="font-heading text-lg font-medium">الرسائل</h2>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative w-full sm:w-56">
-              <Search className="pointer-events-none absolute inset-y-0 inset-s-3 my-auto size-4 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="ابحث بالشقة أو الهاتف"
-                className="ps-9"
-                aria-label="بحث في الرسائل"
-              />
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <div className="flex flex-1 flex-col gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="font-heading text-lg font-medium">الرسائل</h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative w-full sm:w-56">
+                <Search className="pointer-events-none absolute inset-y-0 inset-s-3 my-auto size-4 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="ابحث بالشقة أو الهاتف"
+                  className="ps-9"
+                  aria-label="بحث في الرسائل"
+                />
+              </div>
+              <Tabs
+                value={filter}
+                onValueChange={(v) => setFilter(v as typeof filter)}
+              >
+                <TabsList>
+                  <TabsTrigger value="all">
+                    الكل ({status.messages.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="sent">مرسلة ({status.sent})</TabsTrigger>
+                  <TabsTrigger value="failed">
+                    فاشلة ({status.failed})
+                  </TabsTrigger>
+                  <TabsTrigger value="pending">بانتظار</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
-            <Tabs
-              value={filter}
-              onValueChange={(v) => setFilter(v as typeof filter)}
-            >
-              <TabsList>
-                <TabsTrigger value="all">
-                  الكل ({status.messages.length})
-                </TabsTrigger>
-                <TabsTrigger value="sent">مرسلة ({status.sent})</TabsTrigger>
-                <TabsTrigger value="failed">
-                  فاشلة ({status.failed})
-                </TabsTrigger>
-                <TabsTrigger value="pending">بانتظار</TabsTrigger>
-              </TabsList>
-            </Tabs>
           </div>
-        </div>
-        {filteredMessages.length === 0 ? (
-          <EmptyState
-            icon={<Mail />}
-            title="لا توجد رسائل"
-            description="لا توجد رسائل بهذه الحالة أو بحثك."
-          />
-        ) : (
-          <div className="rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>الشقة</TableHead>
-                  <TableHead>جهة الاتصال</TableHead>
-                  <TableHead>الهاتف</TableHead>
-                  <TableHead>النوع</TableHead>
-                  <TableHead>الحالة</TableHead>
-                  <TableHead>الخطأ</TableHead>
-                  <TableHead>وقت الإرسال</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredMessages.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell className="font-medium">
-                      {m.apartmentLabel}
-                    </TableCell>
-                    <TableCell>{m.contactName ?? "—"}</TableCell>
-                    <TableCell className="tabular-nums">
-                      {m.phoneNumber}
-                    </TableCell>
-                    <TableCell>
-                      {m.templateType === "notification" ? "إشعار" : "تحذير"}
-                    </TableCell>
-                    <TableCell>
-                      <MessageStatusBadge status={m.status} />
-                    </TableCell>
-                    <TableCell className="text-sm text-destructive">
-                      {m.errorReason ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums">
-                      {m.sentAt ? formatDate(m.sentAt) : "—"}
-                    </TableCell>
+          {filteredMessages.length === 0 ? (
+            <EmptyState
+              icon={<Mail />}
+              title="لا توجد رسائل"
+              description="لا توجد رسائل بهذه الحالة أو بحثك."
+            />
+          ) : (
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>الشقة</TableHead>
+                    <TableHead>جهة الاتصال</TableHead>
+                    <TableHead>الهاتف</TableHead>
+                    <TableHead>النوع</TableHead>
+                    <TableHead>الحالة</TableHead>
+                    <TableHead>الخطأ</TableHead>
+                    <TableHead>وقت الإرسال</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-        {search.trim() !== "" && (
-          <p className="text-sm text-muted-foreground tabular-nums">
-            {filteredMessages.length} من {status.messages.length}
-          </p>
+                </TableHeader>
+                <TableBody>
+                  {filteredMessages.map((m) => (
+                    <TableRow
+                      key={m.id}
+                      className="cursor-pointer"
+                      onClick={() => setSelectedApartment(m.apartmentLabel)}
+                    >
+                      <TableCell className="font-medium">
+                        {m.apartmentLabel}
+                      </TableCell>
+                      <TableCell>{m.contactName ?? "—"}</TableCell>
+                      <TableCell className="tabular-nums">
+                        {m.phoneNumber}
+                      </TableCell>
+                      <TableCell>
+                        {m.templateType === "notification" ? "إشعار" : "تحذير"}
+                      </TableCell>
+                      <TableCell>
+                        <MessageStatusBadge status={m.status} />
+                      </TableCell>
+                      <TableCell className="text-sm text-destructive">
+                        {m.errorReason ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground tabular-nums">
+                        {m.sentAt ? formatDate(m.sentAt) : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          {search.trim() !== "" && (
+            <p className="text-sm text-muted-foreground tabular-nums">
+              {filteredMessages.length} من {status.messages.length}
+            </p>
+          )}
+        </div>
+        {!isMobile && selectedApartment && (
+          <aside className="flex flex-col self-stretch overflow-hidden rounded-lg border lg:sticky lg:top-4 lg:w-80 lg:shrink-0">
+            <InvoiceMessagePanelContent
+              apartmentLabel={selectedApartment}
+              messages={status.messages}
+              onClose={() => setSelectedApartment(null)}
+            />
+          </aside>
         )}
       </div>
 
@@ -838,6 +863,103 @@ function ProgressView({
         busy={retrying}
         onConfirm={handleRetry}
       />
+
+      {isMobile && (
+        <Sheet
+          open={selectedApartment !== null}
+          onOpenChange={(open) => {
+            if (!open) setSelectedApartment(null)
+          }}
+        >
+          <SheetContent side="bottom" className="max-h-[85vh] gap-0 p-0">
+            <SheetTitle className="sr-only">{selectedApartment}</SheetTitle>
+            {selectedApartment && (
+              <InvoiceMessagePanelContent
+                apartmentLabel={selectedApartment}
+                messages={status.messages}
+              />
+            )}
+          </SheetContent>
+        </Sheet>
+      )}
     </div>
+  )
+}
+
+function InvoiceMessagePanelContent({
+  apartmentLabel,
+  messages,
+  onClose,
+}: {
+  apartmentLabel: string
+  messages: BatchStatusMessage[]
+  onClose?: () => void
+}) {
+  const apartmentMessages = useMemo(() => {
+    return messages.filter((m) => m.apartmentLabel === apartmentLabel)
+  }, [messages, apartmentLabel])
+
+  const sent = apartmentMessages.filter((m) => m.status === "sent").length
+  const failed = apartmentMessages.filter((m) => m.status === "failed").length
+
+  return (
+    <>
+      <div className="flex items-start justify-between gap-2 border-b p-4">
+        <div className="flex flex-col gap-1">
+          <h3 className="flex items-center gap-2 font-heading text-lg font-medium">
+            <Building2 className="size-5 text-muted-foreground" />
+            {apartmentLabel}
+          </h3>
+          <p className="text-sm text-muted-foreground tabular-nums">
+            {apartmentMessages.length} رسالة — {sent} مرسلة، {failed} فاشلة
+          </p>
+        </div>
+        {onClose && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onClose}
+            aria-label="إغلاق"
+          >
+            <XCircle className="size-4" />
+          </Button>
+        )}
+      </div>
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex flex-col gap-3">
+          {apartmentMessages.map((m) => (
+            <div
+              key={m.id}
+              className="flex flex-col gap-2 rounded-lg border p-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <User className="size-4 text-muted-foreground" />
+                  {m.contactName ?? "غير معروف"}
+                </div>
+                <MessageStatusBadge status={m.status} />
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground tabular-nums">
+                <Phone className="size-4" />
+                {m.phoneNumber}
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <MessageSquare className="size-4" />
+                {m.templateType === "notification" ? "إشعار" : "تحذير"}
+              </div>
+              {m.errorReason && (
+                <div className="rounded bg-destructive/10 px-2 py-1 text-xs text-destructive">
+                  {m.errorReason}
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
+                <Clock className="size-3.5" />
+                {m.sentAt ? formatDate(m.sentAt) : "لم يُرسل بعد"}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
   )
 }

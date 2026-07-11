@@ -83,13 +83,24 @@ requirements, schema, and build order.
 - **Compact code.** Collapse duplicate branches, share abstractions, avoid
   unnecessary nesting.
 
-## Verification — run before declaring done
+## Verification — only when asked
+
+Do **not** run `bun run typecheck`, `bun run test`, or `bun run build`
+automatically after every change. Run them only when the user explicitly asks
+for verification (e.g. "verify", "typecheck", "run tests", "build", "make sure
+it works", "before declaring done").
+
+When asked to verify:
 
 1. `bun run typecheck` — must pass with zero errors.
 2. `bun run test` — write/run Vitest tests for new behavior.
 3. `bun run build` — must succeed (catches SSR/Netlify deploy issues).
 
 If a check fails, fix the root cause. Do not disable or weaken checks.
+
+**Always heed TypeScript errors surfaced by the IDE** when editing a file. If
+the IDE reports a type error on your edit, fix it immediately — do not leave
+the file in a broken state between prompts.
 
 ## Testing
 
@@ -124,8 +135,10 @@ If a check fails, fix the root cause. Do not disable or weaken checks.
    trace imports, match existing patterns.
 2. Write a failing test for bugs/new behavior when feasible.
 3. Implement the smallest correct change.
-4. Run all verification steps above.
-5. Self-critique for edge cases before marking done.
+4. Heed any TypeScript errors the IDE surfaces on your edits — fix them
+   immediately, do not leave the file broken.
+5. Run verification (`typecheck`/`test`/`build`) only when the user asks.
+6. Self-critique for edge cases before marking done.
 
 ## Skills Available
 
