@@ -5,6 +5,7 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 
+import { PhoneNumbersEditor } from "@/components/phone-numbers-editor"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -19,7 +20,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
-import { PhoneNumbersEditor } from "@/components/phone-numbers-editor"
 import { contactLinkSchema, type ContactLinkFormData } from "@/lib/schemas"
 import type { ContactRow } from "@/lib/server/reference-data"
 import {
@@ -120,7 +120,7 @@ export function AddContactDialog({
       {trigger ?? (
         <DialogTrigger
           render={
-            <Button size="sm" nativeButton={false}>
+            <Button size="sm">
               <Plus className="size-4" />
               إضافة جهة اتصال
             </Button>

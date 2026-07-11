@@ -238,11 +238,11 @@ function DraftReview({
   allContacts: ContactRow[]
 }) {
   const router = useRouter()
-  const [acknowledged, setAcknowledged] = useState(false)
   const [unmatchedAck, setUnmatchedAck] = useState(false)
   const [sending, setSending] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [search, setSearch] = useState("")
+  const [noContactsOpen, setNoContactsOpen] = useState(false)
 
   const noRecipients = preview.matched.length === 0
 
@@ -385,11 +385,7 @@ function DraftReview({
               موجودة في ملف Excel. تأكد من عدم نسيان أي شقة.
             </AlertDescription>
             <AlertAction>
-              <DialogTrigger
-                render={
-                  <Button variant="outline" size="sm" nativeButton={false} />
-                }
-              >
+              <DialogTrigger render={<Button variant="outline" size="sm" />}>
                 عرض الشقق
               </DialogTrigger>
             </AlertAction>
@@ -469,34 +465,47 @@ function DraftReview({
                 </TableBody>
               </Table>
             </div>
-            {!noRecipients && (
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={acknowledged}
-                  onCheckedChange={(v) => setAcknowledged(v === true)}
-                />
-                أقر بأن هذه الشقق لن يتم إرسال رسائل لها
-              </label>
-            )}
           </CardContent>
         </Card>
       )}
 
-      <div className="flex flex-col gap-3">
+      <section className="flex flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="font-heading text-lg font-medium">الشقق المطابقة</h2>
-          {preview.matched.length > 0 && (
-            <div className="relative w-full sm:w-64">
-              <Search className="pointer-events-none absolute inset-y-0 inset-s-3 my-auto size-4 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="ابحث بالشقة أو العميل"
-                className="ps-9"
-                aria-label="بحث في الشقق المطابقة"
-              />
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            <h2 className="font-heading text-lg font-medium">الشقق المطابقة</h2>
+            <span className="text-sm text-muted-foreground tabular-nums">
+              {totalRecipients} رسالة
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {preview.matched.length > 0 && (
+              <div className="relative w-full sm:w-64">
+                <Search className="pointer-events-none absolute inset-y-0 inset-s-3 my-auto size-4 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="ابحث بالشقة أو العميل"
+                  className="ps-9"
+                  aria-label="بحث في الشقق المطابقة"
+                />
+              </div>
+            )}
+            <Button
+              disabled={
+                noRecipients ||
+                (preview.unmatched.length > 0 && !unmatchedAck) ||
+                sending
+              }
+              onClick={() =>
+                preview.noContacts.length > 0
+                  ? setNoContactsOpen(true)
+                  : setConfirmOpen(true)
+              }
+            >
+              <Send data-icon="inline-start" />
+              {noRecipients ? "لا يوجد مستلمون" : "إرسال"}
+            </Button>
+          </div>
         </div>
         {preview.matched.length === 0 ? (
           <EmptyState
@@ -547,25 +556,54 @@ function DraftReview({
             {filteredMatched.length} من {preview.matched.length}
           </p>
         )}
-      </div>
+      </section>
 
-      <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-        <span className="text-sm text-muted-foreground tabular-nums">
-          {totalRecipients} رسالة إلى {preview.matched.length} شقة
-        </span>
-        <Button
-          disabled={
-            noRecipients ||
-            (preview.noContacts.length > 0 && !acknowledged) ||
-            (preview.unmatched.length > 0 && !unmatchedAck) ||
-            sending
-          }
-          onClick={() => setConfirmOpen(true)}
-        >
-          <Send data-icon="inline-start" />
-          {noRecipients ? "لا يوجد مستلمون" : "إرسال"}
-        </Button>
-      </div>
+      <Dialog open={noContactsOpen} onOpenChange={setNoContactsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="size-5" />
+              شقق بدون مستلمي إشعارات
+            </DialogTitle>
+            <DialogDescription>
+              {preview.noContacts.length} شقة من أصل {preview.coverage.total} لا
+              تحتوي على جهات اتصال بأرقام هاتف. لن يتم إرسال رسائل لهذه الشقق.
+              يمكنك إضافة جهات اتصال من الجدول أدناه قبل الإرسال.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[40vh] overflow-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>الشقة</TableHead>
+                  <TableHead>العميل</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {preview.noContacts.map((c) => (
+                  <TableRow key={c.apartmentId}>
+                    <TableCell className="font-medium">{c.label}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {c.clientName}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setNoContactsOpen(false)
+                setConfirmOpen(true)
+              }}
+            >
+              فهمت
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={confirmOpen}
