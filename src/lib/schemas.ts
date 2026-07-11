@@ -23,6 +23,11 @@ export const contactSchema = z.object({
   fullname: z.string().min(1, "الاسم مطلوب"),
 })
 
+export const contactUpdateSchema = z.object({
+  id: z.number(),
+  fullname: z.string().min(1, "الاسم مطلوب"),
+})
+
 export const contactLinkSchema = z.object({
   apartmentId: z.number(),
   contactId: z.number().optional(),
@@ -94,6 +99,7 @@ export type ProjectFormData = z.infer<typeof projectSchema>
 export type TowerFormData = z.infer<typeof towerSchema>
 export type ApartmentFormData = z.infer<typeof apartmentSchema>
 export type ContactFormData = z.infer<typeof contactSchema>
+export type ContactUpdateFormData = z.infer<typeof contactUpdateSchema>
 export type ContactLinkFormData = z.infer<typeof contactLinkSchema>
 export type PhoneNumberFormData = z.infer<typeof phoneNumberSchema>
 export type UserCreateFormData = z.infer<typeof userCreateSchema>

@@ -1,6 +1,6 @@
 "use client"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { ContactRound, Pencil, Phone, Plus, Trash2, X } from "lucide-react"
+import { ContactRound, Pencil, Phone, Trash2, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
@@ -8,6 +8,7 @@ import { toast } from "sonner"
 
 import { AddContactDialog } from "@/components/add-contact-dialog"
 import { RoleBadge, roleLabel } from "@/components/admin/role-badge"
+import { PhoneNumbersTable } from "@/components/phone-numbers-table"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,25 +49,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  apartmentSchema,
-  phoneNumberSchema,
-  type ApartmentFormData,
-  type PhoneNumberFormData,
-} from "@/lib/schemas"
+import { apartmentSchema, type ApartmentFormData } from "@/lib/schemas"
 import type {
   ApartmentContactRow,
   ApartmentPhoneNumberRow,
   ContactRow,
 } from "@/lib/server/reference-data"
 import {
-  addPhoneNumber,
-  deletePhoneNumber,
   softDeleteApartment,
   unlinkContact,
   updateApartment,
   updateContactLink,
-  updatePhoneNumber,
 } from "@/lib/server/reference-data"
 import type { ContactRole } from "@/lib/server/schema"
 
@@ -500,17 +493,6 @@ function EditContactDialog({
   const [role, setRole] = useState<ContactRole>(link.role)
   const [notify, setNotify] = useState(link.isNotificationRecipient)
   const [busy, setBusy] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [editValue, setEditValue] = useState("")
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<PhoneNumberFormData>({
-    resolver: zodResolver(phoneNumberSchema),
-    defaultValues: { contactId: link.contactId, number: "" },
-  })
 
   async function handleSaveLink() {
     setBusy(true)
@@ -525,46 +507,6 @@ function EditContactDialog({
       return
     }
     toast.success("تم تحديث الربط")
-    onMutate()
-  }
-
-  async function handleAddNumber(data: PhoneNumberFormData) {
-    setBusy(true)
-    const result = await addPhoneNumber({
-      contactId: data.contactId,
-      number: data.number.trim(),
-    })
-    setBusy(false)
-    if (!result.ok) {
-      toast.error(result.error)
-      return
-    }
-    reset({ contactId: link.contactId, number: "" })
-    onMutate()
-  }
-
-  async function handleUpdateNumber(id: number) {
-    if (!editValue.trim()) return
-    setBusy(true)
-    const result = await updatePhoneNumber({ id, number: editValue.trim() })
-    setBusy(false)
-    if (!result.ok) {
-      toast.error(result.error)
-      return
-    }
-    setEditingId(null)
-    setEditValue("")
-    onMutate()
-  }
-
-  async function handleDeleteNumber(id: number) {
-    setBusy(true)
-    const result = await deletePhoneNumber({ id })
-    setBusy(false)
-    if (!result.ok) {
-      toast.error(result.error)
-      return
-    }
     onMutate()
   }
 
@@ -630,100 +572,11 @@ function EditContactDialog({
 
           <div className="h-px bg-border" />
 
-          <div className="flex flex-col gap-2">
-            <span className="flex items-center gap-1.5 text-sm font-medium">
-              <Phone className="size-4 text-muted-foreground" />
-              أرقام الهاتف
-            </span>
-            {phoneNumbers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">لا توجد أرقام.</p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {phoneNumbers.map((p) => (
-                  <li
-                    key={p.id}
-                    className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2"
-                  >
-                    {editingId === p.id ? (
-                      <>
-                        <Input
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          disabled={busy}
-                          className="h-8 flex-1 font-mono"
-                        />
-                        <Button
-                          size="sm"
-                          onClick={() => handleUpdateNumber(p.id)}
-                          disabled={busy}
-                        >
-                          حفظ
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setEditingId(null)
-                            setEditValue("")
-                          }}
-                          disabled={busy}
-                        >
-                          إلغاء
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <span className="font-mono text-sm">{p.number}</span>
-                        <div className="ms-auto flex gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditingId(p.id)
-                              setEditValue(p.number)
-                            }}
-                            disabled={busy}
-                          >
-                            تعديل
-                          </Button>
-                          <Button
-                            size="icon-sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteNumber(p.id)}
-                            disabled={busy}
-                            className="hover:bg-destructive/10 hover:text-destructive"
-                            aria-label="حذف الرقم"
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <form
-              className="flex flex-wrap gap-2"
-              onSubmit={handleSubmit(handleAddNumber)}
-            >
-              <Input
-                placeholder="رقم جديد"
-                {...register("number")}
-                disabled={busy || isSubmitting}
-                className="min-w-40 flex-1 font-mono"
-              />
-              <Button type="submit" disabled={busy || isSubmitting}>
-                <Plus className="size-4" />
-                إضافة
-              </Button>
-            </form>
-            {errors.number && (
-              <p className="text-sm text-destructive">
-                {errors.number.message}
-              </p>
-            )}
-          </div>
+          <PhoneNumbersTable
+            contactId={link.contactId}
+            phoneNumbers={phoneNumbers}
+            onMutate={onMutate}
+          />
 
           <DialogFooter>
             <Button

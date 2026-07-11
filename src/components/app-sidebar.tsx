@@ -2,6 +2,7 @@
 
 import {
   Building2,
+  ContactRound,
   LogOut,
   MessageSquare,
   MoonIcon,
@@ -140,7 +141,7 @@ export function AppSidebar({ session }: { session: SessionUser }) {
               size="lg"
               className="gap-3"
             >
-              <div className="w-full p-4 mt-2 translate-x-2">
+              <div className="mt-2 w-full translate-x-2 p-4">
                 <JumeirahLogo />
               </div>
             </SidebarMenuButton>
@@ -162,6 +163,11 @@ export function AppSidebar({ session }: { session: SessionUser }) {
                 to="/admin/projects"
                 icon={<Building2 />}
                 label="المشاريع"
+              />
+              <NavItem
+                to="/contacts"
+                icon={<ContactRound />}
+                label="جهات الاتصال"
               />
             </SidebarMenu>
           </SidebarGroupContent>
