@@ -16,6 +16,7 @@ export async function authenticateUser(
       username: users.username,
       password: users.password,
       isAdmin: users.isAdmin,
+      mustResetPassword: users.mustResetPassword,
     })
     .from(users)
     .where(and(eq(users.username, username), isNull(users.deletedAt)))
@@ -29,5 +30,6 @@ export async function authenticateUser(
     fullname: row.fullname,
     username: row.username,
     isAdmin: row.isAdmin,
+    mustResetPassword: row.mustResetPassword,
   }
 }

@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react"
 import Link from "next/link"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -34,6 +35,7 @@ export default async function UsersListPage() {
                 <TableHead>الاسم</TableHead>
                 <TableHead>اسم المستخدم</TableHead>
                 <TableHead>الدور</TableHead>
+                <TableHead>الحالة</TableHead>
                 <TableHead className="text-end">إجراءات</TableHead>
               </TableRow>
             </TableHeader>
@@ -43,6 +45,11 @@ export default async function UsersListPage() {
                   <TableCell className="font-medium">{u.fullname}</TableCell>
                   <TableCell>{u.username}</TableCell>
                   <TableCell>{u.isAdmin ? "مسؤول" : "مشغّل"}</TableCell>
+                  <TableCell>
+                    {u.mustResetPassword && (
+                      <Badge variant="secondary">كلمة مرور مؤقتة</Badge>
+                    )}
+                  </TableCell>
                   <TableCell className="text-end">
                     <Button
                       variant="ghost"

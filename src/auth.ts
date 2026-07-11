@@ -6,7 +6,7 @@ import { authenticateUser } from "@/lib/server/auth-db"
 
 export { authenticateUser }
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const { handlers, signIn, signOut, auth, unstable_update } = NextAuth({
   ...authConfig,
   providers: [
     Credentials({

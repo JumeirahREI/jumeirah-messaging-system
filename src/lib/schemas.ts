@@ -58,7 +58,6 @@ export const phoneNumberSchema = z.object({
 export const userCreateSchema = z.object({
   fullname: z.string().min(1, "الاسم الكامل مطلوب"),
   username: z.string().min(1, "اسم المستخدم مطلوب"),
-  password: z.string().min(6, "كلمة المرور يجب أن تكون 6 أحرف على الأقل"),
   isAdmin: z.boolean(),
 })
 
@@ -67,11 +66,6 @@ export const userUpdateSchema = z.object({
   fullname: z.string().min(1, "الاسم الكامل مطلوب"),
   username: z.string().min(1, "اسم المستخدم مطلوب"),
   isAdmin: z.boolean(),
-})
-
-export const passwordResetSchema = z.object({
-  id: z.number(),
-  password: z.string().min(6, "كلمة المرور يجب أن تكون 6 أحرف على الأقل"),
 })
 
 export const batchCreateSchema = z.object({
@@ -100,7 +94,6 @@ export type ContactLinkFormData = z.infer<typeof contactLinkSchema>
 export type PhoneNumberFormData = z.infer<typeof phoneNumberSchema>
 export type UserCreateFormData = z.infer<typeof userCreateSchema>
 export type UserUpdateFormData = z.infer<typeof userUpdateSchema>
-export type PasswordResetFormData = z.infer<typeof passwordResetSchema>
 export type BatchCreateFormData = z.infer<typeof batchCreateSchema>
 export type BatchFilterFormData = z.infer<typeof batchFilterSchema>
 export type WarningSendFormData = z.infer<typeof warningSendSchema>

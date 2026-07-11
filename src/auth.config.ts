@@ -7,11 +7,13 @@ export type SessionUser = {
   fullname: string
   username: string
   isAdmin: boolean
+  mustResetPassword: boolean
 }
 
 declare module "next-auth" {
   interface Session {
     user: SessionUser
+    mustResetPassword: boolean
   }
 }
 
@@ -20,6 +22,7 @@ type AugmentedJWT = {
   fullname?: string
   username?: string
   isAdmin?: boolean
+  mustResetPassword?: boolean
 }
 
 export const authConfig = {
@@ -28,7 +31,7 @@ export const authConfig = {
   session: { strategy: "jwt", maxAge: 60 * 60 * 2 },
   pages: { signIn: "/login" },
   callbacks: {
-    jwt({ token, user }) {
+    jwt({ token, user, trigger, session }) {
       const t = token as unknown as AugmentedJWT
       if (user) {
         const u = user as unknown as SessionUser
@@ -36,6 +39,13 @@ export const authConfig = {
         t.fullname = u.fullname
         t.username = u.username
         t.isAdmin = u.isAdmin
+        t.mustResetPassword = u.mustResetPassword
+      }
+      if (trigger === "update") {
+        const s = session as { mustResetPassword?: boolean }
+        if (s.mustResetPassword !== undefined) {
+          t.mustResetPassword = s.mustResetPassword
+        }
       }
       return token
     },
@@ -47,7 +57,11 @@ export const authConfig = {
           fullname: t.fullname ?? "",
           username: t.username ?? "",
           isAdmin: t.isAdmin ?? false,
+          mustResetPassword: t.mustResetPassword ?? false,
         }
+        ;(
+          session as unknown as { mustResetPassword: boolean }
+        ).mustResetPassword = t.mustResetPassword ?? false
       }
       return session
     },

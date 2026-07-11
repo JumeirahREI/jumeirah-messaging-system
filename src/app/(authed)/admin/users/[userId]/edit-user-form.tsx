@@ -28,12 +28,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  passwordResetSchema,
-  userUpdateSchema,
-  type PasswordResetFormData,
-  type UserUpdateFormData,
-} from "@/lib/schemas"
+import { userUpdateSchema, type UserUpdateFormData } from "@/lib/schemas"
 import {
   resetUserPassword,
   softDeleteUser,
@@ -70,18 +65,7 @@ export function EditUserForm({
   })
   const isAdmin = watch("isAdmin")
 
-  const {
-    register: registerReset,
-    handleSubmit: handleResetSubmit,
-    reset: resetResetForm,
-    formState: { errors: resetErrors, isSubmitting: isResetting },
-  } = useForm<PasswordResetFormData>({
-    resolver: zodResolver(passwordResetSchema),
-    defaultValues: {
-      id: userId,
-      password: "",
-    },
-  })
+  const [isResetting, setIsResetting] = useState(false)
 
   async function onUpdate(data: UserUpdateFormData) {
     const result = await updateUser({
@@ -98,17 +82,15 @@ export function EditUserForm({
     router.refresh()
   }
 
-  async function onResetPassword(data: PasswordResetFormData) {
-    const result = await resetUserPassword({
-      id: userId,
-      password: data.password,
-    })
+  async function handleResetPassword() {
+    setIsResetting(true)
+    const result = await resetUserPassword({ id: userId })
+    setIsResetting(false)
     if (!result.ok) {
       toast.error(result.error)
       return
     }
-    toast.success("تم تغيير كلمة المرور")
-    resetResetForm({ id: userId, password: "" })
+    toast.success("تم إعادة تعيين كلمة المرور")
   }
 
   async function handleDelete() {
@@ -209,34 +191,43 @@ export function EditUserForm({
       </div>
 
       <div className="mx-auto w-full max-w-md">
-        <form onSubmit={handleResetSubmit(onResetPassword)}>
-          <Card>
-            <CardHeader>
-              <CardTitle>تغيير كلمة المرور</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="newPassword">كلمة المرور الجديدة</Label>
-                <Input
-                  id="newPassword"
-                  type="password"
-                  {...registerReset("password")}
-                  disabled={isResetting}
-                />
-                {resetErrors.password && (
-                  <p className="text-sm text-destructive">
-                    {resetErrors.password.message}
-                  </p>
-                )}
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button type="submit" disabled={isResetting}>
-                {isResetting ? "جارٍ التغيير..." : "تغيير كلمة المرور"}
-              </Button>
-            </CardFooter>
-          </Card>
-        </form>
+        <Card>
+          <CardHeader>
+            <CardTitle>إعادة تعيين كلمة المرور</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              سيتم تعيين كلمة المرور إلى اسم المستخدم وسيتعين على المستخدم
+              تغييرها عند تسجيل الدخول.
+            </p>
+          </CardContent>
+          <CardFooter>
+            <AlertDialog>
+              <AlertDialogTrigger
+                render={
+                  <Button variant="outline" disabled={isResetting}>
+                    إعادة تعيين كلمة المرور
+                  </Button>
+                }
+              />
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>تأكيد إعادة التعيين؟</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    سيتم تعيين كلمة المرور إلى اسم المستخدم وسيتعين على المستخدم
+                    تغييرها عند تسجيل الدخول.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleResetPassword}>
+                    تأكيد
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardFooter>
+        </Card>
       </div>
     </div>
   )

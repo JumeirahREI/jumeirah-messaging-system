@@ -7,7 +7,6 @@ import {
   contactLinkSchema,
   contactSchema,
   contactUpdateSchema,
-  passwordResetSchema,
   phoneNumberSchema,
   projectSchema,
   towerSchema,
@@ -1045,6 +1044,7 @@ export type UserRow = {
   fullname: string
   username: string
   isAdmin: boolean
+  mustResetPassword: boolean
   createdAt: string | null
 }
 
@@ -1056,6 +1056,7 @@ export async function listUsers(): Promise<UserRow[]> {
       fullname: users.fullname,
       username: users.username,
       isAdmin: users.isAdmin,
+      mustResetPassword: users.mustResetPassword,
       createdAt: users.createdAt,
     })
     .from(users)
@@ -1069,6 +1070,7 @@ export async function getUser(input: { id: number }): Promise<{
   fullname: string
   username: string
   isAdmin: boolean
+  mustResetPassword: boolean
 } | null> {
   await requireRole("admin")
   const rows = await db
@@ -1077,6 +1079,7 @@ export async function getUser(input: { id: number }): Promise<{
       fullname: users.fullname,
       username: users.username,
       isAdmin: users.isAdmin,
+      mustResetPassword: users.mustResetPassword,
     })
     .from(users)
     .where(and(eq(users.id, input.id), isNull(users.deletedAt)))
@@ -1087,7 +1090,6 @@ export async function getUser(input: { id: number }): Promise<{
 export async function createUser(input: {
   fullname: string
   username: string
-  password: string
   isAdmin: boolean
 }): Promise<
   MutationResult<{
@@ -1110,7 +1112,7 @@ export async function createUser(input: {
     return { ok: false, error: "اسم المستخدم مستخدم مسبقًا" } as const
   }
   return safeMutation(async () => {
-    const hash = await bcrypt.hash(parsed.data.password, 12)
+    const hash = await bcrypt.hash(parsed.data.username, 12)
     const [row] = await db
       .insert(users)
       .values({
@@ -1118,6 +1120,7 @@ export async function createUser(input: {
         username: parsed.data.username,
         password: hash,
         isAdmin: parsed.data.isAdmin,
+        mustResetPassword: true,
         ...actor(user),
       })
       .returning({
@@ -1199,17 +1202,25 @@ export async function updateUser(input: {
 
 export async function resetUserPassword(input: {
   id: number
-  password: string
 }): Promise<MutationResult<{ id: number }>> {
   const user = await requireRoleRateLimited("admin")
-  const parsed = passwordResetSchema.safeParse(input)
-  if (!parsed.success)
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "خطأ" }
-  const hash = await bcrypt.hash(parsed.data.password, 12)
+  const existing = await db
+    .select({ username: users.username })
+    .from(users)
+    .where(and(eq(users.id, input.id), isNull(users.deletedAt)))
+    .limit(1)
+  if (existing.length === 0)
+    return { ok: false, error: "المستخدم غير موجود" } as const
+  const hash = await bcrypt.hash(existing[0].username, 12)
   const row = await db
     .update(users)
-    .set({ password: hash, updatedBy: user.id, updatedAt: now })
-    .where(and(eq(users.id, parsed.data.id), isNull(users.deletedAt)))
+    .set({
+      password: hash,
+      mustResetPassword: true,
+      updatedBy: user.id,
+      updatedAt: now,
+    })
+    .where(and(eq(users.id, input.id), isNull(users.deletedAt)))
     .returning({ id: users.id })
   if (row.length === 0)
     return { ok: false, error: "المستخدم غير موجود" } as const

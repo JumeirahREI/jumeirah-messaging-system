@@ -5,7 +5,7 @@ import { authConfig } from "@/auth.config"
 
 const { auth } = NextAuth(authConfig)
 
-const PUBLIC_ROUTES = ["/login"]
+const PUBLIC_ROUTES = ["/login", "/change-password"]
 const AUTH_API_PREFIX = "/api/auth"
 
 export default auth((req) => {
@@ -17,6 +17,9 @@ export default auth((req) => {
 
   if (isPublicRoute) {
     if (hasSession && pathname === "/login") {
+      if (req.auth?.user?.mustResetPassword) {
+        return NextResponse.redirect(new URL("/change-password", req.nextUrl))
+      }
       return NextResponse.redirect(new URL("/batches", req.nextUrl))
     }
     return NextResponse.next()
@@ -24,6 +27,10 @@ export default auth((req) => {
 
   if (!hasSession) {
     return NextResponse.redirect(new URL("/login", req.nextUrl))
+  }
+
+  if (req.auth?.user?.mustResetPassword && pathname !== "/change-password") {
+    return NextResponse.redirect(new URL("/change-password", req.nextUrl))
   }
 
   const isAdminRoute = pathname.startsWith("/admin")

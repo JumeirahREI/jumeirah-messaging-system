@@ -31,7 +31,6 @@ export default function NewUserPage() {
     defaultValues: {
       fullname: "",
       username: "",
-      password: "",
       isAdmin: false,
     },
   })
@@ -41,7 +40,6 @@ export default function NewUserPage() {
     const result = await createUser({
       fullname: data.fullname,
       username: data.username,
-      password: data.password,
       isAdmin: data.isAdmin,
     })
     if (!result.ok) {
@@ -83,20 +81,6 @@ export default function NewUserPage() {
               {errors.username && (
                 <p className="text-sm text-destructive">
                   {errors.username.message}
-                </p>
-              )}
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="password">كلمة المرور</Label>
-              <Input
-                id="password"
-                type="password"
-                {...register("password")}
-                disabled={isSubmitting}
-              />
-              {errors.password && (
-                <p className="text-sm text-destructive">
-                  {errors.password.message}
                 </p>
               )}
             </div>

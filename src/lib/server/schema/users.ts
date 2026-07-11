@@ -8,6 +8,9 @@ export const users = sqliteTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
+  mustResetPassword: integer("must_reset_password", { mode: "boolean" })
+    .notNull()
+    .default(false),
   createdBy: integer("created_by").references((): AnySQLiteColumn => users.id),
   createdAt: text("created_at")
     .notNull()
