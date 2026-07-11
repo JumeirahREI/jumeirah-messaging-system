@@ -15,6 +15,7 @@ if (
 
 const ADMIN_USERNAME = process.env.SEED_ADMIN_USERNAME ?? "admin"
 const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD
+const ADMIN_FULLNAME = process.env.SEED_ADMIN_FULLNAME ?? "System Admin"
 
 if (!ADMIN_PASSWORD) {
   console.error("SEED_ADMIN_PASSWORD environment variable is required.")
@@ -39,7 +40,7 @@ async function seedAdmin() {
   const [created] = await db
     .insert(users)
     .values({
-      fullname: "System Administrator",
+      fullname: ADMIN_FULLNAME,
       username: ADMIN_USERNAME,
       password,
       isAdmin: true,
