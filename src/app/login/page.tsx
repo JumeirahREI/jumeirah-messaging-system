@@ -1,8 +1,9 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { ShieldCheck } from "lucide-react"
 import { useForm } from "react-hook-form"
+
+import { JumeirahLogo } from "@/components/jumeirah-logo"
 import { toast } from "sonner"
 
 import { loginAction } from "@/app/login/actions"
@@ -40,21 +41,14 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-svh items-center justify-center bg-muted/30 p-4">
       <div className="flex w-full max-w-sm flex-col gap-6">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <div className="flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-            <ShieldCheck className="size-7" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <h1 className="font-heading text-2xl font-semibold tracking-tight">
-              جُميرا
-            </h1>
-            <p className="text-sm text-muted-foreground">نظام الرسائل</p>
-          </div>
-        </div>
+        <div className="flex justify-center"></div>
 
         <form onSubmit={handleSubmit(onSubmit)}>
           <Card>
             <CardHeader className="text-center">
+              <div className="w-48 mx-auto mb-4">
+                <JumeirahLogo />
+              </div>
               <CardTitle>تسجيل الدخول</CardTitle>
               <CardDescription>أدخل بياناتك للمتابعة</CardDescription>
             </CardHeader>

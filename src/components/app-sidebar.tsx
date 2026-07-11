@@ -5,7 +5,6 @@ import {
   LogOut,
   MessageSquare,
   MoonIcon,
-  ShieldCheck,
   SunIcon,
   Users,
 } from "lucide-react"
@@ -17,6 +16,7 @@ import { toast } from "sonner"
 
 import { logoutAction } from "@/app/login/actions"
 import type { SessionUser } from "@/auth.config"
+import { JumeirahLogo } from "@/components/jumeirah-logo"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -140,16 +140,8 @@ export function AppSidebar({ session }: { session: SessionUser }) {
               size="lg"
               className="gap-3"
             >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <ShieldCheck className="size-4" />
-              </div>
-              <div className="flex flex-col gap-0.5 leading-none">
-                <span className="font-heading text-base font-semibold">
-                  جُميرا
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  نظام الرسائل
-                </span>
+              <div className="w-full p-4 mt-2 translate-x-2">
+                <JumeirahLogo />
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
