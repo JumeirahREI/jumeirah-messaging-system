@@ -146,7 +146,7 @@ export function WarningClient({
                         </TableCell>
                         <TableCell>{inv.clientName}</TableCell>
                         <TableCell className="tabular-nums">
-                          {inv.total.toLocaleString("ar-EG")}
+                          {inv.total.toLocaleString("en-US")}
                         </TableCell>
                       </TableRow>
                     ))}

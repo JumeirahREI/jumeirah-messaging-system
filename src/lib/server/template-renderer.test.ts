@@ -19,9 +19,9 @@ describe("template-renderer", () => {
       expect(out).not.toContain("{unit_label}")
     })
 
-    it("formats the amount with two decimal places in Arabic locale", () => {
+    it("formats the amount with two decimal places in English locale", () => {
       const out = renderNotification({ amount: 1000, unit_label: "B202" })
-      expect(out).toMatch(/١٬٠٠٠[٫.]٠٠|1,000\.00/)
+      expect(out).toContain("1,000.00")
     })
 
     it("preserves the template structure when vars are substituted", () => {

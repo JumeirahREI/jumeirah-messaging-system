@@ -64,6 +64,10 @@ requirements, schema, and build order.
   (`src/fonts/Inter-VariableFont_opsz,wght.ttf`), `next/font/google` for Cairo.
 - **Animations:** `tw-animate-css` + Tailwind. No heavy animation libs unless
   justified.
+- **Numbers and dates always English.** Even in Arabic/RTL UI, numbers and
+  date/datetime values must render in English (Western Arabic numerals, ISO/Gregorian
+  dates). Use `en-US` (or `en-GB`) locale in `Intl`/`toLocaleString`/`date-fns`
+  calls. Never use `ar` locale for number or date formatting.
 
 ## Code Quality
 

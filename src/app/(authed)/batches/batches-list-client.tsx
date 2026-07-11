@@ -1,6 +1,13 @@
 "use client"
 
-import { Archive, ArrowLeft, ArrowRight, MoreHorizontal, Plus, Trash2 } from "lucide-react"
+import {
+  Archive,
+  ArrowLeft,
+  ArrowRight,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+} from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -30,7 +37,7 @@ import {
 } from "@/components/ui/table"
 import type { BatchRow } from "@/lib/server/batch-service"
 import { archiveBatch, softDeleteBatch } from "@/lib/server/batch-service"
-import { formatArabicDate } from "@/lib/utils"
+import { formatDate } from "@/lib/utils"
 
 type StatusFilter = "all" | "draft" | "sending" | "completed"
 
@@ -198,7 +205,7 @@ export function BatchesListClient({
                     )}
                   </TableCell>
                   <TableCell className="text-muted-foreground tabular-nums">
-                    {formatArabicDate(b.createdAt)}
+                    {formatDate(b.createdAt)}
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>

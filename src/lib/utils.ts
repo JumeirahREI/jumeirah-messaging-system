@@ -5,11 +5,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatArabicDate(value: string | null): string {
+export function formatDate(value: string | null): string {
   if (!value) return "—"
   const date = new Date(value.includes("T") ? value : `${value}Z`)
   if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString("ar-EG", {
+  return date.toLocaleString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",

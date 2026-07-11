@@ -69,7 +69,7 @@ import {
   sendBatch,
   softDeleteBatch,
 } from "@/lib/server/batch-service"
-import { formatArabicDate } from "@/lib/utils"
+import { formatDate } from "@/lib/utils"
 
 export function BatchDetailClient({
   batch,
@@ -108,7 +108,7 @@ export function BatchDetailClient({
         <span className="tabular-nums">#{batch.id}</span>
         <Separator orientation="vertical" className="h-4" />
         <span className="tabular-nums">
-          {batch.createdAt ? formatArabicDate(batch.createdAt) : "—"}
+          {batch.createdAt ? formatDate(batch.createdAt) : "—"}
         </span>
         {(batch.status === "sending" || batch.status === "completed") &&
           status && (
@@ -437,7 +437,7 @@ function DraftReview({
           <CardContent className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
               هذه الشقق لن يتم إرسال رسائل لها. أضف جهة اتصال ورقم هاتف لتفعيل
-              الإرسال، أو أقر بذلك قبل الإرسال.
+              الإرسال.
             </p>
             <div className="rounded-lg border">
               <Table>
@@ -455,7 +455,7 @@ function DraftReview({
                       <TableCell className="font-medium">{c.label}</TableCell>
                       <TableCell>{c.clientName}</TableCell>
                       <TableCell className="tabular-nums">
-                        {c.total.toLocaleString("ar-EG")}
+                        {c.total.toLocaleString("en-US")}
                       </TableCell>
                       <TableCell className="text-end">
                         <NoContactAddButton
@@ -534,7 +534,7 @@ function DraftReview({
                       {m.contacts.flatMap((c) => c.phoneNumbers).join("، ")}
                     </TableCell>
                     <TableCell className="tabular-nums">
-                      {m.total.toLocaleString("ar-EG")}
+                      {m.total.toLocaleString("en-US")}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -757,7 +757,7 @@ function ProgressView({
                       {m.errorReason ?? "—"}
                     </TableCell>
                     <TableCell className="text-muted-foreground tabular-nums">
-                      {m.sentAt ? formatArabicDate(m.sentAt) : "—"}
+                      {m.sentAt ? formatDate(m.sentAt) : "—"}
                     </TableCell>
                   </TableRow>
                 ))}
