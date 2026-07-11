@@ -2,8 +2,20 @@
 import bcrypt from "bcryptjs"
 import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm"
 
-import type { SessionUser } from "@/lib/server/auth-helpers"
+import {
+  apartmentSchema,
+  contactLinkSchema,
+  contactSchema,
+  passwordResetSchema,
+  phoneNumberSchema,
+  projectSchema,
+  towerSchema,
+  userCreateSchema,
+  userUpdateSchema,
+} from "@/lib/schemas"
+import type { Role, SessionUser } from "@/lib/server/auth-helpers"
 import { requireRole } from "@/lib/server/auth-helpers"
+import { checkRateLimit, mutationLimiter } from "@/lib/server/rate-limit"
 import { db } from "./db"
 import type { ContactRole } from "./schema"
 import {
@@ -40,6 +52,13 @@ function safeMutation<T>(
 
 function actor(user: SessionUser) {
   return { createdBy: user.id, updatedBy: user.id }
+}
+
+async function requireRoleRateLimited(role: Role): Promise<SessionUser> {
+  const user = await requireRole(role)
+  const allowed = await checkRateLimit(mutationLimiter, `mutation:${user.id}`)
+  if (!allowed) throw new Error("محاولات كثيرة. حاول مرة أخرى لاحقًا")
+  return user
 }
 
 // ---------------------------------------------------------------------------
@@ -120,11 +139,14 @@ export async function getProject(input: {
 export async function createProject(input: {
   title: string
 }): Promise<MutationResult<{ id: number; title: string }>> {
-  const user = await requireRole("admin")
+  const user = await requireRoleRateLimited("admin")
+  const parsed = projectSchema.safeParse(input)
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "خطأ" }
   return safeMutation(async () => {
     const [row] = await db
       .insert(projects)
-      .values({ title: input.title, ...actor(user) })
+      .values({ title: parsed.data.title, ...actor(user) })
       .returning({ id: projects.id, title: projects.title })
     return { ok: true, data: row } as const
   })
@@ -134,11 +156,14 @@ export async function updateProject(input: {
   id: number
   title: string
 }): Promise<MutationResult<{ id: number; title: string }>> {
-  const user = await requireRole("admin")
+  const user = await requireRoleRateLimited("admin")
+  const parsed = projectSchema.safeParse(input)
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "خطأ" }
   return safeMutation(async () => {
     const row = await db
       .update(projects)
-      .set({ title: input.title, updatedBy: user.id, updatedAt: now })
+      .set({ title: parsed.data.title, updatedBy: user.id, updatedAt: now })
       .where(and(eq(projects.id, input.id), isNull(projects.deletedAt)))
       .returning({ id: projects.id, title: projects.title })
     if (row.length === 0)
@@ -150,7 +175,7 @@ export async function updateProject(input: {
 export async function softDeleteProject(input: {
   id: number
 }): Promise<MutationResult<{ id: number }>> {
-  const user = await requireRole("admin")
+  const user = await requireRoleRateLimited("admin")
   const result = await db
     .update(projects)
     .set({ deletedBy: user.id, deletedAt: now })
@@ -278,13 +303,16 @@ export async function createTower(input: {
   projectId: number
   label: string
 }): Promise<MutationResult<{ id: number; projectId: number; label: string }>> {
-  const user = await requireRole("admin")
+  const user = await requireRoleRateLimited("admin")
+  const parsed = towerSchema.safeParse(input)
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "خطأ" }
   return safeMutation(async () => {
     const [row] = await db
       .insert(towers)
       .values({
         projectId: input.projectId,
-        label: input.label,
+        label: parsed.data.label,
         ...actor(user),
       })
       .returning({
@@ -300,11 +328,14 @@ export async function updateTower(input: {
   id: number
   label: string
 }): Promise<MutationResult<{ id: number; label: string }>> {
-  const user = await requireRole("admin")
+  const user = await requireRoleRateLimited("admin")
+  const parsed = towerSchema.safeParse(input)
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "خطأ" }
   return safeMutation(async () => {
     const row = await db
       .update(towers)
-      .set({ label: input.label, updatedBy: user.id, updatedAt: now })
+      .set({ label: parsed.data.label, updatedBy: user.id, updatedAt: now })
       .where(and(eq(towers.id, input.id), isNull(towers.deletedAt)))
       .returning({ id: towers.id, label: towers.label })
     if (row.length === 0)
@@ -316,7 +347,7 @@ export async function updateTower(input: {
 export async function softDeleteTower(input: {
   id: number
 }): Promise<MutationResult<{ id: number }>> {
-  const user = await requireRole("admin")
+  const user = await requireRoleRateLimited("admin")
   const result = await db
     .update(towers)
     .set({ deletedBy: user.id, deletedAt: now })
@@ -443,15 +474,18 @@ export async function createApartment(input: {
     unitNumber: string | null
   }>
 > {
-  const user = await requireRole("admin")
+  const user = await requireRoleRateLimited("admin")
+  const parsed = apartmentSchema.safeParse(input)
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "خطأ" }
   return safeMutation(async () => {
     const [row] = await db
       .insert(apartments)
       .values({
-        towerId: input.towerId,
+        towerId: parsed.data.towerId,
         projectId: input.projectId,
-        label: input.label,
-        unitNumber: input.unitNumber,
+        label: parsed.data.label,
+        unitNumber: parsed.data.unitNumber ?? null,
         ...actor(user),
       })
       .returning({
@@ -476,13 +510,19 @@ export async function updateApartment(input: {
     unitNumber: string | null
   }>
 > {
-  const user = await requireRole("admin")
+  const user = await requireRoleRateLimited("admin")
+  const parsed = apartmentSchema.safeParse({
+    ...input,
+    towerId: 1,
+  })
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "خطأ" }
   return safeMutation(async () => {
     const row = await db
       .update(apartments)
       .set({
-        label: input.label,
-        unitNumber: input.unitNumber,
+        label: parsed.data.label,
+        unitNumber: parsed.data.unitNumber ?? null,
         updatedBy: user.id,
         updatedAt: now,
       })
@@ -501,7 +541,7 @@ export async function updateApartment(input: {
 export async function softDeleteApartment(input: {
   id: number
 }): Promise<MutationResult<{ id: number }>> {
-  const user = await requireRole("admin")
+  const user = await requireRoleRateLimited("admin")
   const result = await db
     .update(apartments)
     .set({ deletedBy: user.id, deletedAt: now })
@@ -543,11 +583,14 @@ export async function listContacts(): Promise<ContactRow[]> {
 export async function createContact(input: {
   fullname: string
 }): Promise<MutationResult<{ id: number; fullname: string }>> {
-  const user = await requireRole("operator")
+  const user = await requireRoleRateLimited("operator")
+  const parsed = contactSchema.safeParse(input)
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "خطأ" }
   return safeMutation(async () => {
     const [row] = await db
       .insert(contacts)
-      .values({ fullname: input.fullname, ...actor(user) })
+      .values({ fullname: parsed.data.fullname, ...actor(user) })
       .returning({ id: contacts.id, fullname: contacts.fullname })
     return { ok: true, data: row } as const
   })
@@ -592,15 +635,18 @@ export async function linkContact(input: {
   role: ContactRole
   isNotificationRecipient: boolean
 }): Promise<MutationResult<{ id: number }>> {
-  const user = await requireRole("operator")
+  const user = await requireRoleRateLimited("operator")
+  const parsed = contactLinkSchema.safeParse(input)
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "خطأ" }
   return safeMutation(async () => {
     const [row] = await db
       .insert(apartmentContacts)
       .values({
-        apartmentId: input.apartmentId,
-        contactId: input.contactId,
-        role: input.role,
-        isNotificationRecipient: input.isNotificationRecipient,
+        apartmentId: parsed.data.apartmentId,
+        contactId: parsed.data.contactId ?? 0,
+        role: parsed.data.role,
+        isNotificationRecipient: parsed.data.isNotificationRecipient,
         ...actor(user),
       })
       .returning({ id: apartmentContacts.id })
@@ -613,7 +659,7 @@ export async function updateContactLink(input: {
   role: ContactRole
   isNotificationRecipient: boolean
 }): Promise<MutationResult<{ id: number }>> {
-  const user = await requireRole("operator")
+  const user = await requireRoleRateLimited("operator")
   return safeMutation(async () => {
     const row = await db
       .update(apartmentContacts)
@@ -639,7 +685,7 @@ export async function updateContactLink(input: {
 export async function unlinkContact(input: {
   id: number
 }): Promise<MutationResult<{ id: number }>> {
-  const user = await requireRole("operator")
+  const user = await requireRoleRateLimited("operator")
   const result = await db
     .update(apartmentContacts)
     .set({ deletedBy: user.id, deletedAt: now })
@@ -719,13 +765,20 @@ export async function addPhoneNumber(input: {
   contactId: number
   number: string
 }): Promise<MutationResult<{ id: number; contactId: number; number: string }>> {
-  const user = await requireRole("operator")
+  const user = await requireRoleRateLimited("operator")
+  const parsed = phoneNumberSchema.safeParse(input)
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "رقم غير صالح",
+    }
+  }
   return safeMutation(async () => {
     const [row] = await db
       .insert(phoneNumbers)
       .values({
-        contactId: input.contactId,
-        number: input.number,
+        contactId: parsed.data.contactId,
+        number: parsed.data.number,
         ...actor(user),
       })
       .returning({
@@ -741,11 +794,21 @@ export async function updatePhoneNumber(input: {
   id: number
   number: string
 }): Promise<MutationResult<{ id: number; number: string }>> {
-  const user = await requireRole("operator")
+  const user = await requireRoleRateLimited("operator")
+  const parsed = phoneNumberSchema.safeParse({
+    contactId: 0,
+    number: input.number,
+  })
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "رقم غير صالح",
+    }
+  }
   return safeMutation(async () => {
     const row = await db
       .update(phoneNumbers)
-      .set({ number: input.number, updatedBy: user.id, updatedAt: now })
+      .set({ number: parsed.data.number, updatedBy: user.id, updatedAt: now })
       .where(and(eq(phoneNumbers.id, input.id), isNull(phoneNumbers.deletedAt)))
       .returning({ id: phoneNumbers.id, number: phoneNumbers.number })
     if (row.length === 0)
@@ -757,7 +820,7 @@ export async function updatePhoneNumber(input: {
 export async function deletePhoneNumber(input: {
   id: number
 }): Promise<MutationResult<{ id: number }>> {
-  const user = await requireRole("operator")
+  const user = await requireRoleRateLimited("operator")
   const result = await db
     .update(phoneNumbers)
     .set({ deletedBy: user.id, deletedAt: now })
@@ -830,24 +893,27 @@ export async function createUser(input: {
     isAdmin: boolean
   }>
 > {
-  const user = await requireRole("admin")
+  const user = await requireRoleRateLimited("admin")
+  const parsed = userCreateSchema.safeParse(input)
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "خطأ" }
   const existing = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.username, input.username))
+    .where(eq(users.username, parsed.data.username))
     .limit(1)
   if (existing.length > 0) {
     return { ok: false, error: "اسم المستخدم مستخدم مسبقًا" } as const
   }
   return safeMutation(async () => {
-    const hash = await bcrypt.hash(input.password, 12)
+    const hash = await bcrypt.hash(parsed.data.password, 12)
     const [row] = await db
       .insert(users)
       .values({
-        fullname: input.fullname,
-        username: input.username,
+        fullname: parsed.data.fullname,
+        username: parsed.data.username,
         password: hash,
-        isAdmin: input.isAdmin,
+        isAdmin: parsed.data.isAdmin,
         ...actor(user),
       })
       .returning({
@@ -873,21 +939,24 @@ export async function updateUser(input: {
     isAdmin: boolean
   }>
 > {
-  const user = await requireRole("admin")
+  const user = await requireRoleRateLimited("admin")
+  const parsed = userUpdateSchema.safeParse(input)
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "خطأ" }
   const existing = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.username, input.username))
+    .where(eq(users.username, parsed.data.username))
     .limit(1)
-  if (existing.length > 0 && existing[0].id !== input.id) {
+  if (existing.length > 0 && existing[0].id !== parsed.data.id) {
     return { ok: false, error: "اسم المستخدم مستخدم مسبقًا" } as const
   }
   return safeMutation(async () => {
-    if (input.isAdmin === false) {
+    if (parsed.data.isAdmin === false) {
       const target = await db
         .select({ isAdmin: users.isAdmin })
         .from(users)
-        .where(and(eq(users.id, input.id), isNull(users.deletedAt)))
+        .where(and(eq(users.id, parsed.data.id), isNull(users.deletedAt)))
         .limit(1)
       if (target.length > 0 && target[0].isAdmin) {
         const adminCount = await db
@@ -905,13 +974,13 @@ export async function updateUser(input: {
     const row = await db
       .update(users)
       .set({
-        fullname: input.fullname,
-        username: input.username,
-        isAdmin: input.isAdmin,
+        fullname: parsed.data.fullname,
+        username: parsed.data.username,
+        isAdmin: parsed.data.isAdmin,
         updatedBy: user.id,
         updatedAt: now,
       })
-      .where(and(eq(users.id, input.id), isNull(users.deletedAt)))
+      .where(and(eq(users.id, parsed.data.id), isNull(users.deletedAt)))
       .returning({
         id: users.id,
         fullname: users.fullname,
@@ -928,12 +997,15 @@ export async function resetUserPassword(input: {
   id: number
   password: string
 }): Promise<MutationResult<{ id: number }>> {
-  const user = await requireRole("admin")
-  const hash = await bcrypt.hash(input.password, 12)
+  const user = await requireRoleRateLimited("admin")
+  const parsed = passwordResetSchema.safeParse(input)
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "خطأ" }
+  const hash = await bcrypt.hash(parsed.data.password, 12)
   const row = await db
     .update(users)
     .set({ password: hash, updatedBy: user.id, updatedAt: now })
-    .where(and(eq(users.id, input.id), isNull(users.deletedAt)))
+    .where(and(eq(users.id, parsed.data.id), isNull(users.deletedAt)))
     .returning({ id: users.id })
   if (row.length === 0)
     return { ok: false, error: "المستخدم غير موجود" } as const
@@ -943,7 +1015,7 @@ export async function resetUserPassword(input: {
 export async function softDeleteUser(input: {
   id: number
 }): Promise<MutationResult<{ id: number }>> {
-  const user = await requireRole("admin")
+  const user = await requireRoleRateLimited("admin")
   if (input.id === user.id) {
     return { ok: false, error: "لا يمكن حذف حسابك الحالي" } as const
   }

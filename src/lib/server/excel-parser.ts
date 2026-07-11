@@ -191,9 +191,20 @@ type Group = {
   sheet: Worksheet
 }
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024
+const MAX_SHEETS = 50
+const MAX_ROWS = 10000
+
 export async function getSheetNames(buffer: Buffer): Promise<string[]> {
+  if (buffer.length > MAX_FILE_SIZE)
+    throwParseError({
+      code: "empty_file",
+      message: "حجم الملف يتجاوز 10 ميجابايت",
+    })
   const workbook = new Workbook()
   await workbook.xlsx.load(buffer as unknown as ArrayBuffer)
+  if (workbook.worksheets.length > MAX_SHEETS)
+    throwParseError({ code: "empty_file", message: "عدد الأوراق يتجاوز 50" })
   return workbook.worksheets.map((ws) => ws.name)
 }
 
@@ -201,6 +212,11 @@ export async function parseInvoiceExcel(
   buffer: Buffer,
   sheetTowerMap?: Map<string, string>
 ): Promise<ParsedInvoice[]> {
+  if (buffer.length > MAX_FILE_SIZE)
+    throwParseError({
+      code: "empty_file",
+      message: "حجم الملف يتجاوز 10 ميجابايت",
+    })
   const workbook = new Workbook()
   // exceljs expects ArrayBuffer; Buffer is compatible at runtime
   await workbook.xlsx.load(buffer as unknown as ArrayBuffer)
@@ -210,6 +226,8 @@ export async function parseInvoiceExcel(
       message: "الملف لا يحتوي على أي ورقة بيانات",
     })
   }
+  if (workbook.worksheets.length > MAX_SHEETS)
+    throwParseError({ code: "empty_file", message: "عدد الأوراق يتجاوز 50" })
 
   const groups = new Map<string, Group>()
   const order: string[] = []
@@ -221,6 +239,11 @@ export async function parseInvoiceExcel(
     const resolveCell = buildMergeResolver(sheet)
     const rowCount = sheet.rowCount
     if (rowCount === 0) continue
+    if (rowCount > MAX_ROWS)
+      throwParseError({
+        code: "empty_file",
+        message: `الورقة ${sheet.name} تتجاوز 10000 صف`,
+      })
 
     let currentLabel: string | null = null
     for (let r = 1; r <= rowCount; r++) {

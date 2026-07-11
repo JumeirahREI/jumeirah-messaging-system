@@ -4,6 +4,7 @@ import { Buffer } from "node:buffer"
 
 import { requireRole } from "@/lib/server/auth-helpers"
 import { processPendingMessages } from "@/lib/server/batch-processing"
+import { checkRateLimit, mutationLimiter } from "@/lib/server/rate-limit"
 import { computeReconciliation } from "./batch-reconciliation"
 import { db } from "./db"
 import {
@@ -28,15 +29,31 @@ import { renderNotification, renderWarning } from "./template-renderer"
 
 const now = sql`(datetime('now'))`
 
+async function requireRoleRateLimited(
+  role: "operator" | "admin"
+): Promise<import("@/auth.config").SessionUser> {
+  const user = await requireRole(role)
+  const allowed = await checkRateLimit(mutationLimiter, `mutation:${user.id}`)
+  if (!allowed) throw new Error("محاولات كثيرة. حاول مرة أخرى لاحقًا")
+  return user
+}
+
 async function invokeBackgroundProcess(batchId: number): Promise<void> {
   const isNetlify = Boolean(process.env.NETLIFY)
   const url = isNetlify
     ? `/.netlify/functions/process-batch-background`
     : `http://localhost:3000/api/batches/${batchId}/process`
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  }
+  const functionSecret = process.env.NETLIFY_FUNCTION_SECRET
+  if (isNetlify && functionSecret) {
+    headers["authorization"] = `Bearer ${functionSecret}`
+  }
   try {
     await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify({ batchId }),
     })
   } catch {
@@ -178,6 +195,17 @@ export async function previewBatchFile(
 
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
+
+  const { fileTypeFromBuffer } = await import("file-type")
+  const detected = await fileTypeFromBuffer(buffer)
+  if (
+    !detected ||
+    detected.mime !==
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  ) {
+    return { ok: false, error: "الملف ليس ملف Excel صالح" }
+  }
+
   let sheets: string[]
   try {
     sheets = await getSheetNames(buffer)
@@ -245,7 +273,6 @@ export async function createBatch(
   const allowedMime = [
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.ms-excel",
-    "application/octet-stream",
   ]
   if (!allowedMime.includes(file.type)) {
     return {
@@ -255,7 +282,7 @@ export async function createBatch(
     } as const
   }
 
-  const user = await requireRole("operator")
+  const user = await requireRoleRateLimited("operator")
 
   const projectRows = await db
     .select({ id: projects.id })
@@ -268,6 +295,20 @@ export async function createBatch(
 
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
+
+  const { fileTypeFromBuffer } = await import("file-type")
+  const detected = await fileTypeFromBuffer(buffer)
+  if (
+    !detected ||
+    detected.mime !==
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  ) {
+    return {
+      ok: false,
+      error: "parse",
+      message: "الملف ليس ملف Excel صالح",
+    } as const
+  }
 
   const sheetMappingRaw = formData.get("sheetMapping")
   let sheetTowerMap: Map<string, string> | undefined
@@ -648,7 +689,7 @@ export async function softDeleteBatch(input: {
     throw new Error("إدخال غير صالح")
   const id = (input as { id?: unknown }).id
   if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-  const user = await requireRole("operator")
+  const user = await requireRoleRateLimited("operator")
   const rows = await db
     .update(batchSessions)
     .set({ deletedBy: user.id, deletedAt: now })
@@ -692,7 +733,7 @@ export async function archiveBatch(input: {
     throw new Error("إدخال غير صالح")
   const id = (input as { id?: unknown }).id
   if (typeof id !== "number") throw new Error("المعرّف مطلوب")
-  const user = await requireRole("operator")
+  const user = await requireRoleRateLimited("operator")
   const rows = await db
     .update(batchSessions)
     .set({ archivedAt: now, updatedBy: user.id, updatedAt: now })
@@ -721,7 +762,7 @@ export async function sendBatch(input: {
     throw new Error("إدخال غير صالح")
   const batchId = (input as { batchId?: unknown }).batchId
   if (typeof batchId !== "number") throw new Error("معرّف الدفعة مطلوب")
-  const user = await requireRole("operator")
+  const user = await requireRoleRateLimited("operator")
 
   const batchRows = await db
     .select({ id: batchSessions.id, projectId: batchSessions.projectId })
@@ -936,7 +977,7 @@ export async function retryFailed(input: {
     throw new Error("إدخال غير صالح")
   const batchId = (input as { batchId?: unknown }).batchId
   if (typeof batchId !== "number") throw new Error("معرّف الدفعة مطلوب")
-  const user = await requireRole("operator")
+  const user = await requireRoleRateLimited("operator")
 
   const batchRows = await db
     .select({ id: batchSessions.id })
@@ -1074,7 +1115,7 @@ export async function sendWarning(input: {
   ) {
     throw new Error("معرّفات الفواتير مطلوبة")
   }
-  const user = await requireRole("operator")
+  const user = await requireRoleRateLimited("operator")
 
   const batchRows = await db
     .select({ id: batchSessions.id })

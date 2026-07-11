@@ -12,6 +12,7 @@ export function useBatchStatus(batchId: number, status: string) {
       refreshInterval: shouldPoll ? 3000 : 0,
       revalidateOnFocus: false,
       shouldRetryOnError: false,
+      dedupingInterval: 2000,
     }
   )
 }

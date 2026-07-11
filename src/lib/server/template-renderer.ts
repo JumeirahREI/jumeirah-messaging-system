@@ -17,10 +17,17 @@ function formatAmount(amount: number): string {
   })
 }
 
+function sanitizeLabel(label: string): string {
+  const stripped = label
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .slice(0, 100)
+  return stripped
+}
+
 function substitute(template: string, vars: TemplateVars): string {
   return template
     .replace("{amount}", formatAmount(vars.amount))
-    .replace("{unit_label}", vars.unit_label)
+    .replace("{unit_label}", sanitizeLabel(vars.unit_label))
 }
 
 export function renderNotification(vars: TemplateVars): string {

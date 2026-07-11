@@ -33,8 +33,26 @@ export const contactLinkSchema = z.object({
 
 export const phoneNumberSchema = z.object({
   contactId: z.number(),
-  number: z.string().min(1, "الرقم مطلوب"),
+  number: z
+    .string()
+    .min(1, "الرقم مطلوب")
+    .transform(sanitizePhoneNumber)
+    .refine(isValidYemeniPhone, "رقم هاتف غير صالح. يجب أن يبدأ بـ +967 أو 7"),
 })
+
+function sanitizePhoneNumber(raw: string): string {
+  const stripped = raw.replace(/[\s\-()]/g, "")
+  if (stripped.startsWith("00967")) return `+967${stripped.slice(5)}`
+  if (stripped.startsWith("967")) return `+${stripped}`
+  if (stripped.startsWith("7") && stripped.length === 9)
+    return `+967${stripped}`
+  if (stripped.startsWith("+967")) return stripped
+  return stripped
+}
+
+function isValidYemeniPhone(number: string): boolean {
+  return /^\+967[0-9]{9}$/.test(number)
+}
 
 export const userCreateSchema = z.object({
   fullname: z.string().min(1, "الاسم الكامل مطلوب"),

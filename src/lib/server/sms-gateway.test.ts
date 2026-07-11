@@ -188,7 +188,7 @@ describe("AlawaelSmsGateway", () => {
   it("getBalance returns trimmed balance body", async () => {
     const fetchFn = mockFetch("  1234.56  ") as unknown as FetchLike
     const gw = new AlawaelSmsGateway(
-      { ...baseConfig, balanceUrl: "http://balance.example/AlawaelEstalam" },
+      { ...baseConfig, balanceUrl: "https://balance.example/AlawaelEstalam" },
       { fetchFn }
     )
     expect(await gw.getBalance()).toBe("1234.56")

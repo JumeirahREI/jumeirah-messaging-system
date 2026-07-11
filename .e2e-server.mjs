@@ -6,7 +6,21 @@ import { fileURLToPath } from "node:url"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-for (const line of readFileSync(join(__dirname, ".env"), "utf8").split("\n")) {
+if (process.env.NODE_ENV === "production") {
+  console.error("E2E server must not run in production.")
+  process.exit(1)
+}
+
+const envPath = existsSync(join(__dirname, ".env.test"))
+  ? join(__dirname, ".env.test")
+  : join(__dirname, ".env")
+if (!existsSync(join(__dirname, ".env.test"))) {
+  console.warn(
+    "No .env.test found, falling back to .env. Create .env.test for E2E."
+  )
+}
+
+for (const line of readFileSync(envPath, "utf8").split("\n")) {
   const trimmed = line.trim()
   if (!trimmed || trimmed.startsWith("#")) continue
   const eq = trimmed.indexOf("=")

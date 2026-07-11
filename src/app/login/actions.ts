@@ -1,6 +1,7 @@
 "use server"
 
 import { signIn, signOut } from "@/auth"
+import { checkRateLimit, loginLimiter } from "@/lib/server/rate-limit"
 import { redirect } from "next/navigation"
 
 export async function loginAction(
@@ -12,6 +13,12 @@ export async function loginAction(
   if (!username || !password) {
     return { error: "اسم المستخدم وكلمة المرور مطلوبان" }
   }
+
+  const allowed = await checkRateLimit(loginLimiter, `login:${username}`)
+  if (!allowed) {
+    return { error: "محاولات كثيرة فاشلة. حاول مرة أخرى بعد 15 دقيقة" }
+  }
+
   try {
     await signIn("credentials", {
       username,

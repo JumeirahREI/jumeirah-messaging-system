@@ -13,6 +13,18 @@ vi.mock("@/lib/server/batch-processing", () => ({
   processPendingMessages: vi.fn(async () => {}),
 }))
 
+vi.mock("@/lib/server/rate-limit", () => ({
+  checkRateLimit: vi.fn(async () => true),
+  mutationLimiter: null,
+}))
+
+vi.mock("file-type", () => ({
+  fileTypeFromBuffer: vi.fn(async () => ({
+    mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ext: "xlsx",
+  })),
+}))
+
 vi.mock("@/lib/server/excel-parser", () => ({
   parseInvoiceExcel: vi.fn(async () => []),
   isExcelParseError: vi.fn(() => false),

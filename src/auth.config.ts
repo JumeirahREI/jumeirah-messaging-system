@@ -23,7 +23,9 @@ type AugmentedJWT = {
 }
 
 export const authConfig = {
-  session: { strategy: "jwt", maxAge: 60 * 60 * 8 },
+  trustHost: true,
+  secret: process.env.AUTH_SECRET,
+  session: { strategy: "jwt", maxAge: 60 * 60 * 2 },
   pages: { signIn: "/login" },
   callbacks: {
     jwt({ token, user }) {
@@ -49,6 +51,19 @@ export const authConfig = {
       }
       return session
     },
+    redirect({ url, baseUrl }) {
+      if (url.startsWith("/")) return new URL(url, baseUrl).toString()
+      if (new URL(url).origin === baseUrl) return url
+      return baseUrl
+    },
   },
   providers: [],
 } satisfies NextAuthConfig
+
+if (
+  !process.env.AUTH_SECRET &&
+  process.env.NODE_ENV === "production" &&
+  !process.env.NETLIFY
+) {
+  throw new Error("AUTH_SECRET environment variable is required in production")
+}

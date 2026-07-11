@@ -12,3 +12,15 @@
 #   AUTH_SECRET         — NextAuth.js signing secret (>= 32 chars)
 #   AUTH_URL            — NextAuth.js base URL (production)
 #   SMS_FAIL_RATE       — (optional) 0..1 simulated failure rate for FakeSmsGateway
+#   NETLIFY_FUNCTION_SECRET — shared secret for process-batch-background auth
+#   UPSTASH_REDIS_REST_URL  — Upstash Redis REST URL (rate limiting)
+#   UPSTASH_REDIS_REST_TOKEN — Upstash Redis REST token (rate limiting)
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"

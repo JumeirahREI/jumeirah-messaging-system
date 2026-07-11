@@ -25,7 +25,6 @@ export class FakeSmsGateway implements SmsGateway {
 }
 
 const DEFAULT_SEND_URL = "https://sms.alawaeltec.com/MainServlet"
-const DEFAULT_BALANCE_URL = "http://185.216.203.97:8070/AlawaelEstalam"
 const DEFAULT_CODING = 2
 const PART_CHAR_LIMIT = 326
 const SUCCESS_CODE = 0
@@ -106,7 +105,9 @@ export class AlawaelSmsGateway implements SmsGateway {
     this.username = config.username
     this.password = config.password
     this.sendUrl = config.sendUrl ?? DEFAULT_SEND_URL
-    this.balanceUrl = config.balanceUrl ?? DEFAULT_BALANCE_URL
+    if (!this.sendUrl.startsWith("https://"))
+      throw new Error("ALAWAEL_SEND_URL must use HTTPS")
+    this.balanceUrl = config.balanceUrl ?? ""
     this.coding = config.coding ?? DEFAULT_CODING
     this.fetchFn = opts.fetchFn ?? (globalThis.fetch as FetchLike)
   }
@@ -141,6 +142,10 @@ export class AlawaelSmsGateway implements SmsGateway {
   }
 
   async getBalance(): Promise<string> {
+    if (!this.balanceUrl)
+      throw new Error("ALAWAEL_BALANCE_URL is not configured")
+    if (!this.balanceUrl.startsWith("https://"))
+      throw new Error("ALAWAEL_BALANCE_URL must use HTTPS")
     const url = new URL(this.balanceUrl)
     url.searchParams.set("O", this.orgName)
     url.searchParams.set("U", this.username)
