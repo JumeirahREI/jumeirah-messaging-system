@@ -1,5 +1,6 @@
 import { Building2, Layers } from "lucide-react"
 
+import { auth } from "@/auth"
 import { PageHeader } from "@/components/admin/page-header"
 import { ProjectApartments } from "@/components/admin/project-apartments"
 import { StatCard, StatGrid } from "@/components/admin/stat-card"
@@ -16,6 +17,8 @@ export default async function EditProjectPage({
   const { projectId } = await params
   const id = Number(projectId)
   if (Number.isNaN(id)) throw new Error("معرّف مشروع غير صالح")
+  const session = await auth()
+  const isAdmin = session?.user?.isAdmin ?? false
   const [project, towers, apartments] = await Promise.all([
     getProject({ id }),
     listTowers({ projectId: id }),
@@ -51,6 +54,7 @@ export default async function EditProjectPage({
           apartments={apartments}
           towers={towers}
           projectId={projectId}
+          isAdmin={isAdmin}
         />
       </section>
     </div>

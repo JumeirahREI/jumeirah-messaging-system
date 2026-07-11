@@ -20,10 +20,12 @@ export function ProjectApartments({
   apartments,
   towers,
   projectId,
+  isAdmin,
 }: {
   apartments: ApartmentWithTowerRow[]
   towers: TowerRow[]
   projectId: string
+  isAdmin: boolean
 }) {
   const [towerFilter, setTowerFilter] = useState<string>("all")
   const { query, setQuery, filtered } = useSearchFilter(
@@ -85,10 +87,16 @@ export function ProjectApartments({
             ))}
           </NativeSelect>
         </div>
-        <Button size="sm" nativeButton={false} render={<Link href={newHref} />}>
-          <Plus className="size-4" />
-          شقة جديدة
-        </Button>
+        {isAdmin ? (
+          <Button
+            size="sm"
+            nativeButton={false}
+            render={<Link href={newHref} />}
+          >
+            <Plus className="size-4" />
+            شقة جديدة
+          </Button>
+        ) : null}
       </div>
 
       {towerFiltered.length === 0 ? (

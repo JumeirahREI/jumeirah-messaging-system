@@ -10,8 +10,10 @@ import type { ProjectWithCountsRow } from "@/lib/server/reference-data"
 
 export function ProjectsGrid({
   projects,
+  isAdmin,
 }: {
   projects: ProjectWithCountsRow[]
+  isAdmin: boolean
 }) {
   const { query, setQuery, filtered } = useSearchFilter(projects, (p, q) =>
     p.title.toLowerCase().includes(q)
@@ -23,8 +25,8 @@ export function ProjectsGrid({
         icon={Building2}
         title="لا توجد مشاريع بعد"
         description="ابدأ بإضافة أول مشروع لإدارة أبراجه وشققه وجهات الاتصال."
-        actionLabel="مشروع جديد"
-        actionHref="/admin/projects/new"
+        actionLabel={isAdmin ? "مشروع جديد" : undefined}
+        actionHref={isAdmin ? "/admin/projects/new" : undefined}
       />
     )
   }

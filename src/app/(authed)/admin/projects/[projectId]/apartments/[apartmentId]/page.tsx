@@ -1,5 +1,6 @@
 import { ContactRound, Phone } from "lucide-react"
 
+import { auth } from "@/auth"
 import { PageHeader } from "@/components/admin/page-header"
 import { StatCard, StatGrid } from "@/components/admin/stat-card"
 import {
@@ -21,6 +22,8 @@ export default async function EditApartmentPage({
   const { projectId, apartmentId } = await params
   const id = Number(apartmentId)
   if (Number.isNaN(id)) throw new Error("معرّف شقة غير صالح")
+  const session = await auth()
+  const isAdmin = session?.user?.isAdmin ?? false
   const [apartment, contacts, phoneNumbers, allContacts] = await Promise.all([
     getApartment({ id }),
     listApartmentContacts({ apartmentId: id }),
@@ -54,6 +57,7 @@ export default async function EditApartmentPage({
         contacts={contacts}
         phoneNumbers={phoneNumbers}
         allContacts={allContacts}
+        isAdmin={isAdmin}
       />
     </div>
   )

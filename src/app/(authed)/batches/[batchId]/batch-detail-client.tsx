@@ -19,6 +19,10 @@ import { useRouter } from "next/navigation"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 
+import {
+  AddContactDialog,
+  type ContactRow,
+} from "@/components/add-contact-dialog"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { PageHeader } from "@/components/page-header"
@@ -70,9 +74,11 @@ import { formatArabicDate } from "@/lib/utils"
 export function BatchDetailClient({
   batch,
   preview,
+  allContacts,
 }: {
   batch: BatchDetail
   preview: DraftPreview | null
+  allContacts: ContactRow[]
 }) {
   const router = useRouter()
   const { data: status } = useBatchStatus(batch.id, batch.status)
@@ -114,7 +120,11 @@ export function BatchDetailClient({
       </div>
 
       {batch.status === "draft" && preview && (
-        <DraftReview batch={batch} preview={preview} />
+        <DraftReview
+          batch={batch}
+          preview={preview}
+          allContacts={allContacts}
+        />
       )}
       {batch.status === "draft" && !preview && (
         <Skeleton className="h-64 w-full" />
@@ -221,9 +231,11 @@ function StatCard({
 function DraftReview({
   batch,
   preview,
+  allContacts,
 }: {
   batch: BatchDetail
   preview: DraftPreview
+  allContacts: ContactRow[]
 }) {
   const router = useRouter()
   const [acknowledged, setAcknowledged] = useState(false)
@@ -231,6 +243,8 @@ function DraftReview({
   const [sending, setSending] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [search, setSearch] = useState("")
+
+  const noRecipients = preview.matched.length === 0
 
   const coveragePercent = useMemo(() => {
     if (preview.coverage.total === 0) return 0
@@ -271,6 +285,22 @@ function DraftReview({
 
   return (
     <div className="flex flex-col gap-6">
+      {noRecipients && (
+        <Alert className="border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-400">
+          <TriangleAlert className="size-4" />
+          <AlertTitle>لا توجد شقق جاهزة للإرسال</AlertTitle>
+          <AlertDescription className="text-amber-700/90 dark:text-amber-400/90">
+            جميع الشقق المطابقة لا تحتوي على مستلمي إشعارات بأرقام هاتف. أضف
+            جهات اتصال وأرقام هاتف للشقق، ثم حدّث هذه الصفحة.{" "}
+            <Link
+              href={`/admin/projects/${batch.projectId}`}
+              className="font-medium underline underline-offset-4"
+            >
+              إدارة جهات اتصال المشروع
+            </Link>
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <StatCard
           icon={<Mail />}
@@ -406,7 +436,8 @@ function DraftReview({
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
-              هذه الشقق لن يتم إرسال رسائل لها. يجب الإقرار بذلك قبل الإرسال.
+              هذه الشقق لن يتم إرسال رسائل لها. أضف جهة اتصال ورقم هاتف لتفعيل
+              الإرسال، أو أقر بذلك قبل الإرسال.
             </p>
             <div className="rounded-lg border">
               <Table>
@@ -415,6 +446,7 @@ function DraftReview({
                     <TableHead>الشقة</TableHead>
                     <TableHead>العميل</TableHead>
                     <TableHead className="tabular-nums">الإجمالي</TableHead>
+                    <TableHead className="text-end">إجراء</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -425,18 +457,27 @@ function DraftReview({
                       <TableCell className="tabular-nums">
                         {c.total.toLocaleString("ar-EG")}
                       </TableCell>
+                      <TableCell className="text-end">
+                        <NoContactAddButton
+                          apartmentId={c.apartmentId}
+                          allContacts={allContacts}
+                          onMutate={() => router.refresh()}
+                        />
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={acknowledged}
-                onCheckedChange={(v) => setAcknowledged(v === true)}
-              />
-              أقر بأن هذه الشقق لن يتم إرسال رسائل لها
-            </label>
+            {!noRecipients && (
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={acknowledged}
+                  onCheckedChange={(v) => setAcknowledged(v === true)}
+                />
+                أقر بأن هذه الشقق لن يتم إرسال رسائل لها
+              </label>
+            )}
           </CardContent>
         </Card>
       )}
@@ -514,15 +555,15 @@ function DraftReview({
         </span>
         <Button
           disabled={
+            noRecipients ||
             (preview.noContacts.length > 0 && !acknowledged) ||
             (preview.unmatched.length > 0 && !unmatchedAck) ||
-            preview.matched.length === 0 ||
             sending
           }
           onClick={() => setConfirmOpen(true)}
         >
           <Send data-icon="inline-start" />
-          إرسال
+          {noRecipients ? "لا يوجد مستلمون" : "إرسال"}
         </Button>
       </div>
 
@@ -536,6 +577,27 @@ function DraftReview({
         onConfirm={handleSend}
       />
     </div>
+  )
+}
+
+function NoContactAddButton({
+  apartmentId,
+  allContacts,
+  onMutate,
+}: {
+  apartmentId: number
+  allContacts: ContactRow[]
+  onMutate: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <AddContactDialog
+      apartmentId={apartmentId}
+      available={allContacts}
+      open={open}
+      onOpenChange={setOpen}
+      onMutate={onMutate}
+    />
   )
 }
 

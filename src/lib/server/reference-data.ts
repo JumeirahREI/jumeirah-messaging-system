@@ -53,7 +53,7 @@ export type ProjectRow = {
 }
 
 export async function listProjects(): Promise<ProjectRow[]> {
-  await requireRole("admin")
+  await requireRole("operator")
   const rows = await db
     .select({
       id: projects.id,
@@ -74,7 +74,7 @@ export type ProjectWithCountsRow = ProjectRow & {
 export async function listProjectsWithCounts(): Promise<
   ProjectWithCountsRow[]
 > {
-  await requireRole("admin")
+  await requireRole("operator")
   const [projectsRows, towerCounts, aptCounts] = await Promise.all([
     db
       .select({
@@ -108,7 +108,7 @@ export async function listProjectsWithCounts(): Promise<
 export async function getProject(input: {
   id: number
 }): Promise<{ id: number; title: string } | null> {
-  await requireRole("admin")
+  await requireRole("operator")
   const rows = await db
     .select({ id: projects.id, title: projects.title })
     .from(projects)
@@ -207,7 +207,7 @@ export type TowerRow = {
 export async function listTowers(input: {
   projectId: number
 }): Promise<TowerRow[]> {
-  await requireRole("admin")
+  await requireRole("operator")
   const rows = await db
     .select({
       id: towers.id,
@@ -226,7 +226,7 @@ export type TowerWithCountsRow = TowerRow & { apartmentCount: number }
 export async function listTowersWithCounts(input: {
   projectId: number
 }): Promise<TowerWithCountsRow[]> {
-  await requireRole("admin")
+  await requireRole("operator")
   const [towerRows, aptCounts] = await Promise.all([
     db
       .select({
@@ -261,7 +261,7 @@ export async function listTowersWithCounts(input: {
 export async function getTower(input: {
   id: number
 }): Promise<{ id: number; projectId: number; label: string } | null> {
-  await requireRole("admin")
+  await requireRole("operator")
   const rows = await db
     .select({
       id: towers.id,
@@ -361,7 +361,7 @@ export type ApartmentRow = {
 export async function listApartments(input: {
   towerId: number
 }): Promise<ApartmentRow[]> {
-  await requireRole("admin")
+  await requireRole("operator")
   const rows = await db
     .select({
       id: apartments.id,
@@ -384,7 +384,7 @@ export type ApartmentWithTowerRow = ApartmentRow & { towerLabel: string }
 export async function listApartmentsByProject(input: {
   projectId: number
 }): Promise<ApartmentWithTowerRow[]> {
-  await requireRole("admin")
+  await requireRole("operator")
   const rows = await db
     .select({
       id: apartments.id,
@@ -414,7 +414,7 @@ export async function getApartment(input: { id: number }): Promise<{
   label: string
   unitNumber: string | null
 } | null> {
-  await requireRole("admin")
+  await requireRole("operator")
   const rows = await db
     .select({
       id: apartments.id,
@@ -531,7 +531,7 @@ export async function softDeleteApartment(input: {
 export type ContactRow = { id: number; fullname: string }
 
 export async function listContacts(): Promise<ContactRow[]> {
-  await requireRole("admin")
+  await requireRole("operator")
   const rows = await db
     .select({ id: contacts.id, fullname: contacts.fullname })
     .from(contacts)
@@ -543,7 +543,7 @@ export async function listContacts(): Promise<ContactRow[]> {
 export async function createContact(input: {
   fullname: string
 }): Promise<MutationResult<{ id: number; fullname: string }>> {
-  const user = await requireRole("admin")
+  const user = await requireRole("operator")
   return safeMutation(async () => {
     const [row] = await db
       .insert(contacts)
@@ -564,7 +564,7 @@ export type ApartmentContactRow = {
 export async function listApartmentContacts(input: {
   apartmentId: number
 }): Promise<ApartmentContactRow[]> {
-  await requireRole("admin")
+  await requireRole("operator")
   const rows = await db
     .select({
       id: apartmentContacts.id,
@@ -592,7 +592,7 @@ export async function linkContact(input: {
   role: ContactRole
   isNotificationRecipient: boolean
 }): Promise<MutationResult<{ id: number }>> {
-  const user = await requireRole("admin")
+  const user = await requireRole("operator")
   return safeMutation(async () => {
     const [row] = await db
       .insert(apartmentContacts)
@@ -613,7 +613,7 @@ export async function updateContactLink(input: {
   role: ContactRole
   isNotificationRecipient: boolean
 }): Promise<MutationResult<{ id: number }>> {
-  const user = await requireRole("admin")
+  const user = await requireRole("operator")
   return safeMutation(async () => {
     const row = await db
       .update(apartmentContacts)
@@ -639,7 +639,7 @@ export async function updateContactLink(input: {
 export async function unlinkContact(input: {
   id: number
 }): Promise<MutationResult<{ id: number }>> {
-  const user = await requireRole("admin")
+  const user = await requireRole("operator")
   const result = await db
     .update(apartmentContacts)
     .set({ deletedBy: user.id, deletedAt: now })
@@ -665,7 +665,7 @@ export type PhoneNumberRow = {
 export async function listPhoneNumbers(input: {
   contactId: number
 }): Promise<PhoneNumberRow[]> {
-  await requireRole("admin")
+  await requireRole("operator")
   const rows = await db
     .select({
       id: phoneNumbers.id,
@@ -692,7 +692,7 @@ export type ApartmentPhoneNumberRow = {
 export async function listPhoneNumbersForApartment(input: {
   apartmentId: number
 }): Promise<ApartmentPhoneNumberRow[]> {
-  await requireRole("admin")
+  await requireRole("operator")
   const rows = await db
     .select({
       id: phoneNumbers.id,
@@ -719,7 +719,7 @@ export async function addPhoneNumber(input: {
   contactId: number
   number: string
 }): Promise<MutationResult<{ id: number; contactId: number; number: string }>> {
-  const user = await requireRole("admin")
+  const user = await requireRole("operator")
   return safeMutation(async () => {
     const [row] = await db
       .insert(phoneNumbers)
@@ -741,7 +741,7 @@ export async function updatePhoneNumber(input: {
   id: number
   number: string
 }): Promise<MutationResult<{ id: number; number: string }>> {
-  const user = await requireRole("admin")
+  const user = await requireRole("operator")
   return safeMutation(async () => {
     const row = await db
       .update(phoneNumbers)
@@ -757,7 +757,7 @@ export async function updatePhoneNumber(input: {
 export async function deletePhoneNumber(input: {
   id: number
 }): Promise<MutationResult<{ id: number }>> {
-  const user = await requireRole("admin")
+  const user = await requireRole("operator")
   const result = await db
     .update(phoneNumbers)
     .set({ deletedBy: user.id, deletedAt: now })

@@ -6,6 +6,7 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 
+import { AddContactDialog } from "@/components/add-contact-dialog"
 import { RoleBadge, roleLabel } from "@/components/admin/role-badge"
 import {
   AlertDialog,
@@ -49,10 +50,8 @@ import {
 } from "@/components/ui/table"
 import {
   apartmentSchema,
-  contactLinkSchema,
   phoneNumberSchema,
   type ApartmentFormData,
-  type ContactLinkFormData,
   type PhoneNumberFormData,
 } from "@/lib/schemas"
 import type {
@@ -62,9 +61,7 @@ import type {
 } from "@/lib/server/reference-data"
 import {
   addPhoneNumber,
-  createContact,
   deletePhoneNumber,
-  linkContact,
   softDeleteApartment,
   unlinkContact,
   updateApartment,
@@ -81,6 +78,7 @@ export function EditApartmentForm({
   contacts,
   phoneNumbers,
   allContacts,
+  isAdmin = false,
 }: {
   apartmentId: number
   projectId: string
@@ -89,6 +87,7 @@ export function EditApartmentForm({
   contacts: ApartmentContactRow[]
   phoneNumbers: ApartmentPhoneNumberRow[]
   allContacts: ContactRow[]
+  isAdmin?: boolean
 }) {
   const router = useRouter()
   const [deleting, setDeleting] = useState(false)
@@ -135,77 +134,79 @@ export function EditApartmentForm({
 
   return (
     <div className="flex flex-col gap-6">
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <Card>
-          <CardHeader>
-            <CardTitle>تعديل الشقة</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="label">الاسم</Label>
-              <Input
-                id="label"
-                placeholder="A101"
-                {...register("label")}
-                disabled={isSubmitting}
-              />
-              {errors.label && (
-                <p className="text-sm text-destructive">
-                  {errors.label.message}
-                </p>
-              )}
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="unitNumber">رقم الوحدة (اختياري)</Label>
-              <Input
-                id="unitNumber"
-                {...register("unitNumber")}
-                disabled={isSubmitting}
-              />
-              {errors.unitNumber && (
-                <p className="text-sm text-destructive">
-                  {errors.unitNumber.message}
-                </p>
-              )}
-            </div>
-          </CardContent>
-          <CardFooter className="justify-between">
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "جارٍ الحفظ..." : "حفظ"}
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={deleting}
-                    className="hover:bg-destructive/10 hover:text-destructive"
-                    aria-label="حذف"
-                  >
-                    <Trash2 />
-                  </Button>
-                }
-              />
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>حذف الشقة؟</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    سيتم حذف الشقة وروابط جهات الاتصال. لا يمكن التراجع.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete}>
-                    حذف
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </CardFooter>
-        </Card>
-      </form>
+      {isAdmin && (
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <Card>
+            <CardHeader>
+              <CardTitle>تعديل الشقة</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="label">الاسم</Label>
+                <Input
+                  id="label"
+                  placeholder="A101"
+                  {...register("label")}
+                  disabled={isSubmitting}
+                />
+                {errors.label && (
+                  <p className="text-sm text-destructive">
+                    {errors.label.message}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="unitNumber">رقم الوحدة (اختياري)</Label>
+                <Input
+                  id="unitNumber"
+                  {...register("unitNumber")}
+                  disabled={isSubmitting}
+                />
+                {errors.unitNumber && (
+                  <p className="text-sm text-destructive">
+                    {errors.unitNumber.message}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+            <CardFooter className="justify-between">
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "جارٍ الحفظ..." : "حفظ"}
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={deleting}
+                      className="hover:bg-destructive/10 hover:text-destructive"
+                      aria-label="حذف"
+                    >
+                      <Trash2 />
+                    </Button>
+                  }
+                />
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>حذف الشقة؟</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      سيتم حذف الشقة وروابط جهات الاتصال. لا يمكن التراجع.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete}>
+                      حذف
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </CardFooter>
+          </Card>
+        </form>
+      )}
 
       <ContactsTable
         apartmentId={apartmentId}
@@ -483,228 +484,6 @@ function ContactRow({
   )
 }
 
-function AddContactDialog({
-  apartmentId,
-  available,
-  open,
-  onOpenChange,
-  onMutate,
-}: {
-  apartmentId: number
-  available: ContactRow[]
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  onMutate: () => void
-}) {
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<ContactLinkFormData>({
-    resolver: zodResolver(contactLinkSchema),
-    defaultValues: {
-      apartmentId,
-      contactId: undefined,
-      newName: "",
-      role: "owner",
-      isNotificationRecipient: true,
-    },
-  })
-  const [phones, setPhones] = useState<string[]>([""])
-  const contactId = watch("contactId")
-  const newName = watch("newName")
-  const role = watch("role")
-  const notify = watch("isNotificationRecipient")
-
-  function resetForm() {
-    reset({
-      apartmentId,
-      contactId: undefined,
-      newName: "",
-      role: "owner",
-      isNotificationRecipient: true,
-    })
-    setPhones([""])
-  }
-
-  async function onSubmit(data: ContactLinkFormData) {
-    let cid = data.contactId
-    if (data.newName && data.newName.trim().length > 0) {
-      const created = await createContact({ fullname: data.newName.trim() })
-      if (!created.ok) {
-        toast.error(created.error)
-        return
-      }
-      cid = created.data.id
-    }
-    if (cid === undefined || Number.isNaN(cid)) {
-      toast.error("اختر جهة اتصال أو أنشئ جديدة")
-      return
-    }
-    const result = await linkContact({
-      apartmentId,
-      contactId: cid,
-      role: data.role,
-      isNotificationRecipient: data.isNotificationRecipient,
-    })
-    if (!result.ok) {
-      toast.error(result.error)
-      return
-    }
-    const cleanPhones = phones.map((p) => p.trim()).filter((p) => p.length > 0)
-    for (const number of cleanPhones) {
-      const r = await addPhoneNumber({ contactId: cid, number })
-      if (!r.ok) toast.error(r.error)
-    }
-    toast.success("تمت إضافة جهة الاتصال")
-    resetForm()
-    onOpenChange(false)
-    onMutate()
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger
-        render={
-          <Button size="sm" nativeButton={false}>
-            <Plus className="size-4" />
-            إضافة جهة اتصال
-          </Button>
-        }
-      />
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>إضافة جهة اتصال</DialogTitle>
-          <DialogDescription>
-            اختر جهة موجودة أو أنشئ اسمًا جديدًا، ثم حدّد الدور والإشعار وأرقام
-            الهاتف.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="existing">جهة اتصال موجودة</Label>
-            <NativeSelect
-              id="existing"
-              className="w-full"
-              value={contactId !== undefined ? String(contactId) : ""}
-              onChange={(e) =>
-                setValue(
-                  "contactId",
-                  e.target.value && e.target.value !== ""
-                    ? Number(e.target.value)
-                    : undefined
-                )
-              }
-              disabled={isSubmitting}
-            >
-              <NativeSelectOption value="" disabled>
-                اختر...
-              </NativeSelectOption>
-              {available.length === 0 ? (
-                <NativeSelectOption value="__none" disabled>
-                  لا توجد متاحة
-                </NativeSelectOption>
-              ) : (
-                available.map((c) => (
-                  <NativeSelectOption key={c.id} value={String(c.id)}>
-                    {c.fullname}
-                  </NativeSelectOption>
-                ))
-              )}
-            </NativeSelect>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="h-px flex-1 bg-border" />
-            <span className="text-xs text-muted-foreground">أو</span>
-            <span className="h-px flex-1 bg-border" />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="newName">اسم جديد</Label>
-            <Input
-              id="newName"
-              placeholder="اكتب الاسم لإنشاء جهة جديدة"
-              {...register("newName")}
-              disabled={isSubmitting}
-            />
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="role">الدور</Label>
-              <NativeSelect
-                id="role"
-                className="w-full"
-                value={role}
-                onChange={(e) =>
-                  e.target.value &&
-                  setValue("role", e.target.value as ContactRole)
-                }
-                disabled={isSubmitting}
-              >
-                <NativeSelectOption value="owner">مالك</NativeSelectOption>
-                <NativeSelectOption value="tenant">مستأجر</NativeSelectOption>
-                <NativeSelectOption value="manager">مدير</NativeSelectOption>
-              </NativeSelect>
-            </div>
-            <label
-              htmlFor="notify"
-              className="flex cursor-pointer items-center gap-2 pt-7"
-            >
-              <Checkbox
-                id="notify"
-                checked={notify}
-                onCheckedChange={(v) =>
-                  setValue("isNotificationRecipient", v === true)
-                }
-                disabled={isSubmitting}
-              />
-              <span className="text-sm">مستلم إشعارات</span>
-            </label>
-          </div>
-
-          <PhoneNumbersEditor
-            phones={phones}
-            onChange={setPhones}
-            disabled={isSubmitting}
-          />
-
-          {(errors.contactId || errors.newName || errors.role) && (
-            <p className="text-sm text-destructive">
-              {errors.contactId?.message ||
-                errors.newName?.message ||
-                errors.role?.message}
-            </p>
-          )}
-          {newName === "" && contactId === undefined && (
-            <p className="text-sm text-muted-foreground">
-              اختر جهة اتصال أو أنشئ جديدة
-            </p>
-          )}
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              إلغاء
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "جارٍ الحفظ..." : "إضافة"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 function EditContactDialog({
   link,
   phoneNumbers,
@@ -959,59 +738,5 @@ function EditContactDialog({
         </div>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function PhoneNumbersEditor({
-  phones,
-  onChange,
-  disabled,
-}: {
-  phones: string[]
-  onChange: (v: string[]) => void
-  disabled?: boolean
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <Label>أرقام الهاتف (اختياري)</Label>
-      <div className="flex flex-col gap-2">
-        {phones.map((p, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <Input
-              value={p}
-              onChange={(e) =>
-                onChange(phones.map((x, j) => (j === i ? e.target.value : x)))
-              }
-              placeholder="مثال: 967777111222"
-              disabled={disabled}
-              className="flex-1 font-mono"
-            />
-            {phones.length > 1 && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => onChange(phones.filter((_, j) => j !== i))}
-                disabled={disabled}
-                className="text-destructive hover:text-destructive"
-              >
-                <X className="size-4" />
-              </Button>
-            )}
-          </div>
-        ))}
-      </div>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => onChange([...phones, ""])}
-        disabled={disabled}
-        className="w-fit"
-      >
-        <Plus className="size-4" />
-        رقم آخر
-      </Button>
-    </div>
   )
 }

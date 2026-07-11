@@ -166,6 +166,11 @@ export function AppSidebar({ session }: { session: SessionUser }) {
                 icon={<MessageSquare />}
                 label="دفعات الرسائل"
               />
+              <NavItem
+                to="/admin/projects"
+                icon={<Building2 />}
+                label="المشاريع"
+              />
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -177,11 +182,6 @@ export function AppSidebar({ session }: { session: SessionUser }) {
               <SidebarGroupLabel>الإدارة</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  <NavItem
-                    to="/admin/projects"
-                    icon={<Building2 />}
-                    label="المشاريع"
-                  />
                   <NavItem
                     to="/admin/users"
                     icon={<Users />}

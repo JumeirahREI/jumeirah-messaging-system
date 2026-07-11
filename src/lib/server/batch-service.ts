@@ -201,14 +201,6 @@ export type PreviewContact = {
   phoneNumbers: string[]
 }
 
-export type PreviewMatched = {
-  apartmentId: number
-  label: string
-  clientName: string
-  total: number
-  contacts: PreviewContact[]
-}
-
 export type PreviewNoContact = {
   apartmentId: number
   label: string
@@ -218,8 +210,6 @@ export type PreviewNoContact = {
 
 export type BatchPreview = {
   batchId: number
-  matched: PreviewMatched[]
-  noContacts: PreviewNoContact[]
   unmatchedCount: number
   missingCount: number
 }
@@ -367,73 +357,6 @@ export async function createBatch(
     })
     .returning({ id: batchSessions.id })
 
-  const matchedApartmentIds = apartmentRows.map((a) => a.id)
-  const linkRows = await db
-    .select({
-      apartmentId: apartmentContacts.apartmentId,
-      contactId: apartmentContacts.contactId,
-      contactName: contacts.fullname,
-      role: apartmentContacts.role,
-      isNotificationRecipient: apartmentContacts.isNotificationRecipient,
-    })
-    .from(apartmentContacts)
-    .innerJoin(contacts, eq(apartmentContacts.contactId, contacts.id))
-    .where(
-      and(
-        inArray(apartmentContacts.apartmentId, matchedApartmentIds),
-        isNull(apartmentContacts.deletedAt),
-        isNull(contacts.deletedAt),
-        eq(apartmentContacts.isNotificationRecipient, true)
-      )
-    )
-
-  const contactIds = linkRows.map((l) => l.contactId)
-  const phoneRows =
-    contactIds.length === 0
-      ? []
-      : await db
-          .select({
-            contactId: phoneNumbers.contactId,
-            number: phoneNumbers.number,
-          })
-          .from(phoneNumbers)
-          .where(
-            and(
-              inArray(phoneNumbers.contactId, contactIds),
-              isNull(phoneNumbers.deletedAt)
-            )
-          )
-          .orderBy(phoneNumbers.number)
-
-  const phonesByContact = new Map<number, string[]>()
-  for (const p of phoneRows) {
-    const list = phonesByContact.get(p.contactId) ?? []
-    list.push(p.number)
-    phonesByContact.set(p.contactId, list)
-  }
-
-  const contactsByApartment = new Map<
-    number,
-    Array<{
-      contactId: number
-      contactName: string
-      role: string
-      phoneNumbers: string[]
-    }>
-  >()
-  for (const l of linkRows) {
-    const list = contactsByApartment.get(l.apartmentId) ?? []
-    list.push({
-      contactId: l.contactId,
-      contactName: l.contactName,
-      role: l.role,
-      phoneNumbers: phonesByContact.get(l.contactId) ?? [],
-    })
-    contactsByApartment.set(l.apartmentId, list)
-  }
-
-  const matched: PreviewMatched[] = []
-  const noContacts: PreviewNoContact[] = []
   const invoiceInserts: Array<{
     batchId: number
     apartmentId: number
@@ -444,31 +367,13 @@ export async function createBatch(
   for (const p of parsed) {
     const apt = apartmentByLabel.get(p.label)
     if (!apt) continue
-    const aptContacts = contactsByApartment.get(apt.id) ?? []
-    const withPhones = aptContacts.filter((c) => c.phoneNumbers.length > 0)
-    if (withPhones.length === 0) {
-      noContacts.push({
-        apartmentId: apt.id,
-        label: p.label,
-        clientName: p.client_name,
-        total: p.total,
-      })
-    } else {
-      matched.push({
-        apartmentId: apt.id,
-        label: p.label,
-        clientName: p.client_name,
-        total: p.total,
-        contacts: withPhones,
-      })
-      invoiceInserts.push({
-        batchId: batch.id,
-        apartmentId: apt.id,
-        clientName: p.client_name,
-        total: p.total,
-        createdBy: user.id,
-      })
-    }
+    invoiceInserts.push({
+      batchId: batch.id,
+      apartmentId: apt.id,
+      clientName: p.client_name,
+      total: p.total,
+      createdBy: user.id,
+    })
   }
 
   if (invoiceInserts.length > 0) {
@@ -478,8 +383,6 @@ export async function createBatch(
   return {
     ok: true,
     batchId: batch.id,
-    matched,
-    noContacts,
     unmatchedCount: unmatched.length,
     missingCount,
   } as const
@@ -589,6 +492,7 @@ export async function getDraftPreview(input: {
     : []
   const allProjectApts = await db
     .select({
+      id: apartments.id,
       label: apartments.label,
       towerLabel: towers.label,
     })
@@ -601,10 +505,36 @@ export async function getDraftPreview(input: {
       )
     )
     .orderBy(apartments.label)
-  const { unmatched, missing, coverage } = computeReconciliation(
+  const { unmatched, missing } = computeReconciliation(
     excelLabels,
-    allProjectApts
+    allProjectApts.map(({ label, towerLabel }) => ({ label, towerLabel }))
   )
+  const emailableAptIds = await db
+    .select({ apartmentId: apartmentContacts.apartmentId })
+    .from(apartmentContacts)
+    .innerJoin(contacts, eq(apartmentContacts.contactId, contacts.id))
+    .innerJoin(phoneNumbers, eq(phoneNumbers.contactId, contacts.id))
+    .where(
+      and(
+        inArray(
+          apartmentContacts.apartmentId,
+          allProjectApts.map((a) => a.id)
+        ),
+        eq(apartmentContacts.isNotificationRecipient, true),
+        isNull(apartmentContacts.deletedAt),
+        isNull(contacts.deletedAt),
+        isNull(phoneNumbers.deletedAt)
+      )
+    )
+    .groupBy(apartmentContacts.apartmentId)
+  const emailableSet = new Set(emailableAptIds.map((r) => r.apartmentId))
+  const excelLabelSet = new Set(excelLabels)
+  const coverage = {
+    matched: allProjectApts.filter(
+      (a) => emailableSet.has(a.id) && excelLabelSet.has(a.label)
+    ).length,
+    total: allProjectApts.length,
+  }
   if (apartmentIds.length === 0) {
     return {
       matched: [],
