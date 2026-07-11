@@ -1,9 +1,9 @@
 [build]
   command = "bun run build"
-  publish = ".next"
 
 [build.environment]
   NODE_VERSION = "22"
+  NEXT_PLUGIN_FORCE_RUN = "true"
   # ALAWAEL_SEND_URL is a public API endpoint (also hardcoded as DEFAULT_SEND_URL
   # in sms-gateway.ts). ALAWAEL_ORG_NAME and ALAWAEL_USERNAME are both "Jumeirah"
   # — the company/project name that appears in docs, logo, and UI. None are real
@@ -29,3 +29,6 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
     Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
