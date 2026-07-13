@@ -32,10 +32,10 @@ export async function POST(
   if (Number.isNaN(batchId)) {
     return NextResponse.json({ error: "معرّف غير صالح" }, { status: 400 })
   }
-  try {
-    await processPendingMessages(batchId)
-    return NextResponse.json({ ok: true, batchId })
-  } catch {
-    return NextResponse.json({ error: "خطأ في المعالجة" }, { status: 500 })
-  }
+
+  void processPendingMessages(batchId).catch((err) => {
+    console.error(`[process] batch ${batchId} failed`, err)
+  })
+
+  return NextResponse.json({ ok: true, batchId }, { status: 202 })
 }

@@ -1,6 +1,10 @@
-import type { Handler } from "@netlify/functions"
+import type { Config, Handler } from "@netlify/functions"
 
 import { processPendingMessages } from "../../src/lib/server/batch-processing"
+
+export const config: Config = {
+  background: true,
+}
 
 export const handler: Handler = async (event) => {
   const authHeader = event.headers["authorization"] ?? ""
@@ -25,7 +29,8 @@ export const handler: Handler = async (event) => {
       statusCode: 200,
       body: JSON.stringify({ ok: true, batchId }),
     }
-  } catch {
+  } catch (err) {
+    console.error("[process-batch-background] failed", err)
     return {
       statusCode: 500,
       body: JSON.stringify({ error: "خطأ في المعالجة" }),

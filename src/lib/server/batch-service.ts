@@ -38,7 +38,7 @@ async function requireRoleRateLimited(
   return user
 }
 
-async function invokeBackgroundProcess(batchId: number): Promise<void> {
+function invokeBackgroundProcess(batchId: number): void {
   const isNetlify = Boolean(process.env.NETLIFY)
   const url = isNetlify
     ? `/.netlify/functions/process-batch-background`
@@ -50,15 +50,16 @@ async function invokeBackgroundProcess(batchId: number): Promise<void> {
   if (isNetlify && functionSecret) {
     headers["authorization"] = `Bearer ${functionSecret}`
   }
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ batchId }),
-    })
-  } catch {
-    await processPendingMessages(batchId)
-  }
+  void fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ batchId }),
+  }).catch((err) => {
+    console.error(`[invokeBackgroundProcess] fetch failed`, err)
+    void processPendingMessages(batchId).catch((e) =>
+      console.error(`[invokeBackgroundProcess] fallback failed`, e)
+    )
+  })
 }
 
 export type BatchRow = {
@@ -889,7 +890,7 @@ export async function sendBatch(input: {
     .set({ status: "sending", updatedBy: user.id, updatedAt: now })
     .where(eq(batchSessions.id, batchId))
 
-  await invokeBackgroundProcess(batchId)
+  invokeBackgroundProcess(batchId)
 
   return { ok: true, batchId } as const
 }
@@ -1026,7 +1027,7 @@ export async function retryFailed(input: {
     .set({ status: "sending", updatedBy: user.id, updatedAt: now })
     .where(eq(batchSessions.id, batchId))
 
-  await invokeBackgroundProcess(batchId)
+  invokeBackgroundProcess(batchId)
 
   return { ok: true, batchId } as const
 }
@@ -1270,7 +1271,7 @@ export async function sendWarning(input: {
     .set({ status: "sending", updatedBy: user.id, updatedAt: now })
     .where(eq(batchSessions.id, batchId))
 
-  await invokeBackgroundProcess(batchId)
+  invokeBackgroundProcess(batchId)
 
   return { ok: true, batchId } as const
 }

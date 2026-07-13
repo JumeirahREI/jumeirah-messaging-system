@@ -12,6 +12,8 @@ import { getSmsGateway } from "@/lib/server/sms-gateway"
 
 const now = sql`(datetime('now'))`
 
+const SEND_CONCURRENCY = 5
+
 export async function refreshBatchCounters(batchId: number): Promise<void> {
   const countRows = await db
     .select({ status: messages.status, count: sql<number>`count(*)` })
@@ -74,33 +76,42 @@ export async function processPendingMessages(batchId: number): Promise<void> {
     .where(inArray(phoneNumbers.id, phoneIds))
   const phoneMap = new Map(phoneRows.map((p) => [p.id, p.number]))
 
-  for (const m of pendingRows) {
-    const to = phoneMap.get(m.phoneNumberId) ?? ""
-    if (!to) {
-      await db
-        .update(messages)
-        .set({
-          status: "failed",
-          errorReason: "رقم الهاتف غير موجود",
-          updatedAt: now,
-        })
-        .where(eq(messages.id, m.id))
-      continue
-    }
-
-    const result = await gateway.send(to, m.contents)
-    if (result.ok) {
-      await db
-        .update(messages)
-        .set({ status: "sent", sentAt: now, updatedAt: now })
-        .where(eq(messages.id, m.id))
-    } else {
-      await db
-        .update(messages)
-        .set({ status: "failed", errorReason: result.error, updatedAt: now })
-        .where(eq(messages.id, m.id))
-    }
+  for (let i = 0; i < pendingRows.length; i += SEND_CONCURRENCY) {
+    const chunk = pendingRows.slice(i, i + SEND_CONCURRENCY)
+    await Promise.all(chunk.map((m) => sendOne(gateway, phoneMap, m)))
   }
 
   await refreshBatchCounters(batchId)
+}
+
+async function sendOne(
+  gateway: ReturnType<typeof getSmsGateway>,
+  phoneMap: Map<number, string>,
+  row: { id: number; phoneNumberId: number; contents: string }
+): Promise<void> {
+  const to = phoneMap.get(row.phoneNumberId) ?? ""
+  if (!to) {
+    await db
+      .update(messages)
+      .set({
+        status: "failed",
+        errorReason: "رقم الهاتف غير موجود",
+        updatedAt: now,
+      })
+      .where(eq(messages.id, row.id))
+    return
+  }
+
+  const result = await gateway.send(to, row.contents)
+  if (result.ok) {
+    await db
+      .update(messages)
+      .set({ status: "sent", sentAt: now, updatedAt: now })
+      .where(eq(messages.id, row.id))
+  } else {
+    await db
+      .update(messages)
+      .set({ status: "failed", errorReason: result.error, updatedAt: now })
+      .where(eq(messages.id, row.id))
+  }
 }
