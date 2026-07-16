@@ -81,6 +81,28 @@
 * **Empty States:** Do not invent manual empty states. Use a dedicated `Empty` component or follow a consistent pattern: a dimmed icon, a clear descriptive header, and a single, obvious primary call-to-action button.
 * **Loading States (Skeletons):** Use shadcn `<Skeleton />` loaders. Match the shape of the content to the final layout to avoid sudden content jumps.
 * **Form Field Consistency:** Wrap your form fields inside a unified `<FormField>` or a container matching the design layout. Ensure validation messages (`FormMessage`) do not shift layout spacing when triggered.
+* **Responsive Tables (Cards on Mobile):** Any `<Table>` used in the project **must** be replaced with a list of cards on mobile only. On medium and larger screens (`md` and up) the table stays exactly as is. Never let a data table render on small screens — horizontal scroll and cramped cells are unacceptable.
+  * **The Rule:** Render both representations and toggle them by breakpoint. Show the card list on mobile and hide it from `md` up (`md:hidden`); hide the table below `md` and show it from `md` up (`hidden md:block`). Use the `md` breakpoint as the single, consistent switch point across the whole project.
+  * Each mobile card should surface the same row data in a readable stacked layout (label/title prominent, secondary fields as muted text or inline chips) and preserve every row action (links, dropdowns, checkboxes) available in the table.
+
+```tsx
+// ✅ GOOD: card list on mobile, table from md up
+<div className="flex flex-col gap-3 md:hidden">
+  {rows.map((r) => (
+    <RowCard key={r.id} row={r} />
+  ))}
+</div>
+<div className="hidden overflow-hidden rounded-lg border md:block">
+  <Table>
+    <TableHeader>...</TableHeader>
+    <TableBody>
+      {rows.map((r) => (
+        <RowTable key={r.id} row={r} />
+      ))}
+    </TableBody>
+  </Table>
+</div>
+```
 
 ---
 

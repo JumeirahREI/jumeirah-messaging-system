@@ -81,14 +81,14 @@ export function ContactLinksTable({
           </CardContent>
         </Card>
       ) : (
-        <div className="flex flex-col gap-3 sm:hidden">
+        <div className="flex flex-col gap-3 md:hidden">
           {links.map((l) => (
             <LinkCard key={l.id} link={l} onMutate={onMutate} />
           ))}
         </div>
       )}
       {links.length > 0 && (
-        <Card className="hidden overflow-hidden p-0 sm:block">
+        <Card className="hidden overflow-hidden p-0 md:block">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
