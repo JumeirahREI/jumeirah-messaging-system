@@ -72,7 +72,8 @@ function SidebarProvider({
 
   // Close the mobile sidebar automatically on route change.
   React.useEffect(() => {
-    setOpenMobile(false)
+    const timeout = setTimeout(() => setOpenMobile(false), 0)
+    return () => clearTimeout(timeout)
   }, [pathname])
 
   // This is the internal state of the sidebar.

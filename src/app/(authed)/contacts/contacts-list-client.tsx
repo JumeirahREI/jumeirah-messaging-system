@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/admin/page-header"
 import { SearchInput } from "@/components/admin/search-input"
 import { CreateContactDialog } from "@/components/create-contact-dialog"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import {
   Table,
@@ -129,52 +130,79 @@ export function ContactsListClient({
           }
         />
       ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>الاسم</TableHead>
-                <TableHead className="tabular-nums">أرقام الهاتف</TableHead>
-                <TableHead className="tabular-nums">الشقق</TableHead>
-                <TableHead>تاريخ الإنشاء</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((c) => (
-                <TableRow
-                  key={c.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => router.push(`/contacts/${c.id}`)}
-                >
-                  <TableCell className="font-medium">
-                    <Link
-                      href={`/contacts/${c.id}`}
-                      className="hover:underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {c.fullname}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="tabular-nums">
-                    <span className="inline-flex items-center gap-1.5">
-                      <Phone className="size-3.5 text-muted-foreground" />
+        <>
+          <div className="flex flex-col gap-3 sm:hidden">
+            {rows.map((c) => (
+              <Card key={c.id} size="sm">
+                <CardContent className="flex flex-col gap-2">
+                  <Link
+                    href={`/contacts/${c.id}`}
+                    className="font-medium hover:underline"
+                  >
+                    {c.fullname}
+                  </Link>
+                  <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5 tabular-nums">
+                      <Phone className="size-3.5" />
                       {c.phoneCount}
                     </span>
-                  </TableCell>
-                  <TableCell className="tabular-nums">
-                    <span className="inline-flex items-center gap-1.5">
-                      <ContactRound className="size-3.5 text-muted-foreground" />
+                    <span className="inline-flex items-center gap-1.5 tabular-nums">
+                      <ContactRound className="size-3.5" />
                       {c.apartmentCount}
                     </span>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground tabular-nums">
-                    {formatDate(c.createdAt)}
-                  </TableCell>
+                    <span className="tabular-nums">{formatDate(c.createdAt)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="hidden rounded-lg border sm:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>الاسم</TableHead>
+                  <TableHead className="tabular-nums">أرقام الهاتف</TableHead>
+                  <TableHead className="tabular-nums">الشقق</TableHead>
+                  <TableHead>تاريخ الإنشاء</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {rows.map((c) => (
+                  <TableRow
+                    key={c.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => router.push(`/contacts/${c.id}`)}
+                  >
+                    <TableCell className="font-medium">
+                      <Link
+                        href={`/contacts/${c.id}`}
+                        className="hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {c.fullname}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Phone className="size-3.5 text-muted-foreground" />
+                        {c.phoneCount}
+                      </span>
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      <span className="inline-flex items-center gap-1.5">
+                        <ContactRound className="size-3.5 text-muted-foreground" />
+                        {c.apartmentCount}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {formatDate(c.createdAt)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       {totalPages > 1 && (

@@ -90,11 +90,11 @@ export function EditContactForm({
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>تعديل جهة الاتصال</CardTitle>
-        </CardHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <Card>
+          <CardHeader>
+            <CardTitle>تعديل جهة الاتصال</CardTitle>
+          </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-2">
               <Label htmlFor="fullname">الاسم</Label>
@@ -146,8 +146,8 @@ export function EditContactForm({
               </AlertDialogContent>
             </AlertDialog>
           </CardFooter>
-        </form>
-      </Card>
+        </Card>
+      </form>
 
       <Card>
         <CardHeader>

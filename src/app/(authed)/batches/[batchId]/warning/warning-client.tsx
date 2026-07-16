@@ -110,7 +110,30 @@ export function WarningClient({
             </span>
           </div>
 
-          <Card>
+          <div className="flex flex-col gap-3 sm:hidden">
+            {eligible.map((inv) => (
+              <Card key={inv.invoiceId} size="sm">
+                <CardContent className="flex flex-col gap-2">
+                  <label className="flex items-center gap-2">
+                    <Checkbox
+                      checked={selected.has(inv.invoiceId)}
+                      onCheckedChange={() => toggle(inv.invoiceId)}
+                      disabled={sending}
+                    />
+                    <span className="font-medium">{inv.label}</span>
+                  </label>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+                    <span>{inv.clientName}</span>
+                    <span className="tabular-nums">
+                      {inv.total.toLocaleString("en-US")}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <Card className="hidden sm:block">
             <CardHeader>
               <CardTitle>الفواتير المؤهلة للتحذير</CardTitle>
             </CardHeader>
