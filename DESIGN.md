@@ -88,5 +88,14 @@
 
 * **Client Boundaries:** Keep `"use client"` restricted strictly to leaf components. Keep wrapper layers and data fetching as React Server Components (RSC) to maximize performance.
 * **Package & Component Management:** The project utilizes **Bun** and specialized local agent configurations.
-  * Always install third-party dependencies using `bun add <package>`.
+  * Always install third-party dependencies using `bun add <package>` and run package binaries with `bunx` (e.g. `bunx shadcn@latest add <component>`). Never use `npm`, `npx`, `yarn`, or `pnpm` in code, scripts, or documentation.
   * **Critical:** When adding or managing UI components, **always use the custom `shadcn` skill/script found in the repository workspace**. Do not invoke raw `npx shadcn@latest` or build components manually if the workspace's local `shadcn` skill is available. Run setup operations via this local integration to enforce custom file structures, paths, and registry options automatically.
+
+---
+
+## 5. Responsive Table Behavior
+
+* **Mobile Rule:** On viewports below the `sm` breakpoint, every `<Table>` must be visually hidden and replaced with a vertical list of `<Card>` components that contain the same rows, data, and actions.
+* **Desktop/Medium Rule:** Tables remain the primary display on `sm` screens and larger; cards must be hidden at those sizes.
+* **Implementation Pattern:** Use `sm:hidden` on the card-list container and `hidden sm:block` (or an equivalent responsive visibility utility) on the table container so only one representation is visible at a time.
+* **Why:** Horizontal tables are unusable on narrow screens; cards preserve scannability and touch targets without horizontal scrolling.

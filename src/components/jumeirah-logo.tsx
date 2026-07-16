@@ -1,7 +1,7 @@
 "use client"
 
 import { useTheme } from "next-themes"
-import { useEffect, useState } from "react"
+import { useSyncExternalStore } from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -9,11 +9,25 @@ type JumeirahLogoProps = {
   className?: string
 }
 
+function subscribe() {
+  return () => {}
+}
+
+function getClientSnapshot() {
+  return true
+}
+
+function getServerSnapshot() {
+  return false
+}
+
 export function JumeirahLogo({ className }: JumeirahLogoProps) {
   const { resolvedTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => setMounted(true), [])
+  const mounted = useSyncExternalStore(
+    subscribe,
+    getClientSnapshot,
+    getServerSnapshot
+  )
 
   const src =
     mounted && resolvedTheme === "light"

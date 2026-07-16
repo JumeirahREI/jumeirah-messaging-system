@@ -98,7 +98,7 @@ describe("processPendingMessages", () => {
   it("marks message failed when phone number is missing", async () => {
     setResults([{ id: 7, phoneNumberId: 999, contents: "x" }], [], [])
 
-    const sendSpy = vi.fn(async () => ({ ok: true, messageId: "x" }))
+    const sendSpy = vi.fn(async () => ({ ok: true as const, messageId: "x" }))
     setSmsGateway(makeGateway(sendSpy))
 
     await processPendingMessages(42)
@@ -158,7 +158,7 @@ describe("processPendingMessages", () => {
   it("skips sending when no pending rows and refreshes counters", async () => {
     setResults([], [])
 
-    const sendSpy = vi.fn(async () => ({ ok: true, messageId: "x" }))
+    const sendSpy = vi.fn(async () => ({ ok: true as const, messageId: "x" }))
     setSmsGateway(makeGateway(sendSpy))
 
     await processPendingMessages(42)

@@ -19,7 +19,7 @@ const BATCH_STATUS: Record<
     label: "مكتملة",
     variant: "outline",
     className:
-      "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+      "border-success/30 bg-success/10 text-success-foreground",
   },
 }
 
@@ -35,7 +35,7 @@ const MESSAGE_STATUS: Record<
   sent: {
     label: "مرسلة",
     variant: "default",
-    className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+    className: "bg-success/15 text-success-foreground",
   },
   failed: { label: "فاشلة", variant: "destructive" },
 }

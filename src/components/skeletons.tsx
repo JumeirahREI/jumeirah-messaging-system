@@ -81,29 +81,43 @@ export function TableSkeleton({
   className?: string
 }) {
   return (
-    <div className={cn("rounded-md border", className)}>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            {Array.from({ length: cols }).map((_, i) => (
-              <TableHead key={i}>
-                <Skeleton className="h-4 w-full" />
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {Array.from({ length: rows }).map((_, r) => (
-            <TableRow key={r}>
-              {Array.from({ length: cols }).map((_, c) => (
-                <TableCell key={c}>
+    <div className={cn("flex flex-col gap-3", className)}>
+      <div className="flex flex-col gap-3 sm:hidden">
+        {Array.from({ length: rows }).map((_, r) => (
+          <Card key={r} size="sm">
+            <CardContent className="flex flex-col gap-2">
+              <Skeleton className="h-4 w-32" />
+              {Array.from({ length: Math.min(cols, 4) }).map((_, c) => (
+                <Skeleton key={c} className="h-3 w-full" />
+              ))}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className="hidden rounded-md border sm:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {Array.from({ length: cols }).map((_, i) => (
+                <TableHead key={i}>
                   <Skeleton className="h-4 w-full" />
-                </TableCell>
+                </TableHead>
               ))}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {Array.from({ length: rows }).map((_, r) => (
+              <TableRow key={r}>
+                {Array.from({ length: cols }).map((_, c) => (
+                  <TableCell key={c}>
+                    <Skeleton className="h-4 w-full" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   )
 }
