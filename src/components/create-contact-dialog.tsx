@@ -1,6 +1,6 @@
 "use client"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Plus } from "lucide-react"
+import { Phone, Plus } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 
@@ -35,17 +35,20 @@ export function CreateContactDialog({
     formState: { errors, isSubmitting },
   } = useForm<ContactFormData>({
     resolver: zodResolver(contactSchema),
-    defaultValues: { fullname: "" },
+    defaultValues: { fullname: "", phone: "" },
   })
 
   async function onSubmit(data: ContactFormData) {
-    const result = await createContact({ fullname: data.fullname.trim() })
+    const result = await createContact({
+      fullname: data.fullname.trim(),
+      phone: data.phone?.trim() || undefined,
+    })
     if (!result.ok) {
       toast.error(result.error)
       return
     }
     toast.success("تمت إضافة جهة الاتصال")
-    reset({ fullname: "" })
+    reset({ fullname: "", phone: "" })
     onOpenChange(false)
     onMutate()
   }
@@ -55,7 +58,7 @@ export function CreateContactDialog({
       open={open}
       onOpenChange={(v) => {
         onOpenChange(v)
-        if (!v) reset({ fullname: "" })
+        if (!v) reset({ fullname: "", phone: "" })
       }}
     >
       <DialogTrigger
@@ -70,7 +73,8 @@ export function CreateContactDialog({
         <DialogHeader>
           <DialogTitle>جهة اتصال جديدة</DialogTitle>
           <DialogDescription>
-            أدخل اسم جهة الاتصال. يمكن إضافة أرقام الهاتف وربط الشقق لاحقًا.
+            أدخل اسم جهة الاتصال ورقم الهاتف (اختياري). يمكن إضافة المزيد من
+            الأرقام وربط الشقق لاحقًا.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
@@ -87,6 +91,23 @@ export function CreateContactDialog({
               <p className="text-sm text-destructive">
                 {errors.fullname.message}
               </p>
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="phone">رقم الهاتف (اختياري)</Label>
+            <div className="relative">
+              <Phone className="absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="phone"
+                placeholder="7XXXXXXXX"
+                className="pr-9"
+                dir="ltr"
+                {...register("phone")}
+                disabled={isSubmitting}
+              />
+            </div>
+            {errors.phone && (
+              <p className="text-sm text-destructive">{errors.phone.message}</p>
             )}
           </div>
           <DialogFooter>

@@ -2,6 +2,7 @@
 import bcrypt from "bcryptjs"
 import { and, count, desc, eq, inArray, isNull, like, sql } from "drizzle-orm"
 
+import { extractLocalNumber, toStorageFormat } from "@/lib/phone"
 import {
   apartmentSchema,
   contactLinkSchema,
@@ -582,6 +583,7 @@ export async function listContacts(): Promise<ContactRow[]> {
 
 export async function createContact(input: {
   fullname: string
+  phone?: string
 }): Promise<MutationResult<{ id: number; fullname: string }>> {
   const user = await requireRoleRateLimited("operator")
   const parsed = contactSchema.safeParse(input)
@@ -592,6 +594,14 @@ export async function createContact(input: {
       .insert(contacts)
       .values({ fullname: parsed.data.fullname, ...actor(user) })
       .returning({ id: contacts.id, fullname: contacts.fullname })
+    if (parsed.data.phone) {
+      const local = extractLocalNumber(parsed.data.phone)
+      await db.insert(phoneNumbers).values({
+        contactId: row.id,
+        number: toStorageFormat(local),
+        ...actor(user),
+      })
+    }
     return { ok: true, data: row } as const
   })
 }
