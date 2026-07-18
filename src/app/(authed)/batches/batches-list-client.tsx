@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/empty-state"
 import { PageHeader } from "@/components/page-header"
 import { BatchStatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
@@ -155,101 +156,124 @@ export function BatchesListClient({
           }
         />
       ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>العنوان</TableHead>
-                <TableHead>المشروع</TableHead>
-                <TableHead>الحالة</TableHead>
-                <TableHead className="tabular-nums">مرسلة</TableHead>
-                <TableHead className="tabular-nums">فاشلة</TableHead>
-                <TableHead>تاريخ الإنشاء</TableHead>
-                <TableHead className="w-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((b) => (
-                <TableRow
-                  key={b.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => router.push(`/batches/${b.id}`)}
-                >
-                  <TableCell className="font-medium">
-                    <Link
-                      href={`/batches/${b.id}`}
-                      className="hover:underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {b.title}
-                    </Link>
-                  </TableCell>
-                  <TableCell>{b.projectTitle}</TableCell>
-                  <TableCell>
-                    <BatchStatusBadge status={b.status} />
-                  </TableCell>
-                  <TableCell className="tabular-nums">
-                    {b.sent > 0 ? (
-                      <span className="text-emerald-600 dark:text-emerald-400">
-                        {b.sent}
+        <>
+          <div className="flex flex-col gap-3 md:hidden">
+            {rows.map((b) => (
+              <Card
+                key={b.id}
+                data-size="sm"
+                className="relative ring-foreground/5 transition-all hover:shadow-md hover:ring-primary/30"
+              >
+                <Link
+                  href={`/batches/${b.id}`}
+                  className="absolute inset-0 z-10 rounded-xl"
+                  aria-label={`فتح ${b.title}`}
+                />
+                <CardContent className="flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <span className="truncate font-medium">{b.title}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {b.projectTitle}
                       </span>
-                    ) : (
-                      b.sent
-                    )}
-                  </TableCell>
-                  <TableCell className="tabular-nums">
-                    {b.failed > 0 ? (
-                      <span className="text-destructive">{b.failed}</span>
-                    ) : (
-                      b.failed
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground tabular-nums">
-                    {formatDate(b.createdAt)}
-                  </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="إجراءات"
-                          />
-                        }
-                      >
-                        <MoreHorizontal />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuGroup>
-                          {b.status === "completed" && (
-                            <DropdownMenuItem
-                              onClick={() => handleArchive(b.id)}
-                              disabled={busy}
-                            >
-                              <Archive data-icon="inline-start" />
-                              أرشفة
-                            </DropdownMenuItem>
-                          )}
-                          {b.status === "draft" && (
-                            <DropdownMenuItem
-                              variant="destructive"
-                              onClick={() => setConfirmDeleteId(b.id)}
-                              disabled={busy}
-                            >
-                              <Trash2 data-icon="inline-start" />
-                              حذف
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuGroup>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+                    </div>
+                    <div className="relative z-20 flex items-center gap-1">
+                      <BatchStatusBadge status={b.status} />
+                      <BatchRowActions
+                        batch={b}
+                        busy={busy}
+                        onArchive={handleArchive}
+                        onDelete={setConfirmDeleteId}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground tabular-nums">
+                    <span>
+                      مرسلة:{" "}
+                      {b.sent > 0 ? (
+                        <span className="text-success">{b.sent}</span>
+                      ) : (
+                        b.sent
+                      )}
+                    </span>
+                    <span>
+                      فاشلة:{" "}
+                      {b.failed > 0 ? (
+                        <span className="text-destructive">{b.failed}</span>
+                      ) : (
+                        b.failed
+                      )}
+                    </span>
+                    <span>{formatDate(b.createdAt)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="hidden rounded-lg border md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>العنوان</TableHead>
+                  <TableHead>المشروع</TableHead>
+                  <TableHead>الحالة</TableHead>
+                  <TableHead className="tabular-nums">مرسلة</TableHead>
+                  <TableHead className="tabular-nums">فاشلة</TableHead>
+                  <TableHead>تاريخ الإنشاء</TableHead>
+                  <TableHead className="w-10"></TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {rows.map((b) => (
+                  <TableRow
+                    key={b.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => router.push(`/batches/${b.id}`)}
+                  >
+                    <TableCell className="font-medium">
+                      <Link
+                        href={`/batches/${b.id}`}
+                        className="hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {b.title}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{b.projectTitle}</TableCell>
+                    <TableCell>
+                      <BatchStatusBadge status={b.status} />
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {b.sent > 0 ? (
+                        <span className="text-success">{b.sent}</span>
+                      ) : (
+                        b.sent
+                      )}
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {b.failed > 0 ? (
+                        <span className="text-destructive">{b.failed}</span>
+                      ) : (
+                        b.failed
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {formatDate(b.createdAt)}
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <BatchRowActions
+                        batch={b}
+                        busy={busy}
+                        onArchive={handleArchive}
+                        onDelete={setConfirmDeleteId}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       {totalPages > 1 && (
@@ -291,5 +315,51 @@ export function BatchesListClient({
         onConfirm={handleDelete}
       />
     </div>
+  )
+}
+
+function BatchRowActions({
+  batch,
+  busy,
+  onArchive,
+  onDelete,
+}: {
+  batch: BatchRow
+  busy: boolean
+  onArchive: (id: number) => void
+  onDelete: (id: number) => void
+}) {
+  if (batch.status !== "completed" && batch.status !== "draft") return null
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={<Button variant="ghost" size="icon-sm" aria-label="إجراءات" />}
+      >
+        <MoreHorizontal />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuGroup>
+          {batch.status === "completed" && (
+            <DropdownMenuItem
+              onClick={() => onArchive(batch.id)}
+              disabled={busy}
+            >
+              <Archive data-icon="inline-start" />
+              أرشفة
+            </DropdownMenuItem>
+          )}
+          {batch.status === "draft" && (
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => onDelete(batch.id)}
+              disabled={busy}
+            >
+              <Trash2 data-icon="inline-start" />
+              حذف
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/admin/page-header"
 import { SearchInput } from "@/components/admin/search-input"
 import { CreateContactDialog } from "@/components/create-contact-dialog"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import {
   Table,
@@ -129,52 +130,83 @@ export function ContactsListClient({
           }
         />
       ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>الاسم</TableHead>
-                <TableHead className="tabular-nums">أرقام الهاتف</TableHead>
-                <TableHead className="tabular-nums">الشقق</TableHead>
-                <TableHead>تاريخ الإنشاء</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((c) => (
-                <TableRow
-                  key={c.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => router.push(`/contacts/${c.id}`)}
-                >
-                  <TableCell className="font-medium">
-                    <Link
-                      href={`/contacts/${c.id}`}
-                      className="hover:underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {c.fullname}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="tabular-nums">
+        <>
+          <div className="flex flex-col gap-3 md:hidden">
+            {rows.map((c) => (
+              <Card
+                key={c.id}
+                data-size="sm"
+                className="relative ring-foreground/5 transition-all hover:shadow-md hover:ring-primary/30"
+              >
+                <Link
+                  href={`/contacts/${c.id}`}
+                  className="absolute inset-0 z-10 rounded-xl"
+                  aria-label={`فتح ${c.fullname}`}
+                />
+                <CardContent className="flex flex-col gap-2">
+                  <span className="font-medium">{c.fullname}</span>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground tabular-nums">
                     <span className="inline-flex items-center gap-1.5">
-                      <Phone className="size-3.5 text-muted-foreground" />
-                      {c.phoneCount}
+                      <Phone className="size-3.5" />
+                      {c.phoneCount} رقم
                     </span>
-                  </TableCell>
-                  <TableCell className="tabular-nums">
                     <span className="inline-flex items-center gap-1.5">
-                      <ContactRound className="size-3.5 text-muted-foreground" />
-                      {c.apartmentCount}
+                      <ContactRound className="size-3.5" />
+                      {c.apartmentCount} شقة
                     </span>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground tabular-nums">
-                    {formatDate(c.createdAt)}
-                  </TableCell>
+                    <span>{formatDate(c.createdAt)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="hidden rounded-lg border md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>الاسم</TableHead>
+                  <TableHead className="tabular-nums">أرقام الهاتف</TableHead>
+                  <TableHead className="tabular-nums">الشقق</TableHead>
+                  <TableHead>تاريخ الإنشاء</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {rows.map((c) => (
+                  <TableRow
+                    key={c.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => router.push(`/contacts/${c.id}`)}
+                  >
+                    <TableCell className="font-medium">
+                      <Link
+                        href={`/contacts/${c.id}`}
+                        className="hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {c.fullname}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Phone className="size-3.5 text-muted-foreground" />
+                        {c.phoneCount}
+                      </span>
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      <span className="inline-flex items-center gap-1.5">
+                        <ContactRound className="size-3.5 text-muted-foreground" />
+                        {c.apartmentCount}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {formatDate(c.createdAt)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       {totalPages > 1 && (

@@ -210,9 +210,9 @@ function StatCard({
 }) {
   const toneClass = {
     default: "text-foreground",
-    success: "text-emerald-600 dark:text-emerald-400",
+    success: "text-success",
     destructive: "text-destructive",
-    warning: "text-amber-600 dark:text-amber-400",
+    warning: "text-warning",
   }[tone]
   return (
     <Card>
@@ -293,10 +293,10 @@ function DraftReview({
   return (
     <div className="flex flex-col gap-6">
       {noRecipients && (
-        <Alert className="border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-400">
+        <Alert className="border-warning/40 bg-warning/5 text-warning">
           <TriangleAlert className="size-4" />
           <AlertTitle>لا توجد شقق جاهزة للإرسال</AlertTitle>
-          <AlertDescription className="text-amber-700/90 dark:text-amber-400/90">
+          <AlertDescription className="text-warning/90">
             جميع الشقق المطابقة لا تحتوي على مستلمي إشعارات بأرقام هاتف. أضف
             جهات اتصال وأرقام هاتف للشقق، ثم حدّث هذه الصفحة.{" "}
             <Link
@@ -384,10 +384,10 @@ function DraftReview({
 
       {preview.missing.length > 0 && (
         <Dialog>
-          <Alert className="border-blue-500/40 bg-blue-500/5 text-blue-700 dark:text-blue-400">
+          <Alert className="border-info/40 bg-info/5 text-info">
             <Building2 className="size-4" />
             <AlertTitle>شقق غير مضمونة في الملف</AlertTitle>
-            <AlertDescription className="text-blue-700/90 dark:text-blue-400/90">
+            <AlertDescription className="text-info/90">
               {preview.missing.length} شقة موجودة في قاعدة البيانات ولكنها غير
               موجودة في ملف Excel. تأكد من عدم نسيان أي شقة.
             </AlertDescription>
@@ -405,7 +405,20 @@ function DraftReview({
                 Excel.
               </DialogDescription>
             </DialogHeader>
-            <div className="max-h-[60vh] overflow-auto rounded-lg border">
+            <div className="flex max-h-[60vh] flex-col gap-2 overflow-auto md:hidden">
+              {preview.missing.map((m) => (
+                <div
+                  key={m.label}
+                  className="flex items-center justify-between gap-2 rounded-lg border p-3"
+                >
+                  <span className="font-medium">{m.label}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {m.towerLabel}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="hidden max-h-[60vh] overflow-auto rounded-lg border md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -430,9 +443,9 @@ function DraftReview({
       )}
 
       {preview.noContacts.length > 0 && (
-        <Card className="border-amber-500/40 bg-amber-500/5">
+        <Card className="border-warning/40 bg-warning/5">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+            <CardTitle className="flex items-center gap-2 text-warning">
               <AlertTriangle className="size-5" />
               شقق بدون مستلمي إشعارات
             </CardTitle>
@@ -442,7 +455,30 @@ function DraftReview({
               هذه الشقق لن يتم إرسال رسائل لها. أضف جهة اتصال ورقم هاتف لتفعيل
               الإرسال.
             </p>
-            <div className="rounded-lg border">
+            <div className="flex flex-col gap-3 md:hidden">
+              {preview.noContacts.map((c) => (
+                <div
+                  key={c.apartmentId}
+                  className="flex items-start justify-between gap-3 rounded-lg border p-3"
+                >
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <span className="font-medium">{c.label}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {c.clientName}
+                    </span>
+                    <span className="text-sm text-muted-foreground tabular-nums">
+                      الإجمالي: {c.total.toLocaleString("en-US")}
+                    </span>
+                  </div>
+                  <NoContactAddButton
+                    apartmentId={c.apartmentId}
+                    allContacts={allContacts}
+                    onMutate={() => router.refresh()}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="hidden rounded-lg border md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -527,39 +563,66 @@ function DraftReview({
             description="لا توجد شقق مطابقة لبحثك."
           />
         ) : (
-          <div className="rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>الشقة</TableHead>
-                  <TableHead>العميل</TableHead>
-                  <TableHead>جهات الاتصال</TableHead>
-                  <TableHead>أرقام الهاتف</TableHead>
-                  <TableHead className="tabular-nums">الإجمالي</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredMatched.map((m) => (
-                  <TableRow key={m.invoiceId}>
-                    <TableCell className="font-medium">{m.label}</TableCell>
-                    <TableCell>{m.clientName}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {m.contacts.map((c) => c.contactName).join("، ")}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground tabular-nums">
-                      {m.contacts
-                        .flatMap((c) => c.phoneNumbers)
-                        .map(toDisplayFormat)
-                        .join("، ")}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
+          <>
+            <div className="flex flex-col gap-3 md:hidden">
+              {filteredMatched.map((m) => (
+                <div
+                  key={m.invoiceId}
+                  className="flex flex-col gap-2 rounded-lg border p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{m.label}</span>
+                    <span className="text-sm text-muted-foreground tabular-nums">
                       {m.total.toLocaleString("en-US")}
-                    </TableCell>
+                    </span>
+                  </div>
+                  <span className="text-sm">{m.clientName}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {m.contacts.map((c) => c.contactName).join("، ")}
+                  </span>
+                  <span className="text-sm text-muted-foreground tabular-nums">
+                    {m.contacts
+                      .flatMap((c) => c.phoneNumbers)
+                      .map(toDisplayFormat)
+                      .join("، ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="hidden rounded-lg border md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>الشقة</TableHead>
+                    <TableHead>العميل</TableHead>
+                    <TableHead>جهات الاتصال</TableHead>
+                    <TableHead>أرقام الهاتف</TableHead>
+                    <TableHead className="tabular-nums">الإجمالي</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredMatched.map((m) => (
+                    <TableRow key={m.invoiceId}>
+                      <TableCell className="font-medium">{m.label}</TableCell>
+                      <TableCell>{m.clientName}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {m.contacts.map((c) => c.contactName).join("، ")}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground tabular-nums">
+                        {m.contacts
+                          .flatMap((c) => c.phoneNumbers)
+                          .map(toDisplayFormat)
+                          .join("، ")}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {m.total.toLocaleString("en-US")}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
         )}
         {search.trim() !== "" && preview.matched.length > 0 && (
           <p className="text-sm text-muted-foreground tabular-nums">
@@ -571,7 +634,7 @@ function DraftReview({
       <Dialog open={noContactsOpen} onOpenChange={setNoContactsOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+            <DialogTitle className="flex items-center gap-2 text-warning">
               <AlertTriangle className="size-5" />
               شقق بدون مستلمي إشعارات
             </DialogTitle>
@@ -581,7 +644,20 @@ function DraftReview({
               يمكنك إضافة جهات اتصال من الجدول أدناه قبل الإرسال.
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[40vh] overflow-auto rounded-lg border">
+          <div className="flex max-h-[40vh] flex-col gap-2 overflow-auto md:hidden">
+            {preview.noContacts.map((c) => (
+              <div
+                key={c.apartmentId}
+                className="flex items-center justify-between gap-2 rounded-lg border p-3"
+              >
+                <span className="font-medium">{c.label}</span>
+                <span className="text-sm text-muted-foreground">
+                  {c.clientName}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="hidden max-h-[40vh] overflow-auto rounded-lg border md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -777,50 +853,88 @@ function ProgressView({
               description="لا توجد رسائل بهذه الحالة أو بحثك."
             />
           ) : (
-            <div className="rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>الشقة</TableHead>
-                    <TableHead>جهة الاتصال</TableHead>
-                    <TableHead>الهاتف</TableHead>
-                    <TableHead>النوع</TableHead>
-                    <TableHead>الحالة</TableHead>
-                    <TableHead>الخطأ</TableHead>
-                    <TableHead>وقت الإرسال</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredMessages.map((m) => (
-                    <TableRow
-                      key={m.id}
-                      className="cursor-pointer"
-                      onClick={() => setSelectedApartment(m.apartmentLabel)}
-                    >
-                      <TableCell className="font-medium">
-                        {m.apartmentLabel}
-                      </TableCell>
-                      <TableCell>{m.contactName ?? "—"}</TableCell>
-                      <TableCell className="tabular-nums">
+            <>
+              <div className="flex flex-col gap-3 md:hidden">
+                {filteredMessages.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setSelectedApartment(m.apartmentLabel)}
+                    className="flex flex-col gap-2 rounded-lg border p-3 text-start"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">{m.apartmentLabel}</span>
+                      <MessageStatusBadge status={m.status} />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                      <span>{m.contactName ?? "—"}</span>
+                      <span className="tabular-nums">
                         {toDisplayFormat(m.phoneNumber)}
-                      </TableCell>
-                      <TableCell>
+                      </span>
+                      <span>
                         {m.templateType === "notification" ? "إشعار" : "تحذير"}
-                      </TableCell>
-                      <TableCell>
-                        <MessageStatusBadge status={m.status} />
-                      </TableCell>
-                      <TableCell className="text-sm text-destructive">
-                        {m.errorReason ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground tabular-nums">
-                        {m.sentAt ? formatDate(m.sentAt) : "—"}
-                      </TableCell>
+                      </span>
+                    </div>
+                    {m.errorReason && (
+                      <span className="text-sm text-destructive">
+                        {m.errorReason}
+                      </span>
+                    )}
+                    {m.sentAt && (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {formatDate(m.sentAt)}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <div className="hidden rounded-lg border md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>الشقة</TableHead>
+                      <TableHead>جهة الاتصال</TableHead>
+                      <TableHead>الهاتف</TableHead>
+                      <TableHead>النوع</TableHead>
+                      <TableHead>الحالة</TableHead>
+                      <TableHead>الخطأ</TableHead>
+                      <TableHead>وقت الإرسال</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredMessages.map((m) => (
+                      <TableRow
+                        key={m.id}
+                        className="cursor-pointer"
+                        onClick={() => setSelectedApartment(m.apartmentLabel)}
+                      >
+                        <TableCell className="font-medium">
+                          {m.apartmentLabel}
+                        </TableCell>
+                        <TableCell>{m.contactName ?? "—"}</TableCell>
+                        <TableCell className="tabular-nums">
+                          {toDisplayFormat(m.phoneNumber)}
+                        </TableCell>
+                        <TableCell>
+                          {m.templateType === "notification"
+                            ? "إشعار"
+                            : "تحذير"}
+                        </TableCell>
+                        <TableCell>
+                          <MessageStatusBadge status={m.status} />
+                        </TableCell>
+                        <TableCell className="text-sm text-destructive">
+                          {m.errorReason ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground tabular-nums">
+                          {m.sentAt ? formatDate(m.sentAt) : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
           {search.trim() !== "" && (
             <p className="text-sm text-muted-foreground tabular-nums">

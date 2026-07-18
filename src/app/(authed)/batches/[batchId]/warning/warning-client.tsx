@@ -115,7 +115,31 @@ export function WarningClient({
               <CardTitle>الفواتير المؤهلة للتحذير</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="rounded-lg border">
+              <div className="flex flex-col gap-3 md:hidden">
+                {eligible.map((inv) => (
+                  <label
+                    key={inv.invoiceId}
+                    className="flex cursor-pointer items-start gap-3 rounded-lg border bg-muted/30 p-3"
+                  >
+                    <Checkbox
+                      checked={selected.has(inv.invoiceId)}
+                      onCheckedChange={() => toggle(inv.invoiceId)}
+                      disabled={sending}
+                      className="mt-0.5"
+                    />
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <span className="font-medium">{inv.label}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {inv.clientName}
+                      </span>
+                      <span className="text-sm text-muted-foreground tabular-nums">
+                        الإجمالي: {inv.total.toLocaleString("en-US")}
+                      </span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              <div className="hidden rounded-lg border md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
