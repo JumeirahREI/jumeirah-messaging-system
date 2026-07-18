@@ -5,7 +5,7 @@ import { authConfig } from "@/auth.config"
 
 const { auth } = NextAuth(authConfig)
 
-const PUBLIC_ROUTES = ["/login", "/change-password"]
+const PUBLIC_ROUTES = ["/login", "/change-password", "/debug-sentry"]
 const AUTH_API_PREFIX = "/api/auth"
 
 export default auth((req) => {
@@ -43,6 +43,6 @@ export default auth((req) => {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/auth|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff|woff2)).*)",
+    "/((?!monitoring|_next/static|_next/image|favicon.ico|api/auth|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff|woff2)).*)",
   ],
 }
