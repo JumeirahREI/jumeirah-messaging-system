@@ -21,6 +21,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Spinner } from "@/components/ui/spinner"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { batchCreateSchema, type BatchCreateFormData } from "@/lib/schemas"
 import {
   createBatch,
@@ -46,6 +47,7 @@ export function NewBatchForm({
   projects: { id: number; title: string }[]
 }) {
   const router = useRouter()
+  const [mode, setMode] = useState<"automatic" | "manual">("automatic")
   const [file, setFile] = useState<File | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [result, setResult] = useState<null | {
@@ -68,6 +70,7 @@ export function NewBatchForm({
     defaultValues: {
       title: todayTitle(),
       projectId: "",
+      mode: "automatic",
     },
   })
 
@@ -123,14 +126,31 @@ export function NewBatchForm({
       toast.error("لا توجد مشاريع. أنشئ مشروعًا أولًا.")
       return
     }
-    if (!file) {
-      toast.error("اختر ملف Excel")
-      return
-    }
     setResult(null)
     const formData = new FormData()
     formData.set("title", data.title)
     formData.set("projectId", data.projectId)
+    formData.set("mode", mode)
+    if (mode === "manual") {
+      const res = await createBatch(formData)
+      if (!res.ok) {
+        if (res.error === "invalid_project") {
+          toast.error("المشروع غير صالح")
+        } else if (res.error === "empty_project") {
+          toast.error("لا توجد شقق في هذا المشروع")
+        } else {
+          toast.error("تعذّر إنشاء الدفعة")
+        }
+        return
+      }
+      toast.success("تم إنشاء الدفعة اليدوية")
+      router.push(`/batches/${res.batchId}`)
+      return
+    }
+    if (!file) {
+      toast.error("اختر ملف Excel")
+      return
+    }
     formData.set("file", file)
     const activeMapping: Record<string, string> = {}
     for (const [towerId, sheetName] of Object.entries(mapping)) {
@@ -171,7 +191,7 @@ export function NewBatchForm({
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <PageHeader
         title="دفعة جديدة"
-        description="ارفع ملف الفواتير لإنشاء دفعة إرسال"
+        description="أنشئ دفعة إرسال آلية من ملف Excel أو يدوية بإدخال المبالغ"
       />
 
       {projects.length === 0 ? (
@@ -231,125 +251,152 @@ export function NewBatchForm({
                     </p>
                   )}
                 </Field>
-                <Field>
-                  <FieldLabel htmlFor="file">ملف Excel (.xlsx)</FieldLabel>
-                  <input
-                    ref={fileInputRef}
-                    id="file"
-                    type="file"
-                    accept=".xlsx"
-                    required
-                    disabled={isSubmitting}
-                    onChange={(e) =>
-                      handleFileSelect(e.target.files?.[0] ?? null)
-                    }
-                    className="sr-only"
-                  />
-                  {file ? (
-                    <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
-                      <FileSpreadsheet className="size-5 shrink-0 text-muted-foreground" />
-                      <div className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate text-sm font-medium">
-                          {file.name}
-                        </span>
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                          {formatFileSize(file.size)}
-                        </span>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setFile(null)}
+                <Tabs
+                  value={mode}
+                  onValueChange={(v: unknown) =>
+                    setMode(v === "manual" ? "manual" : "automatic")
+                  }
+                  className="w-full"
+                >
+                  <TabsList className="w-full">
+                    <TabsTrigger value="automatic">آلي (Excel)</TabsTrigger>
+                    <TabsTrigger value="manual">يدوي</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="automatic">
+                    <Field>
+                      <FieldLabel htmlFor="file">ملف Excel (.xlsx)</FieldLabel>
+                      <input
+                        ref={fileInputRef}
+                        id="file"
+                        type="file"
+                        accept=".xlsx"
+                        required
                         disabled={isSubmitting}
-                        aria-label="إزالة الملف"
-                      >
-                        <X />
-                      </Button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      onDragOver={(e) => {
-                        e.preventDefault()
-                        setDragOver(true)
-                      }}
-                      onDragLeave={() => setDragOver(false)}
-                      onDrop={handleDrop}
-                      disabled={isSubmitting}
-                      className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/40 disabled:opacity-50 data-[drag=true]:border-primary data-[drag=true]:bg-primary/5"
-                      data-drag={dragOver}
-                    >
-                      <Upload className="size-6" />
-                      <span className="text-sm font-medium">
-                        اسحب الملف هنا أو اضغط للاختيار
-                      </span>
-                      <span className="text-xs">xlsx. فقط</span>
-                    </button>
-                  )}
-                </Field>
-                {previewLoading && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Spinner />
-                    جارٍ قراءة أوراق الملف...
-                  </div>
-                )}
-                {preview && !preview.ok && (
-                  <Alert variant="destructive">
-                    <AlertTitle>خطأ في قراءة الملف</AlertTitle>
-                    <AlertDescription>{preview.error}</AlertDescription>
-                  </Alert>
-                )}
-                {previewData &&
-                  previewData.towers.length > 0 &&
-                  previewData.towers.map((tower) => {
-                    const selectedSheet = mapping[tower.id] ?? null
-                    return (
-                      <Field key={tower.id}>
-                        <FieldLabel className="flex items-center gap-1.5">
-                          <Building2 className="size-4 text-muted-foreground" />
-                          البرج {tower.label}
-                        </FieldLabel>
-                        <NativeSelect
-                          className="w-full"
-                          value={selectedSheet ?? ""}
-                          onChange={(e) =>
-                            handleMappingChange(
-                              tower.id,
-                              e.target.value || null
-                            )
-                          }
+                        onChange={(e) =>
+                          handleFileSelect(e.target.files?.[0] ?? null)
+                        }
+                        className="sr-only"
+                      />
+                      {file ? (
+                        <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
+                          <FileSpreadsheet className="size-5 shrink-0 text-muted-foreground" />
+                          <div className="flex min-w-0 flex-1 flex-col">
+                            <span className="truncate text-sm font-medium">
+                              {file.name}
+                            </span>
+                            <span className="text-xs text-muted-foreground tabular-nums">
+                              {formatFileSize(file.size)}
+                            </span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setFile(null)}
+                            disabled={isSubmitting}
+                            aria-label="إزالة الملف"
+                          >
+                            <X />
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          onDragOver={(e) => {
+                            e.preventDefault()
+                            setDragOver(true)
+                          }}
+                          onDragLeave={() => setDragOver(false)}
+                          onDrop={handleDrop}
                           disabled={isSubmitting}
+                          className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/40 disabled:opacity-50 data-[drag=true]:border-primary data-[drag=true]:bg-primary/5"
+                          data-drag={dragOver}
                         >
-                          <NativeSelectOption value="">
-                            بدون ورقة
-                          </NativeSelectOption>
-                          {previewData.sheets.map((sheetName) => {
-                            const isUsed =
-                              usedSheets.has(sheetName) &&
-                              selectedSheet !== sheetName
-                            return (
-                              <NativeSelectOption
-                                key={sheetName}
-                                value={sheetName}
-                                disabled={isUsed}
-                              >
-                                {sheetName}
-                                {isUsed && " (مستخدمة)"}
+                          <Upload className="size-6" />
+                          <span className="text-sm font-medium">
+                            اسحب الملف هنا أو اضغط للاختيار
+                          </span>
+                          <span className="text-xs">xlsx. فقط</span>
+                        </button>
+                      )}
+                    </Field>
+                    {previewLoading && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Spinner />
+                        جارٍ قراءة أوراق الملف...
+                      </div>
+                    )}
+                    {preview && !preview.ok && (
+                      <Alert variant="destructive">
+                        <AlertTitle>خطأ في قراءة الملف</AlertTitle>
+                        <AlertDescription>{preview.error}</AlertDescription>
+                      </Alert>
+                    )}
+                    {previewData &&
+                      previewData.towers.length > 0 &&
+                      previewData.towers.map((tower) => {
+                        const selectedSheet = mapping[tower.id] ?? null
+                        return (
+                          <Field key={tower.id}>
+                            <FieldLabel className="flex items-center gap-1.5">
+                              <Building2 className="size-4 text-muted-foreground" />
+                              البرج {tower.label}
+                            </FieldLabel>
+                            <NativeSelect
+                              className="w-full"
+                              value={selectedSheet ?? ""}
+                              onChange={(e) =>
+                                handleMappingChange(
+                                  tower.id,
+                                  e.target.value || null
+                                )
+                              }
+                              disabled={isSubmitting}
+                            >
+                              <NativeSelectOption value="">
+                                بدون ورقة
                               </NativeSelectOption>
-                            )
-                          })}
-                        </NativeSelect>
-                      </Field>
-                    )
-                  })}
+                              {previewData.sheets.map((sheetName) => {
+                                const isUsed =
+                                  usedSheets.has(sheetName) &&
+                                  selectedSheet !== sheetName
+                                return (
+                                  <NativeSelectOption
+                                    key={sheetName}
+                                    value={sheetName}
+                                    disabled={isUsed}
+                                  >
+                                    {sheetName}
+                                    {isUsed && " (مستخدمة)"}
+                                  </NativeSelectOption>
+                                )
+                              })}
+                            </NativeSelect>
+                          </Field>
+                        )
+                      })}
+                  </TabsContent>
+                  <TabsContent value="manual">
+                    <Alert>
+                      <AlertTitle>الوضع اليدوي</AlertTitle>
+                      <AlertDescription>
+                        سيتم إنشاء صفوف فواتير لجميع شقق المشروع بمبلغ صفر.
+                        ستُدخل المبالغ لاحقًا من صفحة الدفعة قبل الإرسال.
+                      </AlertDescription>
+                    </Alert>
+                  </TabsContent>
+                </Tabs>
               </FieldGroup>
             </CardContent>
             <CardFooter>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting && <Spinner data-icon="inline-start" />}
-                {isSubmitting ? "جارٍ الإنشاء..." : "إنشاء ومعاينة"}
+                {isSubmitting
+                  ? "جارٍ الإنشاء..."
+                  : mode === "manual"
+                    ? "إنشاء الدفعة اليدوية"
+                    : "إنشاء ومعاينة"}
               </Button>
             </CardFooter>
           </Card>

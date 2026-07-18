@@ -4,6 +4,7 @@ import { projects } from "./projects"
 import { users } from "./users"
 
 export type BatchStatus = "draft" | "sending" | "completed"
+export type BatchMode = "automatic" | "manual"
 
 export const batchSessions = sqliteTable(
   "batch_sessions",
@@ -16,6 +17,7 @@ export const batchSessions = sqliteTable(
     sent: integer("sent").notNull().default(0),
     failed: integer("failed").notNull().default(0),
     status: text("status").$type<BatchStatus>().notNull().default("draft"),
+    mode: text("mode").$type<BatchMode>().notNull().default("automatic"),
     excelLabels: text("excel_labels"),
     createdBy: integer("created_by")
       .notNull()
@@ -28,6 +30,8 @@ export const batchSessions = sqliteTable(
     deletedAt: text("deleted_at"),
     deletedBy: integer("deleted_by").references(() => users.id),
     archivedAt: text("archived_at"),
+    lockedBy: integer("locked_by").references(() => users.id),
+    lockedAt: text("locked_at"),
   },
   (t) => ({
     projectIdx: index("batch_sessions_project_id_idx").on(t.projectId),

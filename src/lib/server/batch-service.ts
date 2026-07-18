@@ -13,7 +13,7 @@ import {
   isExcelParseError,
   parseInvoiceExcel,
 } from "./excel-parser"
-import type { BatchStatus } from "./schema"
+import type { BatchMode, BatchStatus } from "./schema"
 import {
   apartmentContacts,
   apartments,
@@ -24,6 +24,7 @@ import {
   phoneNumbers,
   projects,
   towers,
+  users,
 } from "./schema"
 import { renderNotification, renderWarning } from "./template-renderer"
 
@@ -68,6 +69,7 @@ export type BatchRow = {
   projectId: number
   projectTitle: string
   status: BatchStatus
+  mode: BatchMode
   sent: number
   failed: number
   createdAt: string | null
@@ -116,6 +118,7 @@ export async function listBatches(params?: {
       projectId: batchSessions.projectId,
       projectTitle: projects.title,
       status: batchSessions.status,
+      mode: batchSessions.mode,
       sent: batchSessions.sent,
       failed: batchSessions.failed,
       createdAt: batchSessions.createdAt,
@@ -247,21 +250,19 @@ export type CreateBatchError =
   | { ok: false; error: "parse"; message: string }
   | { ok: false; error: "invalid_project" }
   | { ok: false; error: "empty_parse" }
+  | { ok: false; error: "empty_project" }
 
 export type CreateBatchResult = ({ ok: true } & BatchPreview) | CreateBatchError
 
-export async function createBatch(
-  formData: FormData
+type ParsedInvoice = { label: string; client_name: string; total: number }
+
+async function createAutomaticInvoices(
+  formData: FormData,
+  pid: number,
+  userId: number,
+  batchId: number
 ): Promise<CreateBatchResult> {
-  if (!(formData instanceof FormData)) throw new Error("متوقع FormData")
-  const title = formData.get("title")
-  const projectId = formData.get("projectId")
   const file = formData.get("file")
-  if (typeof title !== "string" || title.trim().length === 0) {
-    throw new Error("العنوان مطلوب")
-  }
-  const pid = Number(projectId)
-  if (Number.isNaN(pid)) throw new Error("معرّف المشروع مطلوب")
   if (!(file instanceof File)) throw new Error("الملف مطلوب")
 
   if (file.size > 10 * 1024 * 1024) {
@@ -281,17 +282,6 @@ export async function createBatch(
       error: "parse",
       message: "نوع الملف غير مدعوم. يجب أن يكون ملف Excel",
     } as const
-  }
-
-  const user = await requireRoleRateLimited("operator")
-
-  const projectRows = await db
-    .select({ id: projects.id })
-    .from(projects)
-    .where(and(eq(projects.id, pid), isNull(projects.deletedAt)))
-    .limit(1)
-  if (projectRows.length === 0) {
-    return { ok: false, error: "invalid_project" } as const
   }
 
   const arrayBuffer = await file.arrayBuffer()
@@ -336,7 +326,7 @@ export async function createBatch(
     }
   }
 
-  let parsed
+  let parsed: ParsedInvoice[]
   try {
     parsed = await parseInvoiceExcel(buffer, sheetTowerMap)
   } catch (e) {
@@ -388,16 +378,10 @@ export async function createBatch(
     (a) => !excelLabelSet.has(a.label)
   ).length
 
-  const [batch] = await db
-    .insert(batchSessions)
-    .values({
-      title: title.trim(),
-      projectId: pid,
-      status: "draft",
-      excelLabels: JSON.stringify(labels),
-      createdBy: user.id,
-    })
-    .returning({ id: batchSessions.id })
+  await db
+    .update(batchSessions)
+    .set({ excelLabels: JSON.stringify(labels) })
+    .where(eq(batchSessions.id, batchId))
 
   const invoiceInserts: Array<{
     batchId: number
@@ -410,11 +394,11 @@ export async function createBatch(
     const apt = apartmentByLabel.get(p.label)
     if (!apt) continue
     invoiceInserts.push({
-      batchId: batch.id,
+      batchId,
       apartmentId: apt.id,
       clientName: p.client_name,
       total: p.total,
-      createdBy: user.id,
+      createdBy: userId,
     })
   }
 
@@ -424,10 +408,131 @@ export async function createBatch(
 
   return {
     ok: true,
-    batchId: batch.id,
+    batchId,
     unmatchedCount: unmatched.length,
     missingCount,
   } as const
+}
+
+async function createManualInvoices(
+  pid: number,
+  userId: number,
+  batchId: number
+): Promise<CreateBatchResult> {
+  const apartmentRows = await db
+    .select({ id: apartments.id })
+    .from(apartments)
+    .where(and(eq(apartments.projectId, pid), isNull(apartments.deletedAt)))
+
+  if (apartmentRows.length === 0) {
+    await db
+      .update(batchSessions)
+      .set({ deletedBy: userId, deletedAt: now })
+      .where(eq(batchSessions.id, batchId))
+    return { ok: false, error: "empty_project" } as const
+  }
+
+  const invoiceInserts = apartmentRows.map((a) => ({
+    batchId,
+    apartmentId: a.id,
+    clientName: "",
+    total: 0,
+    createdBy: userId,
+  }))
+
+  await db.insert(invoices).values(invoiceInserts)
+
+  return {
+    ok: true,
+    batchId,
+    unmatchedCount: 0,
+    missingCount: 0,
+  } as const
+}
+
+export async function createBatch(
+  formData: FormData
+): Promise<CreateBatchResult> {
+  if (!(formData instanceof FormData)) throw new Error("متوقع FormData")
+  const title = formData.get("title")
+  const projectId = formData.get("projectId")
+  const modeRaw = formData.get("mode")
+  if (typeof title !== "string" || title.trim().length === 0) {
+    throw new Error("العنوان مطلوب")
+  }
+  const pid = Number(projectId)
+  if (Number.isNaN(pid)) throw new Error("معرّف المشروع مطلوب")
+  const mode: "automatic" | "manual" =
+    modeRaw === "manual" ? "manual" : "automatic"
+
+  const user = await requireRoleRateLimited("operator")
+
+  const projectRows = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(and(eq(projects.id, pid), isNull(projects.deletedAt)))
+    .limit(1)
+  if (projectRows.length === 0) {
+    return { ok: false, error: "invalid_project" } as const
+  }
+
+  const [batch] = await db
+    .insert(batchSessions)
+    .values({
+      title: title.trim(),
+      projectId: pid,
+      status: "draft",
+      mode,
+      createdBy: user.id,
+    })
+    .returning({ id: batchSessions.id })
+
+  if (mode === "manual") {
+    return createManualInvoices(pid, user.id, batch.id)
+  }
+  return createAutomaticInvoices(formData, pid, user.id, batch.id)
+}
+
+export async function updateInvoiceTotal(input: {
+  invoiceId: number
+  total: number
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (typeof input !== "object" || input === null)
+    throw new Error("إدخال غير صالح")
+  const invoiceId = (input as { invoiceId?: unknown }).invoiceId
+  const total = (input as { total?: unknown }).total
+  if (typeof invoiceId !== "number") throw new Error("معرّف الفاتورة مطلوب")
+  if (typeof total !== "number" || Number.isNaN(total))
+    return { ok: false, error: "المبلغ غير صالح" }
+  if (!Number.isFinite(total)) return { ok: false, error: "المبلغ غير صالح" }
+  if (total < 0) return { ok: false, error: "المبلغ يجب أن يكون غير سالب" }
+
+  const user = await requireRoleRateLimited("operator")
+
+  const invoiceRows = await db
+    .select({
+      id: invoices.id,
+      batchId: invoices.batchId,
+      status: batchSessions.status,
+    })
+    .from(invoices)
+    .innerJoin(batchSessions, eq(invoices.batchId, batchSessions.id))
+    .where(and(eq(invoices.id, invoiceId), isNull(invoices.deletedAt)))
+    .limit(1)
+
+  if (invoiceRows.length === 0) {
+    return { ok: false, error: "الفاتورة غير موجودة" }
+  }
+  if (invoiceRows[0].status !== "draft") {
+    return { ok: false, error: "لا يمكن تعديل فاتورة في دفعة ليست مسودة" }
+  }
+
+  await db
+    .update(invoices)
+    .set({ total, updatedBy: user.id, updatedAt: now })
+    .where(eq(invoices.id, invoiceId))
+
+  return { ok: true }
 }
 
 export type BatchDetail = {
@@ -436,6 +541,7 @@ export type BatchDetail = {
   projectId: number
   projectTitle: string
   status: BatchStatus
+  mode: BatchMode
   sent: number
   failed: number
   createdAt: string | null
@@ -456,6 +562,7 @@ export async function getBatch(input: {
       projectId: batchSessions.projectId,
       projectTitle: projects.title,
       status: batchSessions.status,
+      mode: batchSessions.mode,
       sent: batchSessions.sent,
       failed: batchSessions.failed,
       createdAt: batchSessions.createdAt,
@@ -502,6 +609,7 @@ export async function getDraftPreview(input: {
       id: batchSessions.id,
       projectId: batchSessions.projectId,
       excelLabels: batchSessions.excelLabels,
+      mode: batchSessions.mode,
     })
     .from(batchSessions)
     .where(
@@ -514,6 +622,15 @@ export async function getDraftPreview(input: {
     .limit(1)
   if (batchRows.length === 0) return null
   const batchRow = batchRows[0]
+  if (batchRow.mode === "manual") {
+    return {
+      matched: [],
+      noContacts: [],
+      unmatched: [],
+      missing: [],
+      coverage: { matched: 0, total: 0 },
+    }
+  }
 
   const invoiceRows = await db
     .select({
@@ -693,7 +810,12 @@ export async function softDeleteBatch(input: {
   const user = await requireRoleRateLimited("operator")
   const rows = await db
     .update(batchSessions)
-    .set({ deletedBy: user.id, deletedAt: now })
+    .set({
+      deletedBy: user.id,
+      deletedAt: now,
+      lockedBy: null,
+      lockedAt: null,
+    })
     .where(
       and(
         eq(batchSessions.id, id),
@@ -766,7 +888,11 @@ export async function sendBatch(input: {
   const user = await requireRoleRateLimited("operator")
 
   const batchRows = await db
-    .select({ id: batchSessions.id, projectId: batchSessions.projectId })
+    .select({
+      id: batchSessions.id,
+      projectId: batchSessions.projectId,
+      mode: batchSessions.mode,
+    })
     .from(batchSessions)
     .where(
       and(
@@ -779,6 +905,7 @@ export async function sendBatch(input: {
   if (batchRows.length === 0) {
     return { ok: false, error: "الدفعة غير موجودة أو ليست مسودة" } as const
   }
+  const batchMode = batchRows[0].mode
 
   const invoiceRows = await db
     .select({
@@ -837,13 +964,16 @@ export async function sendBatch(input: {
   }
 
   const phonesByApartment = new Map<number, typeof phoneRows>()
+  const apartmentsWithContacts = new Set<number>()
   for (const l of linkRows) {
     const phones = phonesByContact.get(l.contactId) ?? []
+    const hasPhones = phones.length > 0
     const existing = phonesByApartment.get(l.apartmentId) ?? []
     for (const p of phones) {
       if (!existing.some((e) => e.id === p.id)) existing.push(p)
     }
     phonesByApartment.set(l.apartmentId, existing)
+    if (hasPhones) apartmentsWithContacts.add(l.apartmentId)
   }
 
   const apartmentLabels = new Map<number, string>(
@@ -855,6 +985,23 @@ export async function sendBatch(input: {
     .where(inArray(apartments.id, apartmentIds))
   for (const a of aptLabelRows) apartmentLabels.set(a.id, a.label)
 
+  if (batchMode === "manual") {
+    const blockingLabels: string[] = []
+    for (const inv of invoiceRows) {
+      if (!apartmentsWithContacts.has(inv.apartmentId) && inv.total > 0) {
+        const label =
+          apartmentLabels.get(inv.apartmentId) ?? `#${inv.apartmentId}`
+        blockingLabels.push(label)
+      }
+    }
+    if (blockingLabels.length > 0) {
+      return {
+        ok: false,
+        error: `الشقق التالية لها مبالغ ولكن لا توجد أرقام استقبال: ${blockingLabels.join("، ")}`,
+      } as const
+    }
+  }
+
   const messageInserts: Array<{
     invoiceId: number
     phoneNumberId: number
@@ -864,6 +1011,7 @@ export async function sendBatch(input: {
     createdBy: number
   }> = []
   for (const inv of invoiceRows) {
+    if (inv.total <= 0) continue
     const label = apartmentLabels.get(inv.apartmentId) ?? ""
     const body = renderNotification({ amount: inv.total, unit_label: label })
     const phones = phonesByApartment.get(inv.apartmentId) ?? []
@@ -887,7 +1035,13 @@ export async function sendBatch(input: {
 
   await db
     .update(batchSessions)
-    .set({ status: "sending", updatedBy: user.id, updatedAt: now })
+    .set({
+      status: "sending",
+      updatedBy: user.id,
+      updatedAt: now,
+      lockedBy: null,
+      lockedAt: null,
+    })
     .where(eq(batchSessions.id, batchId))
 
   invokeBackgroundProcess(batchId)
@@ -1288,4 +1442,265 @@ export async function sendWarning(input: {
   invokeBackgroundProcess(batchId)
 
   return { ok: true, batchId } as const
+}
+
+const LOCK_TIMEOUT_SECONDS = 5 * 60
+
+export type BatchLockInfo = {
+  lockedBy: number | null
+  lockedAt: string | null
+  lockedByName: string | null
+}
+
+export async function acquireBatchLock(input: {
+  batchId: number
+}): Promise<
+  { ok: true } | { ok: false; error: string; lockedBy: BatchLockInfo }
+> {
+  if (typeof input !== "object" || input === null)
+    throw new Error("إدخال غير صالح")
+  const batchId = (input as { batchId?: unknown }).batchId
+  if (typeof batchId !== "number") throw new Error("معرّف الدفعة مطلوب")
+  const user = await requireRoleRateLimited("operator")
+
+  const batchRows = await db
+    .select({
+      id: batchSessions.id,
+      status: batchSessions.status,
+      mode: batchSessions.mode,
+      lockedBy: batchSessions.lockedBy,
+      lockedAt: batchSessions.lockedAt,
+    })
+    .from(batchSessions)
+    .where(and(eq(batchSessions.id, batchId), isNull(batchSessions.deletedAt)))
+    .limit(1)
+  if (batchRows.length === 0) {
+    return {
+      ok: false,
+      error: "الدفعة غير موجودة",
+      lockedBy: { lockedBy: null, lockedAt: null, lockedByName: null },
+    }
+  }
+  const batch = batchRows[0]
+  if (batch.status !== "draft") {
+    return {
+      ok: false,
+      error: "الدفعة ليست مسودة",
+      lockedBy: { lockedBy: null, lockedAt: null, lockedByName: null },
+    }
+  }
+  if (batch.mode !== "manual") {
+    return {
+      ok: false,
+      error: "القفل ينطبق على الدفعات اليدوية فقط",
+      lockedBy: { lockedBy: null, lockedAt: null, lockedByName: null },
+    }
+  }
+
+  const expiredRows = await db
+    .select({
+      id: batchSessions.id,
+      lockedBy: batchSessions.lockedBy,
+      lockedAt: batchSessions.lockedAt,
+    })
+    .from(batchSessions)
+    .where(
+      and(
+        eq(batchSessions.id, batchId),
+        sql`${batchSessions.lockedAt} is not null`,
+        sql`${batchSessions.lockedAt} < datetime('now', '-${LOCK_TIMEOUT_SECONDS} seconds')`
+      )
+    )
+    .limit(1)
+  const isExpired = expiredRows.length > 0
+
+  if (batch.lockedBy !== null && batch.lockedBy !== user.id && !isExpired) {
+    const lockerName = await getUserName(batch.lockedBy)
+    return {
+      ok: false,
+      error: "الدفعة مقفلة بواسطة مستخدم آخر",
+      lockedBy: {
+        lockedBy: batch.lockedBy,
+        lockedAt: batch.lockedAt,
+        lockedByName: lockerName,
+      },
+    }
+  }
+
+  await db
+    .update(batchSessions)
+    .set({ lockedBy: user.id, lockedAt: now })
+    .where(eq(batchSessions.id, batchId))
+
+  return { ok: true }
+}
+
+export async function releaseBatchLock(input: {
+  batchId: number
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (typeof input !== "object" || input === null)
+    throw new Error("إدخال غير صالح")
+  const batchId = (input as { batchId?: unknown }).batchId
+  if (typeof batchId !== "number") throw new Error("معرّف الدفعة مطلوب")
+  const user = await requireRoleRateLimited("operator")
+
+  const rows = await db
+    .update(batchSessions)
+    .set({ lockedBy: null, lockedAt: null })
+    .where(
+      and(eq(batchSessions.id, batchId), eq(batchSessions.lockedBy, user.id))
+    )
+    .returning({ id: batchSessions.id })
+  if (rows.length === 0) {
+    return { ok: false, error: "لا تملك قفل هذه الدفعة" }
+  }
+  return { ok: true }
+}
+
+export async function heartbeatBatchLock(input: {
+  batchId: number
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (typeof input !== "object" || input === null)
+    throw new Error("إدخال غير صالح")
+  const batchId = (input as { batchId?: unknown }).batchId
+  if (typeof batchId !== "number") throw new Error("معرّف الدفعة مطلوب")
+  const user = await requireRole("operator")
+
+  const rows = await db
+    .update(batchSessions)
+    .set({ lockedAt: now })
+    .where(
+      and(eq(batchSessions.id, batchId), eq(batchSessions.lockedBy, user.id))
+    )
+    .returning({ id: batchSessions.id })
+  if (rows.length === 0) {
+    return { ok: false, error: "لا تملك قفل هذه الدفعة" }
+  }
+  return { ok: true }
+}
+
+export async function forceReleaseBatchLock(input: {
+  batchId: number
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (typeof input !== "object" || input === null)
+    throw new Error("إدخال غير صالح")
+  const batchId = (input as { batchId?: unknown }).batchId
+  if (typeof batchId !== "number") throw new Error("معرّف الدفعة مطلوب")
+  await requireRoleRateLimited("admin")
+
+  const rows = await db
+    .update(batchSessions)
+    .set({ lockedBy: null, lockedAt: null })
+    .where(eq(batchSessions.id, batchId))
+    .returning({ id: batchSessions.id })
+  if (rows.length === 0) {
+    return { ok: false, error: "الدفعة غير موجودة" }
+  }
+  return { ok: true }
+}
+
+async function getUserName(userId: number): Promise<string | null> {
+  const rows = await db
+    .select({ name: users.fullname })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+  return rows.length > 0 ? rows[0].name : null
+}
+
+export type ManualDraftInvoice = {
+  invoiceId: number
+  apartmentId: number
+  label: string
+  clientName: string
+  total: number
+  hasContacts: boolean
+}
+
+export async function getManualDraftInvoices(input: {
+  batchId: number
+}): Promise<ManualDraftInvoice[] | null> {
+  if (typeof input !== "object" || input === null)
+    throw new Error("إدخال غير صالح")
+  const batchId = (input as { batchId?: unknown }).batchId
+  if (typeof batchId !== "number") throw new Error("معرّف الدفعة مطلوب")
+  await requireRole("operator")
+
+  const batchRows = await db
+    .select({ id: batchSessions.id, mode: batchSessions.mode })
+    .from(batchSessions)
+    .where(
+      and(
+        eq(batchSessions.id, batchId),
+        eq(batchSessions.status, "draft"),
+        isNull(batchSessions.deletedAt)
+      )
+    )
+    .limit(1)
+  if (batchRows.length === 0) return null
+  if (batchRows[0].mode !== "manual") return []
+
+  const invoiceRows = await db
+    .select({
+      invoiceId: invoices.id,
+      apartmentId: invoices.apartmentId,
+      clientName: invoices.clientName,
+      total: invoices.total,
+    })
+    .from(invoices)
+    .where(and(eq(invoices.batchId, batchId), isNull(invoices.deletedAt)))
+
+  if (invoiceRows.length === 0) return []
+
+  const apartmentIds = invoiceRows.map((i) => i.apartmentId)
+  const labelRows = await db
+    .select({ id: apartments.id, label: apartments.label })
+    .from(apartments)
+    .where(inArray(apartments.id, apartmentIds))
+  const labels = new Map(labelRows.map((r) => [r.id, r.label]))
+
+  const linkRows = await db
+    .select({
+      apartmentId: apartmentContacts.apartmentId,
+      contactId: apartmentContacts.contactId,
+    })
+    .from(apartmentContacts)
+    .innerJoin(contacts, eq(apartmentContacts.contactId, contacts.id))
+    .where(
+      and(
+        inArray(apartmentContacts.apartmentId, apartmentIds),
+        isNull(apartmentContacts.deletedAt),
+        isNull(contacts.deletedAt),
+        eq(apartmentContacts.isNotificationRecipient, true)
+      )
+    )
+  const contactIds = linkRows.map((l) => l.contactId)
+  const phoneRows =
+    contactIds.length === 0
+      ? []
+      : await db
+          .select({ contactId: phoneNumbers.contactId })
+          .from(phoneNumbers)
+          .where(
+            and(
+              inArray(phoneNumbers.contactId, contactIds),
+              isNull(phoneNumbers.deletedAt)
+            )
+          )
+  const contactsWithPhones = new Set(phoneRows.map((p) => p.contactId))
+  const aptsWithContacts = new Set<number>()
+  for (const l of linkRows) {
+    if (contactsWithPhones.has(l.contactId)) {
+      aptsWithContacts.add(l.apartmentId)
+    }
+  }
+
+  return invoiceRows.map((inv) => ({
+    invoiceId: inv.invoiceId,
+    apartmentId: inv.apartmentId,
+    label: labels.get(inv.apartmentId) ?? `#${inv.apartmentId}`,
+    clientName: inv.clientName,
+    total: inv.total,
+    hasContacts: aptsWithContacts.has(inv.apartmentId),
+  }))
 }

@@ -27,6 +27,15 @@ export const apartmentSchema = z.object({
 
 export const contactSchema = z.object({
   fullname: z.string().min(1, "الاسم مطلوب"),
+  phone: z
+    .string()
+    .optional()
+    .refine((v) => !v || v.trim().length > 0, "الرقم مطلوب")
+    .transform((v) => (v ? v.trim() : undefined))
+    .refine(
+      (v) => !v || isValidYemeniPhone(extractLocalNumber(v)),
+      "رقم هاتف غير صالح. يجب أن يبدأ بـ 7 ثم 0 أو 1 أو 3 أو 7 أو 8، ويتكون من 9 أرقام"
+    ),
 })
 
 export const contactUpdateSchema = z.object({
@@ -71,6 +80,7 @@ export const userUpdateSchema = z.object({
 export const batchCreateSchema = z.object({
   title: z.string().min(1, "العنوان مطلوب"),
   projectId: z.string().min(1, "المشروع مطلوب"),
+  mode: z.enum(["automatic", "manual"]).default("automatic"),
 })
 
 export const batchFilterSchema = z.object({

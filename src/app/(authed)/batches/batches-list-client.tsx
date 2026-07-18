@@ -179,6 +179,11 @@ export function BatchesListClient({
                     </div>
                     <div className="relative z-20 flex items-center gap-1">
                       <BatchStatusBadge status={b.status} />
+                      {b.mode === "manual" && (
+                        <span className="rounded bg-info/15 px-1.5 py-0.5 text-xs font-medium text-info">
+                          يدوي
+                        </span>
+                      )}
                       <BatchRowActions
                         batch={b}
                         busy={busy}
@@ -241,7 +246,14 @@ export function BatchesListClient({
                     </TableCell>
                     <TableCell>{b.projectTitle}</TableCell>
                     <TableCell>
-                      <BatchStatusBadge status={b.status} />
+                      <div className="flex items-center gap-1">
+                        <BatchStatusBadge status={b.status} />
+                        {b.mode === "manual" && (
+                          <span className="rounded bg-info/15 px-1.5 py-0.5 text-xs font-medium text-info">
+                            يدوي
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="tabular-nums">
                       {b.sent > 0 ? (

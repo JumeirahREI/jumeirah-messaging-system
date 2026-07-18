@@ -19,7 +19,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import {
@@ -70,11 +70,17 @@ import type {
   BatchStatusMessage,
   BatchStatusResponse,
   DraftPreview,
+  ManualDraftInvoice,
 } from "@/lib/server/batch-service"
 import {
+  acquireBatchLock,
+  forceReleaseBatchLock,
+  heartbeatBatchLock,
+  releaseBatchLock,
   retryFailed,
   sendBatch,
   softDeleteBatch,
+  updateInvoiceTotal,
 } from "@/lib/server/batch-service"
 import { formatDate } from "@/lib/utils"
 
@@ -82,10 +88,16 @@ export function BatchDetailClient({
   batch,
   preview,
   allContacts,
+  manualInvoices,
+  currentUserId,
+  isAdmin,
 }: {
   batch: BatchDetail
   preview: DraftPreview | null
   allContacts: ContactRow[]
+  manualInvoices: ManualDraftInvoice[] | null
+  currentUserId: number | null
+  isAdmin: boolean
 }) {
   const router = useRouter()
   const { data: status } = useBatchStatus(batch.id, batch.status)
@@ -126,14 +138,25 @@ export function BatchDetailClient({
           )}
       </div>
 
-      {batch.status === "draft" && preview && (
+      {batch.status === "draft" &&
+        batch.mode === "manual" &&
+        manualInvoices && (
+          <ManualDraftReview
+            batch={batch}
+            invoices={manualInvoices}
+            allContacts={allContacts}
+            currentUserId={currentUserId}
+            isAdmin={isAdmin}
+          />
+        )}
+      {batch.status === "draft" && batch.mode === "automatic" && preview && (
         <DraftReview
           batch={batch}
           preview={preview}
           allContacts={allContacts}
         />
       )}
-      {batch.status === "draft" && !preview && (
+      {batch.status === "draft" && batch.mode === "automatic" && !preview && (
         <Skeleton className="h-64 w-full" />
       )}
       {(batch.status === "sending" || batch.status === "completed") &&
@@ -722,6 +745,433 @@ function NoContactAddButton({
       onOpenChange={setOpen}
       onMutate={onMutate}
     />
+  )
+}
+
+type LockState =
+  | { status: "loading" }
+  | { status: "acquired" }
+  | { status: "blocked"; lockedByName: string | null }
+  | { status: "error"; message: string }
+
+function useBatchLock({
+  batchId,
+  currentUserId,
+}: {
+  batchId: number
+  currentUserId: number | null
+}): {
+  state: LockState
+  retry: () => void
+  release: () => Promise<void>
+} {
+  const [state, setState] = useState<LockState>({ status: "loading" })
+
+  const acquire = useCallback(async () => {
+    if (currentUserId === null) {
+      setState({ status: "error", message: "غير مصرح" })
+      return
+    }
+    setState({ status: "loading" })
+    const res = await acquireBatchLock({ batchId })
+    if (res.ok) {
+      setState({ status: "acquired" })
+    } else if (res.error === "الدفعة مقفلة بواسطة مستخدم آخر") {
+      setState({ status: "blocked", lockedByName: res.lockedBy.lockedByName })
+    } else {
+      setState({ status: "error", message: res.error })
+    }
+  }, [batchId, currentUserId])
+
+  useEffect(() => {
+    void acquire()
+  }, [acquire])
+
+  useEffect(() => {
+    if (state.status !== "acquired") return
+    const interval = setInterval(() => {
+      void heartbeatBatchLock({ batchId }).then((res) => {
+        if (!res.ok) {
+          setState({ status: "blocked", lockedByName: null })
+        }
+      })
+    }, 60_000)
+    return () => clearInterval(interval)
+  }, [state.status, batchId])
+
+  useEffect(() => {
+    if (state.status !== "acquired") return
+    const handler = () => {
+      void releaseBatchLock({ batchId })
+    }
+    window.addEventListener("beforeunload", handler)
+    return () => {
+      window.removeEventListener("beforeunload", handler)
+      void releaseBatchLock({ batchId })
+    }
+  }, [state.status, batchId])
+
+  return {
+    state,
+    retry: () => void acquire(),
+    release: async () => {
+      await releaseBatchLock({ batchId })
+      setState({ status: "loading" })
+      void acquire()
+    },
+  }
+}
+
+function ManualDraftReview({
+  batch,
+  invoices,
+  allContacts,
+  currentUserId,
+  isAdmin,
+}: {
+  batch: BatchDetail
+  invoices: ManualDraftInvoice[]
+  allContacts: ContactRow[]
+  currentUserId: number | null
+  isAdmin: boolean
+}) {
+  const router = useRouter()
+  const lock = useBatchLock({ batchId: batch.id, currentUserId })
+  const [totals, setTotals] = useState<Record<number, number>>(() =>
+    Object.fromEntries(invoices.map((i) => [i.invoiceId, i.total]))
+  )
+  const [sending, setSending] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [blockError, setBlockError] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (q === "") return invoices
+    return invoices.filter((i) => i.label.toLowerCase().includes(q))
+  }, [invoices, search])
+
+  const withContactsAndAmount = invoices.filter(
+    (i) => i.hasContacts && (totals[i.invoiceId] ?? i.total) > 0
+  ).length
+  const blockingCount = invoices.filter(
+    (i) => !i.hasContacts && (totals[i.invoiceId] ?? i.total) > 0
+  ).length
+
+  async function commitTotal(invoiceId: number) {
+    const raw = totals[invoiceId]
+    if (raw === undefined) return
+    const inv = invoices.find((i) => i.invoiceId === invoiceId)
+    if (inv && inv.total === raw) return
+    const res = await updateInvoiceTotal({ invoiceId, total: raw })
+    if (!res.ok) {
+      toast.error(res.error)
+      setTotals((prev) => ({
+        ...prev,
+        [invoiceId]: inv?.total ?? 0,
+      }))
+      return
+    }
+    toast.success("تم تحديث المبلغ")
+    router.refresh()
+  }
+
+  async function handleSend() {
+    setSending(true)
+    const res = await sendBatch({ batchId: batch.id })
+    setSending(false)
+    setConfirmOpen(false)
+    if (!res.ok) {
+      setBlockError(res.error)
+      return
+    }
+    toast.success("بدأ الإرسال")
+    router.refresh()
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {lock.state.status === "loading" && (
+        <Alert>
+          <Spinner />
+          <AlertTitle>جارٍ الحصول على قفل الدفعة...</AlertTitle>
+          <AlertDescription>
+            تنتظر الصفحة حتى تتوفر الدفعة للتعديل.
+          </AlertDescription>
+        </Alert>
+      )}
+      {lock.state.status === "blocked" && (
+        <Alert className="border-warning/40 bg-warning/5 text-warning">
+          <TriangleAlert className="size-4" />
+          <AlertTitle>الدفعة مقفلة بواسطة مستخدم آخر</AlertTitle>
+          <AlertDescription className="text-warning/90">
+            {lock.state.lockedByName
+              ? `المستخدم: ${lock.state.lockedByName}`
+              : "مستخدم آخر"}{" "}
+            يقوم بتعديل هذه الدفعة حاليًا. يمكنك المحاولة لاحقًا.
+            <div className="mt-3 flex gap-2">
+              <Button variant="outline" size="sm" onClick={lock.retry}>
+                <RefreshCw data-icon="inline-start" />
+                إعادة المحاولة
+              </Button>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hover:bg-destructive/10 hover:text-destructive"
+                  onClick={async () => {
+                    const res = await forceReleaseBatchLock({
+                      batchId: batch.id,
+                    })
+                    if (!res.ok) {
+                      toast.error(res.error)
+                      return
+                    }
+                    toast.success("تم تحرير القفل")
+                    lock.retry()
+                  }}
+                >
+                  <Trash2 data-icon="inline-start" />
+                  تحرير القفل (مسؤول)
+                </Button>
+              )}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+      {lock.state.status === "error" && (
+        <Alert variant="destructive">
+          <AlertTitle>تعذّر الحصول على القفل</AlertTitle>
+          <AlertDescription>{lock.state.message}</AlertDescription>
+        </Alert>
+      )}
+      {lock.state.status === "acquired" && (
+        <Alert className="border-info/40 bg-info/5 text-info">
+          <CheckCircle2 className="size-4" />
+          <AlertTitle>أنت تحرر هذه الدفعة</AlertTitle>
+          <AlertDescription className="text-info/90">
+            القفل نشط. سيُحرَّر تلقائيًا عند مغادرة الصفحة أو انتهاء المهلة.
+            <Button
+              variant="outline"
+              size="sm"
+              className="ms-2"
+              onClick={() => void lock.release()}
+            >
+              تحرير القفل
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      {lock.state.status === "blocked" ? (
+        <div className="rounded-lg border p-4 text-center text-sm text-muted-foreground">
+          الجدول للقراءة فقط بينما الدفعة مقفلة بواسطة مستخدم آخر.
+        </div>
+      ) : lock.state.status === "acquired" ? (
+        <>
+          {blockingCount > 0 && (
+            <Alert className="border-warning/40 bg-warning/5 text-warning">
+              <TriangleAlert className="size-4" />
+              <AlertTitle>شقق بدون مستلمين لها مبالغ</AlertTitle>
+              <AlertDescription className="text-warning/90">
+                {blockingCount} شقة لها مبالغ ولكن لا توجد أرقام استقبال. لن يتم
+                الإرسال حتى تُصفر مبالغها أو تُضاف جهات اتصال.{" "}
+                <Link
+                  href={`/admin/projects/${batch.projectId}`}
+                  className="font-medium underline underline-offset-4"
+                >
+                  إدارة جهات اتصال المشروع
+                </Link>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatCard
+              icon={<Mail />}
+              label="إجمالي الشقق"
+              value={invoices.length}
+            />
+            <StatCard
+              icon={<Send />}
+              label="جاهزة للإرسال"
+              value={withContactsAndAmount}
+              tone="success"
+            />
+            <StatCard
+              icon={<AlertTriangle />}
+              label="بدون مستلمين"
+              value={invoices.filter((i) => !i.hasContacts).length}
+              tone={
+                invoices.some((i) => !i.hasContacts) ? "warning" : "default"
+              }
+            />
+          </div>
+
+          <section className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="font-heading text-lg font-medium">
+                إدخال المبالغ
+              </h2>
+              <div className="flex items-center gap-2">
+                <div className="relative w-full sm:w-64">
+                  <Search className="pointer-events-none absolute inset-y-0 inset-s-3 my-auto size-4 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="ابحث بالشقة"
+                    className="ps-9"
+                    aria-label="بحث في الشقق"
+                  />
+                </div>
+                <Button
+                  disabled={withContactsAndAmount === 0 || sending}
+                  onClick={() => setConfirmOpen(true)}
+                >
+                  <Send data-icon="inline-start" />
+                  إرسال
+                </Button>
+              </div>
+            </div>
+
+            {filtered.length === 0 ? (
+              <EmptyState
+                icon={<Search />}
+                title="لا نتائج"
+                description="لا توجد شقق مطابقة لبحثك."
+              />
+            ) : (
+              <div className="hidden rounded-lg border md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>الشقة</TableHead>
+                      <TableHead>المستلمون</TableHead>
+                      <TableHead className="tabular-nums">المبلغ</TableHead>
+                      <TableHead className="text-end">إجراء</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((inv) => (
+                      <TableRow key={inv.invoiceId}>
+                        <TableCell className="font-medium">
+                          {inv.label}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {inv.hasContacts ? "نعم" : "لا"}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={totals[inv.invoiceId] ?? 0}
+                            onChange={(e) =>
+                              setTotals((prev) => ({
+                                ...prev,
+                                [inv.invoiceId]: Number(e.target.value),
+                              }))
+                            }
+                            onBlur={() => commitTotal(inv.invoiceId)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.currentTarget.blur()
+                              }
+                            }}
+                            disabled={sending}
+                            className="w-32"
+                            aria-label={`المبلغ للشقة ${inv.label}`}
+                          />
+                        </TableCell>
+                        <TableCell className="text-end">
+                          {!inv.hasContacts && (
+                            <NoContactAddButton
+                              apartmentId={inv.apartmentId}
+                              allContacts={allContacts}
+                              onMutate={() => router.refresh()}
+                            />
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3 md:hidden">
+              {filtered.map((inv) => (
+                <div
+                  key={inv.invoiceId}
+                  className="flex flex-col gap-2 rounded-lg border p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{inv.label}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {inv.hasContacts ? "لها مستلمون" : "بدون مستلمين"}
+                    </span>
+                  </div>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={totals[inv.invoiceId] ?? 0}
+                    onChange={(e) =>
+                      setTotals((prev) => ({
+                        ...prev,
+                        [inv.invoiceId]: Number(e.target.value),
+                      }))
+                    }
+                    onBlur={() => commitTotal(inv.invoiceId)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur()
+                    }}
+                    disabled={sending}
+                    aria-label={`المبلغ للشقة ${inv.label}`}
+                  />
+                  {!inv.hasContacts && (
+                    <NoContactAddButton
+                      apartmentId={inv.apartmentId}
+                      allContacts={allContacts}
+                      onMutate={() => router.refresh()}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <ConfirmDialog
+            open={confirmOpen}
+            onOpenChange={setConfirmOpen}
+            title="تأكيد الإرسال"
+            description={`سيتم إرسال رسائل إلى ${withContactsAndAmount} شقة. هل تريد المتابعة؟`}
+            confirmLabel="إرسال الآن"
+            busy={sending}
+            onConfirm={handleSend}
+          />
+
+          <Dialog
+            open={blockError !== null}
+            onOpenChange={(o) => !o && setBlockError(null)}
+          >
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-destructive">
+                  <XCircle className="size-5" />
+                  تعذّر الإرسال
+                </DialogTitle>
+                <DialogDescription>{blockError}</DialogDescription>
+              </DialogHeader>
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => setBlockError(null)}>
+                  فهمت
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
+      ) : null}
+    </div>
   )
 }
 
