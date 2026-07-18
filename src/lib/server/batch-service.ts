@@ -1078,20 +1078,34 @@ export async function getWarningEligible(input: {
   const invoiceIds = invoiceRows.map((i) => i.id)
   if (invoiceIds.length === 0) return []
 
-  const warningRows = await db
-    .select({ invoiceId: messages.invoiceId })
-    .from(messages)
-    .where(
-      and(
-        inArray(messages.invoiceId, invoiceIds),
-        eq(messages.templateType, "warning"),
-        isNull(messages.deletedAt)
-      )
-    )
+  const [warningRows, notifiedRows] = await Promise.all([
+    db
+      .select({ invoiceId: messages.invoiceId })
+      .from(messages)
+      .where(
+        and(
+          inArray(messages.invoiceId, invoiceIds),
+          eq(messages.templateType, "warning"),
+          isNull(messages.deletedAt)
+        )
+      ),
+    db
+      .select({ invoiceId: messages.invoiceId })
+      .from(messages)
+      .where(
+        and(
+          inArray(messages.invoiceId, invoiceIds),
+          eq(messages.templateType, "notification"),
+          eq(messages.status, "sent"),
+          isNull(messages.deletedAt)
+        )
+      ),
+  ])
 
   const withWarning = new Set(warningRows.map((w) => w.invoiceId))
+  const withSentNotification = new Set(notifiedRows.map((n) => n.invoiceId))
   return invoiceRows
-    .filter((i) => !withWarning.has(i.id))
+    .filter((i) => !withWarning.has(i.id) && withSentNotification.has(i.id))
     .map((i) => ({
       invoiceId: i.id,
       apartmentId: i.apartmentId,

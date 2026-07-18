@@ -814,6 +814,25 @@ function ProgressView({
         </CardContent>
       </Card>
 
+      {status.status === "completed" && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {status.failed > 0 && (
+            <Button onClick={() => setRetryConfirm(true)} disabled={retrying}>
+              <RefreshCw data-icon="inline-start" />
+              إعادة إرسال الفاشلة ({status.failed})
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href={`/batches/${batch.id}/warning`} />}
+          >
+            <TriangleAlert data-icon="inline-start" />
+            إرسال تحذير متابعة
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <div className="flex flex-1 flex-col gap-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -952,25 +971,6 @@ function ProgressView({
           </aside>
         )}
       </div>
-
-      {status.status === "completed" && (
-        <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-          {status.failed > 0 && (
-            <Button onClick={() => setRetryConfirm(true)} disabled={retrying}>
-              <RefreshCw data-icon="inline-start" />
-              إعادة إرسال الفاشلة ({status.failed})
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            nativeButton={false}
-            render={<Link href={`/batches/${batch.id}/warning`} />}
-          >
-            <TriangleAlert data-icon="inline-start" />
-            إرسال تحذير متابعة
-          </Button>
-        </div>
-      )}
 
       <ConfirmDialog
         open={retryConfirm}
