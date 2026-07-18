@@ -234,6 +234,7 @@ export type PreviewContact = {
 }
 
 export type PreviewNoContact = {
+  invoiceId: number
   apartmentId: number
   label: string
   clientName: string
@@ -506,6 +507,8 @@ export async function updateInvoiceTotal(input: {
     return { ok: false, error: "المبلغ غير صالح" }
   if (!Number.isFinite(total)) return { ok: false, error: "المبلغ غير صالح" }
   if (total < 0) return { ok: false, error: "المبلغ يجب أن يكون غير سالب" }
+  if (total > 9_999_999.99)
+    return { ok: false, error: "المبلغ أكبر من الحد الأقصى المسموح" }
 
   const user = await requireRoleRateLimited("operator")
 
@@ -774,6 +777,7 @@ export async function getDraftPreview(input: {
     const withPhones = invContacts.filter((c) => c.phoneNumbers.length > 0)
     if (withPhones.length === 0) {
       noContacts.push({
+        invoiceId: inv.id,
         apartmentId: inv.apartmentId,
         label: inv.label,
         clientName: inv.clientName,

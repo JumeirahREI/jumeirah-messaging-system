@@ -27,6 +27,7 @@ import {
   type ContactRow,
 } from "@/components/add-contact-dialog"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { CurrencyInput } from "@/components/currency-input"
 import { EmptyState } from "@/components/empty-state"
 import { PageHeader } from "@/components/page-header"
 import { BatchStatusBadge, MessageStatusBadge } from "@/components/status-badge"
@@ -273,8 +274,27 @@ function DraftReview({
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [noContactsOpen, setNoContactsOpen] = useState(false)
+  const [totals, setTotals] = useState<Record<number, number>>(() =>
+    Object.fromEntries(
+      [...preview.matched, ...preview.noContacts].map((i) => [
+        i.invoiceId,
+        i.total,
+      ])
+    )
+  )
 
   const noRecipients = preview.matched.length === 0
+
+  async function commitTotal(invoiceId: number, next: number) {
+    setTotals((prev) => ({ ...prev, [invoiceId]: next }))
+    const res = await updateInvoiceTotal({ invoiceId, total: next })
+    if (!res.ok) {
+      toast.error(res.error)
+      const all = [...preview.matched, ...preview.noContacts]
+      const inv = all.find((i) => i.invoiceId === invoiceId)
+      setTotals((prev) => ({ ...prev, [invoiceId]: inv?.total ?? 0 }))
+    }
+  }
 
   const coveragePercent = useMemo(() => {
     if (preview.coverage.total === 0) return 0
@@ -489,9 +509,12 @@ function DraftReview({
                     <span className="text-sm text-muted-foreground">
                       {c.clientName}
                     </span>
-                    <span className="text-sm text-muted-foreground tabular-nums">
-                      الإجمالي: {c.total.toLocaleString("en-US")}
-                    </span>
+                    <CurrencyInput
+                      value={totals[c.invoiceId] ?? c.total}
+                      onCommit={(next) => commitTotal(c.invoiceId, next)}
+                      disabled={sending}
+                      ariaLabel={`المبلغ للشقة ${c.label}`}
+                    />
                   </div>
                   <NoContactAddButton
                     apartmentId={c.apartmentId}
@@ -517,7 +540,12 @@ function DraftReview({
                       <TableCell className="font-medium">{c.label}</TableCell>
                       <TableCell>{c.clientName}</TableCell>
                       <TableCell className="tabular-nums">
-                        {c.total.toLocaleString("en-US")}
+                        <CurrencyInput
+                          value={totals[c.invoiceId] ?? c.total}
+                          onCommit={(next) => commitTotal(c.invoiceId, next)}
+                          disabled={sending}
+                          ariaLabel={`المبلغ للشقة ${c.label}`}
+                        />
                       </TableCell>
                       <TableCell className="text-end">
                         <NoContactAddButton
@@ -595,9 +623,12 @@ function DraftReview({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium">{m.label}</span>
-                    <span className="text-sm text-muted-foreground tabular-nums">
-                      {m.total.toLocaleString("en-US")}
-                    </span>
+                    <CurrencyInput
+                      value={totals[m.invoiceId] ?? m.total}
+                      onCommit={(next) => commitTotal(m.invoiceId, next)}
+                      disabled={sending}
+                      ariaLabel={`المبلغ للشقة ${m.label}`}
+                    />
                   </div>
                   <span className="text-sm">{m.clientName}</span>
                   <span className="text-sm text-muted-foreground">
@@ -638,7 +669,12 @@ function DraftReview({
                           .join("، ")}
                       </TableCell>
                       <TableCell className="tabular-nums">
-                        {m.total.toLocaleString("en-US")}
+                        <CurrencyInput
+                          value={totals[m.invoiceId] ?? m.total}
+                          onCommit={(next) => commitTotal(m.invoiceId, next)}
+                          disabled={sending}
+                          ariaLabel={`المبلغ للشقة ${m.label}`}
+                        />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -858,22 +894,15 @@ function ManualDraftReview({
     (i) => !i.hasContacts && (totals[i.invoiceId] ?? i.total) > 0
   ).length
 
-  async function commitTotal(invoiceId: number) {
-    const raw = totals[invoiceId]
-    if (raw === undefined) return
+  async function commitTotal(invoiceId: number, next: number) {
+    setTotals((prev) => ({ ...prev, [invoiceId]: next }))
     const inv = invoices.find((i) => i.invoiceId === invoiceId)
-    if (inv && inv.total === raw) return
-    const res = await updateInvoiceTotal({ invoiceId, total: raw })
+    if (inv && inv.total === next) return
+    const res = await updateInvoiceTotal({ invoiceId, total: next })
     if (!res.ok) {
       toast.error(res.error)
-      setTotals((prev) => ({
-        ...prev,
-        [invoiceId]: inv?.total ?? 0,
-      }))
-      return
+      setTotals((prev) => ({ ...prev, [invoiceId]: inv?.total ?? 0 }))
     }
-    toast.success("تم تحديث المبلغ")
-    router.refresh()
   }
 
   async function handleSend() {
@@ -1060,26 +1089,13 @@ function ManualDraftReview({
                           {inv.hasContacts ? "نعم" : "لا"}
                         </TableCell>
                         <TableCell className="tabular-nums">
-                          <Input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={totals[inv.invoiceId] ?? 0}
-                            onChange={(e) =>
-                              setTotals((prev) => ({
-                                ...prev,
-                                [inv.invoiceId]: Number(e.target.value),
-                              }))
+                          <CurrencyInput
+                            value={totals[inv.invoiceId] ?? inv.total}
+                            onCommit={(next) =>
+                              commitTotal(inv.invoiceId, next)
                             }
-                            onBlur={() => commitTotal(inv.invoiceId)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.currentTarget.blur()
-                              }
-                            }}
                             disabled={sending}
-                            className="w-32"
-                            aria-label={`المبلغ للشقة ${inv.label}`}
+                            ariaLabel={`المبلغ للشقة ${inv.label}`}
                           />
                         </TableCell>
                         <TableCell className="text-end">
@@ -1110,23 +1126,11 @@ function ManualDraftReview({
                       {inv.hasContacts ? "لها مستلمون" : "بدون مستلمين"}
                     </span>
                   </div>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={totals[inv.invoiceId] ?? 0}
-                    onChange={(e) =>
-                      setTotals((prev) => ({
-                        ...prev,
-                        [inv.invoiceId]: Number(e.target.value),
-                      }))
-                    }
-                    onBlur={() => commitTotal(inv.invoiceId)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") e.currentTarget.blur()
-                    }}
+                  <CurrencyInput
+                    value={totals[inv.invoiceId] ?? inv.total}
+                    onCommit={(next) => commitTotal(inv.invoiceId, next)}
                     disabled={sending}
-                    aria-label={`المبلغ للشقة ${inv.label}`}
+                    ariaLabel={`المبلغ للشقة ${inv.label}`}
                   />
                   {!inv.hasContacts && (
                     <NoContactAddButton
