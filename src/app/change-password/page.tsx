@@ -1,8 +1,8 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
 import { useTransition } from "react"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
 
@@ -19,13 +19,16 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
 import { Spinner } from "@/components/ui/spinner"
+import { useRouter } from "next/navigation"
 
 const changePasswordSchema = z
   .object({
     newPassword: z.string().min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل"),
-    confirmPassword: z.string().min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل"),
+    confirmPassword: z
+      .string()
+      .min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل"),
   })
   .refine((d) => d.newPassword === d.confirmPassword, {
     message: "كلمتا المرور غير متطابقتين",
@@ -35,6 +38,7 @@ const changePasswordSchema = z
 type ChangePasswordFormData = z.infer<typeof changePasswordSchema>
 
 export default function ChangePasswordPage() {
+  const router = useRouter()
   const {
     register,
     handleSubmit,
@@ -49,13 +53,23 @@ export default function ChangePasswordPage() {
     formData.set("newPassword", data.newPassword)
     formData.set("confirmPassword", data.confirmPassword)
     const result = await changePasswordAction(null, formData)
-    if (result?.error) toast.error(result.error)
+    if (result?.error) {
+      toast.error(result.error)
+      return
+    }
+    if (result?.success) {
+      toast.success("تم تغيير كلمة المرور")
+      router.replace("/batches")
+      router.refresh()
+    }
   }
 
   function handleLogout() {
     startTransition(async () => {
-      toast.success("تم تسجيل الخروج")
       await logoutAction()
+      toast.success("تم تسجيل الخروج")
+      router.replace("/login")
+      router.refresh()
     })
   }
 
@@ -65,7 +79,7 @@ export default function ChangePasswordPage() {
         <form onSubmit={handleSubmit(onSubmit)}>
           <Card>
             <CardHeader className="text-center">
-              <div className="w-48 mx-auto mb-4">
+              <div className="mx-auto mb-4 w-48">
                 <JumeirahLogo />
               </div>
               <CardTitle>تغيير كلمة المرور</CardTitle>
@@ -76,10 +90,11 @@ export default function ChangePasswordPage() {
             <CardContent>
               <FieldGroup>
                 <Field>
-                  <FieldLabel htmlFor="newPassword">كلمة المرور الجديدة</FieldLabel>
-                  <Input
+                  <FieldLabel htmlFor="newPassword">
+                    كلمة المرور الجديدة
+                  </FieldLabel>
+                  <PasswordInput
                     id="newPassword"
-                    type="password"
                     autoComplete="new-password"
                     disabled={isSubmitting}
                     {...register("newPassword")}
@@ -94,9 +109,8 @@ export default function ChangePasswordPage() {
                   <FieldLabel htmlFor="confirmPassword">
                     تأكيد كلمة المرور
                   </FieldLabel>
-                  <Input
+                  <PasswordInput
                     id="confirmPassword"
-                    type="password"
                     autoComplete="new-password"
                     disabled={isSubmitting}
                     {...register("confirmPassword")}

@@ -1,6 +1,7 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
+import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 
 import { JumeirahLogo } from "@/components/jumeirah-logo"
@@ -18,10 +19,12 @@ import {
 } from "@/components/ui/card"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
 import { Spinner } from "@/components/ui/spinner"
 import { loginSchema, type LoginFormData } from "@/lib/schemas"
 
 export default function LoginPage() {
+  const router = useRouter()
   const {
     register,
     handleSubmit,
@@ -35,7 +38,14 @@ export default function LoginPage() {
     formData.set("username", data.username)
     formData.set("password", data.password)
     const result = await loginAction(null, formData)
-    if (result?.error) toast.error(result.error)
+    if (result?.error) {
+      toast.error(result.error)
+      return
+    }
+    if (result?.success) {
+      router.replace("/batches")
+      router.refresh()
+    }
   }
 
   return (
@@ -46,7 +56,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit(onSubmit)}>
           <Card>
             <CardHeader className="text-center">
-              <div className="w-48 mx-auto mb-4">
+              <div className="mx-auto mb-4 w-48">
                 <JumeirahLogo />
               </div>
               <CardTitle>تسجيل الدخول</CardTitle>
@@ -70,9 +80,8 @@ export default function LoginPage() {
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="password">كلمة المرور</FieldLabel>
-                  <Input
+                  <PasswordInput
                     id="password"
-                    type="password"
                     autoComplete="current-password"
                     disabled={isSubmitting}
                     {...register("password")}

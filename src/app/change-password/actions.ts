@@ -2,7 +2,6 @@
 
 import bcrypt from "bcryptjs"
 import { and, eq, isNull, sql } from "drizzle-orm"
-import { redirect } from "next/navigation"
 import { z } from "zod"
 
 import { auth, unstable_update } from "@/auth"
@@ -14,7 +13,9 @@ const now = sql`(datetime('now'))`
 const changePasswordSchema = z
   .object({
     newPassword: z.string().min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل"),
-    confirmPassword: z.string().min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل"),
+    confirmPassword: z
+      .string()
+      .min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل"),
   })
   .refine((d) => d.newPassword === d.confirmPassword, {
     message: "كلمتا المرور غير متطابقتين",
@@ -24,7 +25,7 @@ const changePasswordSchema = z
 export async function changePasswordAction(
   _prevState: { error?: string } | null,
   formData: FormData
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; success?: boolean }> {
   const session = await auth()
   if (!session?.user) {
     return { error: "غير مصرح" }
@@ -33,7 +34,10 @@ export async function changePasswordAction(
   const newPassword = String(formData.get("newPassword") ?? "")
   const confirmPassword = String(formData.get("confirmPassword") ?? "")
 
-  const parsed = changePasswordSchema.safeParse({ newPassword, confirmPassword })
+  const parsed = changePasswordSchema.safeParse({
+    newPassword,
+    confirmPassword,
+  })
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "خطأ" }
   }
@@ -51,7 +55,10 @@ export async function changePasswordAction(
     return { error: "المستخدم غير موجود" }
   }
 
-  const sameAsCurrent = await bcrypt.compare(parsed.data.newPassword, rows[0].password)
+  const sameAsCurrent = await bcrypt.compare(
+    parsed.data.newPassword,
+    rows[0].password
+  )
   if (sameAsCurrent) {
     return { error: "لا يمكن استخدام كلمة المرور الحالية" }
   }
@@ -68,5 +75,5 @@ export async function changePasswordAction(
     .where(and(eq(users.id, session.user.id), isNull(users.deletedAt)))
 
   await unstable_update({ mustResetPassword: false })
-  redirect("/batches")
+  return { success: true }
 }

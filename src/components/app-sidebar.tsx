@@ -11,7 +11,7 @@ import {
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { toast } from "sonner"
 
@@ -69,6 +69,7 @@ function NavItem({
 }
 
 function UserMenu({ session }: { session: SessionUser }) {
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const { resolvedTheme, setTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
@@ -80,8 +81,10 @@ function UserMenu({ session }: { session: SessionUser }) {
 
   function handleLogout() {
     startTransition(async () => {
-      toast.success("تم تسجيل الخروج")
       await logoutAction()
+      toast.success("تم تسجيل الخروج")
+      router.replace("/login")
+      router.refresh()
     })
   }
 

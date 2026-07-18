@@ -2,12 +2,11 @@
 
 import { signIn, signOut } from "@/auth"
 import { checkRateLimit, loginLimiter } from "@/lib/server/rate-limit"
-import { redirect } from "next/navigation"
 
 export async function loginAction(
   _prevState: { error?: string } | null,
   formData: FormData
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; success?: boolean }> {
   const username = String(formData.get("username") ?? "")
   const password = String(formData.get("password") ?? "")
   if (!username || !password) {
@@ -28,10 +27,10 @@ export async function loginAction(
   } catch {
     return { error: "بيانات الدخول غير صحيحة" }
   }
-  redirect("/batches")
+  return { success: true }
 }
 
-export async function logoutAction(): Promise<void> {
+export async function logoutAction(): Promise<{ success: true }> {
   await signOut({ redirect: false })
-  redirect("/login")
+  return { success: true }
 }
