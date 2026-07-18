@@ -6,9 +6,11 @@
   NEXT_PLUGIN_FORCE_RUN = "true"
   # ALAWAEL_SEND_URL is a public API endpoint (also hardcoded as DEFAULT_SEND_URL
   # in sms-gateway.ts). ALAWAEL_ORG_NAME and ALAWAEL_USERNAME are both "Jumeirah"
-  # — the company/project name that appears in docs, logo, and UI. None are real
-  # secrets; only ALAWAEL_PASSWORD is sensitive.
-  SECRETS_SCAN_OMIT_KEYS = "ALAWAEL_SEND_URL,ALAWAEL_USERNAME,ALAWAEL_ORG_NAME"
+  # — the company/project name that appears in docs, logo, and UI. SENTRY_ORG
+  # ("jumeirah") and SENTRY_PROJECT ("messaging-system") are public Sentry slugs
+  # that match the company/project name throughout the codebase. None are real
+  # secrets; only ALAWAEL_PASSWORD and SENTRY_AUTH_TOKEN are sensitive.
+  SECRETS_SCAN_OMIT_KEYS = "ALAWAEL_SEND_URL,ALAWAEL_USERNAME,ALAWAEL_ORG_NAME,SENTRY_ORG,SENTRY_PROJECT"
 
 # @netlify/nextjs plugin handles SSR + static optimization.
 # Environment variables set in Netlify dashboard or via CLI:
@@ -20,6 +22,11 @@
 #   NETLIFY_FUNCTION_SECRET — shared secret for process-batch-background auth
 #   UPSTASH_REDIS_REST_URL  — Upstash Redis REST URL (rate limiting)
 #   UPSTASH_REDIS_REST_TOKEN — Upstash Redis REST token (rate limiting)
+#   NEXT_PUBLIC_SENTRY_DSN  — Sentry DSN (public, browser runtime)
+#   SENTRY_DSN              — Sentry DSN (server/edge runtime)
+#   SENTRY_ORG              — Sentry org slug (public, non-secret)
+#   SENTRY_PROJECT          — Sentry project slug (public, non-secret)
+#   SENTRY_AUTH_TOKEN       — Sentry source map upload token (secret, build-time)
 
 [[headers]]
   for = "/*"
