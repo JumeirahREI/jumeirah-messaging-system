@@ -391,6 +391,30 @@ function DraftReview({
         </Card>
       </div>
 
+      {(preview.skippedCreditCount > 0 ||
+        preview.skippedTinyCount > 0 ||
+        preview.duplicateCount > 0) && (
+        <Alert className="border-info/40 bg-info/5 text-info">
+          <TriangleAlert className="size-4" />
+          <AlertTitle>صفوف متجاهلة من التحليل</AlertTitle>
+          <AlertDescription className="text-info/90">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 tabular-nums">
+              {preview.skippedCreditCount > 0 && (
+                <span>{preview.skippedCreditCount} صف دائن متجاهل</span>
+              )}
+              {preview.skippedTinyCount > 0 && (
+                <span>{preview.skippedTinyCount} صف برصيد ضئيل متجاهل</span>
+              )}
+              {preview.duplicateCount > 0 && (
+                <span>
+                  {preview.duplicateCount} تسمية مكررة (أُخذ أول رصيد)
+                </span>
+              )}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {preview.unmatched.length > 0 && (
         <Card className="border-destructive/40 bg-destructive/5">
           <CardHeader>

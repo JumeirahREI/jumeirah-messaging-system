@@ -6,8 +6,6 @@ import type { ParsedInvoice } from "./excel-parser"
 
 const { Workbook } = ExcelJS
 
-export type { ParsedInvoice }
-
 export type SkippedRow = {
   label: string
   clientName: string
@@ -35,7 +33,7 @@ const COL_CREDIT = 6
 const LABEL_TOKEN = /[A-Za-z]+\d[\w-]*/g
 const APARTMENT_MARKER = "شقة رقم"
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024
+export const MAX_FILE_SIZE = 10 * 1024 * 1024
 const MAX_SHEETS = 50
 const MAX_ROWS = 10000
 
@@ -43,8 +41,10 @@ function isBalanceError(e: unknown): e is BalanceParseError {
   return (
     typeof e === "object" &&
     e !== null &&
-    typeof (e as BalanceParseError).code === "string" &&
-    typeof (e as BalanceParseError).message === "string"
+    "code" in e &&
+    typeof e.code === "string" &&
+    "message" in e &&
+    typeof e.message === "string"
   )
 }
 
@@ -65,16 +65,12 @@ function readCell(value: unknown): CellValue {
   ) {
     return value
   }
-  if (typeof value === "object") {
-    const hyper = value as {
-      text?: unknown
-      result?: unknown
-      formula?: unknown
+  if (typeof value === "object" && value !== null) {
+    if ("result" in value) {
+      const r = value.result
+      if (typeof r === "string" || typeof r === "number") return r
     }
-    if (typeof hyper.result === "string" || typeof hyper.result === "number") {
-      return hyper.result
-    }
-    if (typeof hyper.text === "string") return hyper.text
+    if ("text" in value && typeof value.text === "string") return value.text
   }
   return null
 }
@@ -177,6 +173,8 @@ export async function parseBalanceSheetExcel(
     })
   }
   const workbook = new Workbook()
+  // ExcelJS xlsx.load type signature expects ArrayBuffer; Node Buffer is
+  // structurally compatible at runtime. Cast through unknown to satisfy TS.
   await workbook.xlsx.load(buffer as unknown as ArrayBuffer)
   if (workbook.worksheets.length === 0) {
     throwParseError({

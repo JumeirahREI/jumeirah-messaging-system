@@ -40,6 +40,78 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function FileChip({
+  name,
+  size,
+  onRemove,
+  disabled,
+}: {
+  name: string
+  size: number
+  onRemove: () => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
+      <FileSpreadsheet className="size-5 shrink-0 text-muted-foreground" />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm font-medium">{name}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {formatFileSize(size)}
+        </span>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={onRemove}
+        disabled={disabled}
+        aria-label="إزالة الملف"
+      >
+        <X />
+      </Button>
+    </div>
+  )
+}
+
+function FileDropzone({
+  onPick,
+  onDrop,
+  dragOver,
+  setDragOver,
+  disabled,
+  label,
+  hint,
+}: {
+  onPick: () => void
+  onDrop: (e: React.DragEvent) => void
+  dragOver: boolean
+  setDragOver: (v: boolean) => void
+  disabled?: boolean
+  label: string
+  hint: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      onDragOver={(e) => {
+        e.preventDefault()
+        setDragOver(true)
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={onDrop}
+      disabled={disabled}
+      className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/40 disabled:opacity-50 data-[drag=true]:border-primary data-[drag=true]:bg-primary/5"
+      data-drag={dragOver}
+    >
+      <Upload className="size-6" />
+      <span className="text-sm font-medium">{label}</span>
+      <span className="text-xs">{hint}</span>
+    </button>
+  )
+}
+
 type SheetMapping = Record<number, string | null>
 
 export function NewBatchForm({
@@ -346,30 +418,13 @@ export function NewBatchForm({
                         {balanceFiles.length > 0 ? (
                           <div className="flex flex-col gap-2">
                             {balanceFiles.map((f, idx) => (
-                              <div
+                              <FileChip
                                 key={`${f.name}-${idx}`}
-                                className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3"
-                              >
-                                <FileSpreadsheet className="size-5 shrink-0 text-muted-foreground" />
-                                <div className="flex min-w-0 flex-1 flex-col">
-                                  <span className="truncate text-sm font-medium">
-                                    {f.name}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground tabular-nums">
-                                    {formatFileSize(f.size)}
-                                  </span>
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  onClick={() => removeBalanceFile(idx)}
-                                  disabled={isSubmitting}
-                                  aria-label="إزالة الملف"
-                                >
-                                  <X />
-                                </Button>
-                              </div>
+                                name={f.name}
+                                size={f.size}
+                                onRemove={() => removeBalanceFile(idx)}
+                                disabled={isSubmitting}
+                              />
                             ))}
                             <Button
                               type="button"
@@ -383,27 +438,15 @@ export function NewBatchForm({
                             </Button>
                           </div>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => balanceInputRef.current?.click()}
-                            onDragOver={(e) => {
-                              e.preventDefault()
-                              setDragOver(true)
-                            }}
-                            onDragLeave={() => setDragOver(false)}
+                          <FileDropzone
+                            onPick={() => balanceInputRef.current?.click()}
                             onDrop={handleDrop}
+                            dragOver={dragOver}
+                            setDragOver={setDragOver}
                             disabled={isSubmitting}
-                            className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/40 disabled:opacity-50 data-[drag=true]:border-primary data-[drag=true]:bg-primary/5"
-                            data-drag={dragOver}
-                          >
-                            <Upload className="size-6" />
-                            <span className="text-sm font-medium">
-                              اسحب الملفات هنا أو اضغط للاختيار
-                            </span>
-                            <span className="text-xs">
-                              xlsx. فقط — ملف واحد لكل برج
-                            </span>
-                          </button>
+                            label="اسحب الملفات هنا أو اضغط للاختيار"
+                            hint="xlsx. فقط — ملف واحد لكل برج"
+                          />
                         )}
                       </Field>
                     ) : (
@@ -425,47 +468,22 @@ export function NewBatchForm({
                             className="sr-only"
                           />
                           {file ? (
-                            <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
-                              <FileSpreadsheet className="size-5 shrink-0 text-muted-foreground" />
-                              <div className="flex min-w-0 flex-1 flex-col">
-                                <span className="truncate text-sm font-medium">
-                                  {file.name}
-                                </span>
-                                <span className="text-xs text-muted-foreground tabular-nums">
-                                  {formatFileSize(file.size)}
-                                </span>
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => setFile(null)}
-                                disabled={isSubmitting}
-                                aria-label="إزالة الملف"
-                              >
-                                <X />
-                              </Button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => fileInputRef.current?.click()}
-                              onDragOver={(e) => {
-                                e.preventDefault()
-                                setDragOver(true)
-                              }}
-                              onDragLeave={() => setDragOver(false)}
-                              onDrop={handleDrop}
+                            <FileChip
+                              name={file.name}
+                              size={file.size}
+                              onRemove={() => setFile(null)}
                               disabled={isSubmitting}
-                              className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/40 disabled:opacity-50 data-[drag=true]:border-primary data-[drag=true]:bg-primary/5"
-                              data-drag={dragOver}
-                            >
-                              <Upload className="size-6" />
-                              <span className="text-sm font-medium">
-                                اسحب الملف هنا أو اضغط للاختيار
-                              </span>
-                              <span className="text-xs">xlsx. فقط</span>
-                            </button>
+                            />
+                          ) : (
+                            <FileDropzone
+                              onPick={() => fileInputRef.current?.click()}
+                              onDrop={handleDrop}
+                              dragOver={dragOver}
+                              setDragOver={setDragOver}
+                              disabled={isSubmitting}
+                              label="اسحب الملف هنا أو اضغط للاختيار"
+                              hint="xlsx. فقط"
+                            />
                           )}
                         </Field>
                         {previewLoading && (

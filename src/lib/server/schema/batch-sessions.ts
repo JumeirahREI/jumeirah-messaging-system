@@ -19,6 +19,7 @@ export const batchSessions = sqliteTable(
     status: text("status").$type<BatchStatus>().notNull().default("draft"),
     mode: text("mode").$type<BatchMode>().notNull().default("automatic"),
     excelLabels: text("excel_labels"),
+    parseStats: text("parse_stats"),
     createdBy: integer("created_by")
       .notNull()
       .references(() => users.id),

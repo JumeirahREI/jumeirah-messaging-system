@@ -39,6 +39,7 @@ vi.mock("@/lib/server/excel-balance-parser", () => ({
     skippedTiny: [],
   })),
   isBalanceParseError: vi.fn(() => false),
+  MAX_FILE_SIZE: 10 * 1024 * 1024,
 }))
 
 type InsertCall = { table: unknown; values: unknown }
@@ -111,6 +112,7 @@ const {
   releaseBatchLock,
   heartbeatBatchLock,
   forceReleaseBatchLock,
+  getDraftPreview,
 } = await import("./batch-service")
 const { parseInvoiceExcel } = await import("./excel-parser")
 const { parseBalanceSheetExcel } = await import("./excel-balance-parser")
@@ -965,5 +967,105 @@ describe("forceReleaseBatchLock", () => {
     const result = await forceReleaseBatchLock({ batchId: 999 })
 
     expect(result).toEqual({ ok: false, error: "الدفعة غير موجودة" })
+  })
+})
+
+describe("getDraftPreview parseStats", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    ;(
+      db as unknown as {
+        __setResults: (r: unknown[]) => void
+      }
+    ).__setResults([])
+  })
+
+  it("surfaces skippedCredit/skippedTiny/duplicate counts from parse_stats", async () => {
+    ;(
+      db as unknown as {
+        __setResults: (r: unknown[]) => void
+      }
+    ).__setResults([
+      [
+        {
+          id: 5,
+          projectId: 1,
+          excelLabels: "[]",
+          parseStats: JSON.stringify({
+            skippedCreditCount: 3,
+            skippedTinyCount: 2,
+            duplicateCount: 1,
+          }),
+          mode: "automatic",
+        },
+      ],
+      [],
+      [],
+      [],
+    ])
+
+    const result = await getDraftPreview({ batchId: 5 })
+
+    if (!result) throw new Error("expected preview")
+    expect(result.skippedCreditCount).toBe(3)
+    expect(result.skippedTinyCount).toBe(2)
+    expect(result.duplicateCount).toBe(1)
+  })
+
+  it("returns zero counts when parse_stats is null (invoice/manual batches)", async () => {
+    ;(
+      db as unknown as {
+        __setResults: (r: unknown[]) => void
+      }
+    ).__setResults([
+      [
+        {
+          id: 6,
+          projectId: 1,
+          excelLabels: "[]",
+          parseStats: null,
+          mode: "automatic",
+        },
+      ],
+      [],
+      [],
+      [],
+    ])
+
+    const result = await getDraftPreview({ batchId: 6 })
+
+    if (!result) throw new Error("expected preview")
+    expect(result.skippedCreditCount).toBe(0)
+    expect(result.skippedTinyCount).toBe(0)
+    expect(result.duplicateCount).toBe(0)
+  })
+
+  it("manual mode returns zero counts", async () => {
+    ;(
+      db as unknown as {
+        __setResults: (r: unknown[]) => void
+      }
+    ).__setResults([
+      [
+        {
+          id: 7,
+          projectId: 1,
+          excelLabels: null,
+          parseStats: JSON.stringify({
+            skippedCreditCount: 9,
+            skippedTinyCount: 9,
+            duplicateCount: 9,
+          }),
+          mode: "manual",
+        },
+      ],
+    ])
+
+    const result = await getDraftPreview({ batchId: 7 })
+
+    if (!result) throw new Error("expected preview")
+    expect(result.skippedCreditCount).toBe(0)
+    expect(result.skippedTinyCount).toBe(0)
+    expect(result.duplicateCount).toBe(0)
   })
 })

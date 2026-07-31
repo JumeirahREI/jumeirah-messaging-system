@@ -8,6 +8,11 @@ import { checkRateLimit, mutationLimiter } from "@/lib/server/rate-limit"
 import { computeReconciliation } from "./batch-reconciliation"
 import { db } from "./db"
 import {
+  BalanceParseResult,
+  MAX_FILE_SIZE,
+  parseBalanceSheetExcel,
+} from "./excel-balance-parser"
+import {
   deriveTowerPrefix,
   getSheetNames,
   isExcelParseError,
@@ -27,7 +32,6 @@ import {
   users,
 } from "./schema"
 import { renderNotification, renderWarning } from "./template-renderer"
-import { BalanceParseResult, isBalanceParseError, parseBalanceSheetExcel } from "./excel-balance-parser"
 
 const now = sql`(datetime('now'))`
 
@@ -242,6 +246,35 @@ export type PreviewNoContact = {
   total: number
 }
 
+export type BatchParseStats = {
+  skippedCreditCount: number
+  skippedTinyCount: number
+  duplicateCount: number
+}
+
+function encodeParseStats(stats: BatchParseStats): string {
+  return JSON.stringify(stats)
+}
+
+function decodeParseStats(raw: string | null): BatchParseStats {
+  if (!raw)
+    return { skippedCreditCount: 0, skippedTinyCount: 0, duplicateCount: 0 }
+  try {
+    const parsed = JSON.parse(raw) as Partial<BatchParseStats>
+    return {
+      skippedCreditCount: parsed.skippedCreditCount ?? 0,
+      skippedTinyCount: parsed.skippedTinyCount ?? 0,
+      duplicateCount: parsed.duplicateCount ?? 0,
+    }
+  } catch {
+    return { skippedCreditCount: 0, skippedTinyCount: 0, duplicateCount: 0 }
+  }
+}
+
+function parseError(message: string): CreateBatchError {
+  return { ok: false, error: "parse", message } as const
+}
+
 export type BatchPreview = {
   batchId: number
   unmatchedCount: number
@@ -432,11 +465,7 @@ async function createBalanceInvoices(
     .getAll("files")
     .filter((f): f is File => f instanceof File)
   if (files.length === 0) {
-    return {
-      ok: false,
-      error: "parse",
-      message: "ملف رصيد واحد على الأقل مطلوب",
-    } as const
+    return parseError("ملف رصيد واحد على الأقل مطلوب")
   }
 
   const allowedMime = [
@@ -444,19 +473,11 @@ async function createBalanceInvoices(
     "application/vnd.ms-excel",
   ]
   for (const file of files) {
-    if (file.size > 10 * 1024 * 1024) {
-      return {
-        ok: false,
-        error: "parse",
-        message: "حجم الملف يتجاوز 10 ميجابايت",
-      } as const
+    if (file.size > MAX_FILE_SIZE) {
+      return parseError("حجم الملف يتجاوز 10 ميجابايت")
     }
     if (!allowedMime.includes(file.type)) {
-      return {
-        ok: false,
-        error: "parse",
-        message: "نوع الملف غير مدعوم. يجب أن يكون ملف Excel",
-      } as const
+      return parseError("نوع الملف غير مدعوم. يجب أن يكون ملف Excel")
     }
   }
 
@@ -477,23 +498,15 @@ async function createBalanceInvoices(
       detected.mime !==
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     ) {
-      return {
-        ok: false,
-        error: "parse",
-        message: "الملف ليس ملف Excel صالح",
-      } as const
+      return parseError("الملف ليس ملف Excel صالح")
     }
 
     let parsed: BalanceParseResult
     try {
       parsed = await parseBalanceSheetExcel(buffer)
     } catch (e) {
-      const message = isBalanceParseError(e)
-        ? e.message
-        : e instanceof Error
-          ? e.message
-          : "خطأ في تحليل الملف"
-      return { ok: false, error: "parse", message } as const
+      const message = e instanceof Error ? e.message : "خطأ في تحليل الملف"
+      return parseError(message)
     }
 
     skippedCreditCount += parsed.skippedCredit.length
@@ -559,11 +572,19 @@ async function createBalanceInvoices(
 
   await db
     .update(batchSessions)
-    .set({ excelLabels: JSON.stringify(labels) })
+    .set({
+      excelLabels: JSON.stringify(labels),
+      parseStats: encodeParseStats({
+        skippedCreditCount,
+        skippedTinyCount,
+        duplicateCount: duplicates.length,
+      }),
+    })
     .where(eq(batchSessions.id, batchId))
 
   const invoiceInserts = allInvoices.map((p) => ({
     batchId,
+    // Safe: unmatched labels returned early above, so every label is in the map.
     apartmentId: apartmentByLabel.get(p.label)!.id,
     clientName: p.client_name,
     total: p.total,
@@ -774,6 +795,9 @@ export type DraftPreview = {
   unmatched: string[]
   missing: DraftPreviewMissing[]
   coverage: { matched: number; total: number }
+  skippedCreditCount: number
+  skippedTinyCount: number
+  duplicateCount: number
 }
 
 export async function getDraftPreview(input: {
@@ -789,6 +813,7 @@ export async function getDraftPreview(input: {
       id: batchSessions.id,
       projectId: batchSessions.projectId,
       excelLabels: batchSessions.excelLabels,
+      parseStats: batchSessions.parseStats,
       mode: batchSessions.mode,
     })
     .from(batchSessions)
@@ -802,6 +827,7 @@ export async function getDraftPreview(input: {
     .limit(1)
   if (batchRows.length === 0) return null
   const batchRow = batchRows[0]
+  const stats = decodeParseStats(batchRow.parseStats)
   if (batchRow.mode === "manual") {
     return {
       matched: [],
@@ -809,6 +835,9 @@ export async function getDraftPreview(input: {
       unmatched: [],
       missing: [],
       coverage: { matched: 0, total: 0 },
+      skippedCreditCount: 0,
+      skippedTinyCount: 0,
+      duplicateCount: 0,
     }
   }
 
@@ -881,6 +910,9 @@ export async function getDraftPreview(input: {
       unmatched,
       missing,
       coverage,
+      skippedCreditCount: stats.skippedCreditCount,
+      skippedTinyCount: stats.skippedTinyCount,
+      duplicateCount: stats.duplicateCount,
     } satisfies DraftPreview
   }
 
@@ -978,6 +1010,9 @@ export async function getDraftPreview(input: {
     unmatched,
     missing,
     coverage,
+    skippedCreditCount: stats.skippedCreditCount,
+    skippedTinyCount: stats.skippedTinyCount,
+    duplicateCount: stats.duplicateCount,
   } satisfies DraftPreview
 }
 
