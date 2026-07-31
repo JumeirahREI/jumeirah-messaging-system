@@ -20,6 +20,11 @@ const cairo = Cairo({
 
 export const metadata: Metadata = {
   title: "نظام رسائل جُميرا",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+  },
 }
 
 export default function RootLayout({
