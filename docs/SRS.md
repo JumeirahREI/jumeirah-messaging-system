@@ -10,22 +10,22 @@
 
 ## 1. Technology Stack
 
-| Layer            | Technology                                                        |
-| ---------------- | ----------------------------------------------------------------- |
-| Framework        | TanStack Start (file-router mode) on Vite                         |
-| UI               | React 19, shadcn/ui, Tailwind v4 (RTL, logical CSS properties)    |
-| Language         | TypeScript (strict mode, no `any`)                                |
-| Icons            | lucide-react                                                      |
-| Fonts            | @fontsource-variable/inter                                        |
-| Animations       | tw-animate-css + Tailwind                                         |
-| Database         | Turso (libSQL/SQLite) in the cloud                                |
-| ORM              | Drizzle ORM (libSQL adapter, fully typed schema + migrations)     |
-| Auth             | Username/password, hashed with bcrypt (or argon2). Session-based. |
-| SMS Gateway      | Pluggable interface (`SmsGateway`); fake/logger adapter for v1.   |
-| Excel Parsing    | `exceljs` (server-side, handles merged cells)                     |
-| Hosting          | Netlify (TanStack Start Netlify adapter for SSR + background fns) |
-| Package Manager  | bun                                                               |
-| Testing          | Vitest + Testing Library (unit), Playwright MCP (UI/flow)         |
+| Layer           | Technology                                                        |
+| --------------- | ----------------------------------------------------------------- |
+| Framework       | TanStack Start (file-router mode) on Vite                         |
+| UI              | React 19, shadcn/ui, Tailwind v4 (RTL, logical CSS properties)    |
+| Language        | TypeScript (strict mode, no `any`)                                |
+| Icons           | lucide-react                                                      |
+| Fonts           | @fontsource-variable/inter                                        |
+| Animations      | tw-animate-css + Tailwind                                         |
+| Database        | Turso (libSQL/SQLite) in the cloud                                |
+| ORM             | Drizzle ORM (libSQL adapter, fully typed schema + migrations)     |
+| Auth            | Username/password, hashed with bcrypt (or argon2). Session-based. |
+| SMS Gateway     | Pluggable interface (`SmsGateway`); fake/logger adapter for v1.   |
+| Excel Parsing   | `exceljs` (server-side, handles merged cells)                     |
+| Hosting         | Netlify (TanStack Start Netlify adapter for SSR + background fns) |
+| Package Manager | bun                                                               |
+| Testing         | Vitest + Testing Library (unit), Playwright MCP (UI/flow)         |
 
 ## 2. System Architecture
 
@@ -60,14 +60,15 @@
 
 ### Key Modules (Deep-Module Design)
 
-| Module                  | Interface (seam)                                              | Implementation (hidden)                                              |
-| ----------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------- |
-| `ExcelParser`           | `parseInvoiceExcel(file: Buffer): ParsedInvoice[]`            | exceljs, merged-cell resolution, Arabic column mapping, total extraction |
-| `SmsGateway`            | `send(to: string, body: string): Promise<SmsResult>`          | Fake adapter (logs to console/DB). Real adapter added later.        |
-| `BatchService`          | `createBatch`, `parseAndPreview`, `sendBatch`, `getBatchStatus`, `retryFailed`, `sendWarning` | Invoice creation, message row creation, background function invocation, status polling |
-| `AuthService`           | `login`, `logout`, `getSession`, `requireRole`                | Password hashing, session token management, role enforcement         |
-| `ReferenceDataService`  | CRUD server functions per entity                              | Drizzle queries, soft-delete filtering, audit column population     |
-| `TemplateRenderer`      | `renderNotification(invoice)`, `renderWarning(invoice)`       | Template string interpolation, Arabic text, variable substitution   |
+| Module                 | Interface (seam)                                                                              | Implementation (hidden)                                                                                                               |
+| ---------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `ExcelParser`          | `parseInvoiceExcel(file: Buffer): ParsedInvoice[]`                                            | exceljs, merged-cell resolution, Arabic column mapping, total extraction (future/alternate format)                                    |
+| `BalanceSheetParser`   | `parseBalanceSheetExcel(file: Buffer): BalanceParseResult`                                    | exceljs, row-filter (col A numeric), label extraction from client name, debit/credit classification, skip buckets (primary format)    |
+| `SmsGateway`           | `send(to: string, body: string): Promise<SmsResult>`                                          | Fake adapter (logs to console/DB). Real adapter added later.                                                                          |
+| `BatchService`         | `createBatch`, `parseAndPreview`, `sendBatch`, `getBatchStatus`, `retryFailed`, `sendWarning` | Invoice/balance creation, multi-file merge, duplicate detection, message row creation, background function invocation, status polling |
+| `AuthService`          | `login`, `logout`, `getSession`, `requireRole`                                                | Password hashing, session token management, role enforcement                                                                          |
+| `ReferenceDataService` | CRUD server functions per entity                                                              | Drizzle queries, soft-delete filtering, audit column population                                                                       |
+| `TemplateRenderer`     | `renderNotification(invoice)`, `renderWarning(invoice)`                                       | Template string interpolation, Arabic text, variable substitution                                                                     |
 
 ## 3. Database Schema
 
@@ -97,63 +98,63 @@ users
 
 #### `users`
 
-| Column       | Type      | Constraints                              |
-| ------------ | --------- | ---------------------------------------- |
-| id           | integer   | PK, auto-increment                       |
-| fullname     | text      | not null                                 |
-| username     | text      | not null, unique                         |
-| password     | text      | not null (bcrypt hash)                   |
-| is_admin     | integer   | not null, default 0 (boolean)            |
-| created_by   | integer   | FK → users.id                            |
-| created_at   | text      | not null (ISO timestamp)                 |
-| updated_by   | integer   | FK → users.id, nullable                  |
-| updated_at   | text      | nullable                                 |
-| deleted_at   | text      | nullable (soft delete)                   |
-| deleted_by   | integer   | FK → users.id, nullable                  |
+| Column     | Type    | Constraints                   |
+| ---------- | ------- | ----------------------------- |
+| id         | integer | PK, auto-increment            |
+| fullname   | text    | not null                      |
+| username   | text    | not null, unique              |
+| password   | text    | not null (bcrypt hash)        |
+| is_admin   | integer | not null, default 0 (boolean) |
+| created_by | integer | FK → users.id                 |
+| created_at | text    | not null (ISO timestamp)      |
+| updated_by | integer | FK → users.id, nullable       |
+| updated_at | text    | nullable                      |
+| deleted_at | text    | nullable (soft delete)        |
+| deleted_by | integer | FK → users.id, nullable       |
 
 #### `projects`
 
-| Column       | Type      | Constraints                              |
-| ------------ | --------- | ---------------------------------------- |
-| id           | integer   | PK, auto-increment                       |
-| title        | text      | not null                                 |
-| created_by   | integer   | FK → users.id                            |
-| created_at   | text      | not null                                 |
-| updated_by   | integer   | FK → users.id, nullable                  |
-| updated_at   | text      | nullable                                 |
-| deleted_at   | text      | nullable (soft delete)                   |
-| deleted_by   | integer   | FK → users.id, nullable                  |
+| Column     | Type    | Constraints             |
+| ---------- | ------- | ----------------------- |
+| id         | integer | PK, auto-increment      |
+| title      | text    | not null                |
+| created_by | integer | FK → users.id           |
+| created_at | text    | not null                |
+| updated_by | integer | FK → users.id, nullable |
+| updated_at | text    | nullable                |
+| deleted_at | text    | nullable (soft delete)  |
+| deleted_by | integer | FK → users.id, nullable |
 
 #### `towers`
 
-| Column       | Type      | Constraints                              |
-| ------------ | --------- | ---------------------------------------- |
-| id           | integer   | PK, auto-increment                       |
-| project_id   | integer   | FK → projects.id, not null               |
-| label        | text      | not null (e.g. "Tower A", "A")           |
-| created_by   | integer   | FK → users.id                            |
-| created_at   | text      | not null                                 |
-| updated_by   | integer   | FK → users.id, nullable                  |
-| updated_at   | text      | nullable                                 |
-| deleted_at   | text      | nullable (soft delete)                   |
-| deleted_by   | integer   | FK → users.id, nullable                  |
+| Column     | Type    | Constraints                    |
+| ---------- | ------- | ------------------------------ |
+| id         | integer | PK, auto-increment             |
+| project_id | integer | FK → projects.id, not null     |
+| label      | text    | not null (e.g. "Tower A", "A") |
+| created_by | integer | FK → users.id                  |
+| created_at | text    | not null                       |
+| updated_by | integer | FK → users.id, nullable        |
+| updated_at | text    | nullable                       |
+| deleted_at | text    | nullable (soft delete)         |
+| deleted_by | integer | FK → users.id, nullable        |
 
 **Unique constraint:** `(project_id, label)` where `deleted_at IS NULL`.
 
 #### `apartments`
 
-| Column       | Type      | Constraints                              |
-| ------------ | --------- | ---------------------------------------- |
-| id           | integer   | PK, auto-increment                       |
-| tower_id     | integer   | FK → towers.id, not null                 |
-| label        | text      | not null (e.g. "A101", unique within project) |
-| unit_number  | text      | nullable (e.g. "101", for future use)    |
-| created_by   | integer   | FK → users.id                            |
-| created_at   | text      | not null                                 |
-| updated_by   | integer   | FK → users.id, nullable                  |
-| updated_at   | text      | nullable                                 |
-| deleted_at   | text      | nullable (soft delete)                   |
-| deleted_by   | integer   | FK → users.id, nullable                  |
+| Column      | Type    | Constraints                                   |
+| ----------- | ------- | --------------------------------------------- |
+| id          | integer | PK, auto-increment                            |
+| tower_id    | integer | FK → towers.id, not null                      |
+| label       | text    | not null (e.g. "A101", unique within project) |
+| unit_number | text    | nullable (e.g. "101", for future use)         |
+| created_by  | integer | FK → users.id                                 |
+| created_at  | text    | not null                                      |
+| updated_by  | integer | FK → users.id, nullable                       |
+| updated_at  | text    | nullable                                      |
+| deleted_at  | text    | nullable (soft delete)                        |
+| deleted_by  | integer | FK → users.id, nullable                       |
 
 **Unique constraint:** `label` is unique within a project (across all towers) where
 `deleted_at IS NULL`. Enforced via a composite unique index on `(project_id_derived,
@@ -168,83 +169,83 @@ label)` or via application-level validation joining through `tower_id → projec
 
 #### `contacts`
 
-| Column       | Type      | Constraints                              |
-| ------------ | --------- | ---------------------------------------- |
-| id           | integer   | PK, auto-increment                       |
-| fullname     | text      | not null                                 |
-| created_by   | integer   | FK → users.id                            |
-| created_at   | text      | not null                                 |
-| updated_by   | integer   | FK → users.id, nullable                  |
-| updated_at   | text      | nullable                                 |
-| deleted_at   | text      | nullable (soft delete)                   |
-| deleted_by   | integer   | FK → users.id, nullable                  |
+| Column     | Type    | Constraints             |
+| ---------- | ------- | ----------------------- |
+| id         | integer | PK, auto-increment      |
+| fullname   | text    | not null                |
+| created_by | integer | FK → users.id           |
+| created_at | text    | not null                |
+| updated_by | integer | FK → users.id, nullable |
+| updated_at | text    | nullable                |
+| deleted_at | text    | nullable (soft delete)  |
+| deleted_by | integer | FK → users.id, nullable |
 
 #### `apartment_contacts` (M2M join)
 
-| Column                    | Type      | Constraints                       |
-| ------------------------- | --------- | --------------------------------- |
-| id                        | integer   | PK, auto-increment                |
-| apartment_id              | integer   | FK → apartments.id, not null      |
-| contact_id                | integer   | FK → contacts.id, not null        |
-| role                      | text      | not null (enum: owner, tenant, manager) |
-| is_notification_recipient | integer   | not null, default 1 (boolean)     |
-| created_by                | integer   | FK → users.id                     |
-| created_at                | text      | not null                          |
-| updated_by                | integer   | FK → users.id, nullable           |
-| updated_at                | text      | nullable                          |
-| deleted_at                | text      | nullable (soft delete)            |
-| deleted_by                | integer   | FK → users.id, nullable           |
+| Column                    | Type    | Constraints                             |
+| ------------------------- | ------- | --------------------------------------- |
+| id                        | integer | PK, auto-increment                      |
+| apartment_id              | integer | FK → apartments.id, not null            |
+| contact_id                | integer | FK → contacts.id, not null              |
+| role                      | text    | not null (enum: owner, tenant, manager) |
+| is_notification_recipient | integer | not null, default 1 (boolean)           |
+| created_by                | integer | FK → users.id                           |
+| created_at                | text    | not null                                |
+| updated_by                | integer | FK → users.id, nullable                 |
+| updated_at                | text    | nullable                                |
+| deleted_at                | text    | nullable (soft delete)                  |
+| deleted_by                | integer | FK → users.id, nullable                 |
 
 **Unique constraint:** `(apartment_id, contact_id)` where `deleted_at IS NULL`.
 
 #### `phone_numbers`
 
-| Column       | Type      | Constraints                              |
-| ------------ | --------- | ---------------------------------------- |
-| id           | integer   | PK, auto-increment                       |
-| contact_id   | integer   | FK → contacts.id, not null               |
-| number       | text      | not null (E.164 or local format)         |
-| created_by   | integer   | FK → users.id                            |
-| created_at   | text      | not null                                 |
-| updated_by   | integer   | FK → users.id, nullable                  |
-| updated_at   | text      | nullable                                 |
-| deleted_at   | text      | nullable (soft delete)                   |
-| deleted_by   | integer   | FK → users.id, nullable                  |
+| Column     | Type    | Constraints                      |
+| ---------- | ------- | -------------------------------- |
+| id         | integer | PK, auto-increment               |
+| contact_id | integer | FK → contacts.id, not null       |
+| number     | text    | not null (E.164 or local format) |
+| created_by | integer | FK → users.id                    |
+| created_at | text    | not null                         |
+| updated_by | integer | FK → users.id, nullable          |
+| updated_at | text    | nullable                         |
+| deleted_at | text    | nullable (soft delete)           |
+| deleted_by | integer | FK → users.id, nullable          |
 
 #### `batch_sessions`
 
-| Column       | Type      | Constraints                              |
-| ------------ | --------- | ---------------------------------------- |
-| id           | integer   | PK, auto-increment                       |
-| title        | text      | not null (defaults to current date)      |
-| project_id   | integer   | FK → projects.id, not null               |
-| sent         | integer   | not null, default 0 (total messages sent)|
-| failed       | integer   | not null, default 0 (total messages failed) |
-| status       | text      | not null (enum: draft, sending, completed) |
-| created_by   | integer   | FK → users.id                            |
-| created_at   | text      | not null                                 |
-| updated_by   | integer   | FK → users.id, nullable                  |
-| updated_at   | text      | nullable                                 |
-| deleted_at   | text      | nullable (soft delete, drafts only)      |
-| deleted_by   | integer   | FK → users.id, nullable                  |
-| archived_at  | text      | nullable (archive completed batches)     |
+| Column      | Type    | Constraints                                 |
+| ----------- | ------- | ------------------------------------------- |
+| id          | integer | PK, auto-increment                          |
+| title       | text    | not null (defaults to current date)         |
+| project_id  | integer | FK → projects.id, not null                  |
+| sent        | integer | not null, default 0 (total messages sent)   |
+| failed      | integer | not null, default 0 (total messages failed) |
+| status      | text    | not null (enum: draft, sending, completed)  |
+| created_by  | integer | FK → users.id                               |
+| created_at  | text    | not null                                    |
+| updated_by  | integer | FK → users.id, nullable                     |
+| updated_at  | text    | nullable                                    |
+| deleted_at  | text    | nullable (soft delete, drafts only)         |
+| deleted_by  | integer | FK → users.id, nullable                     |
+| archived_at | text    | nullable (archive completed batches)        |
 
 > No `tower_id` — the batch is scoped to a project. The Excel covers all towers.
 > No M2M to apartments — the batch's apartments are determined by its invoices.
 
 #### `invoices`
 
-| Column       | Type      | Constraints                              |
-| ------------ | --------- | ---------------------------------------- |
-| id           | integer   | PK, auto-increment                       |
-| batch_id     | integer   | FK → batch_sessions.id, not null         |
-| apartment_id | integer   | FK → apartments.id, not null             |
-| client_name  | text      | not null (from Excel "اسم العميل")       |
-| total        | real      | not null (from Excel "الإجمالي" row)     |
-| created_by   | integer   | FK → users.id                            |
-| created_at   | text      | not null                                 |
-| updated_by   | integer   | FK → users.id, nullable                  |
-| updated_at   | text      | nullable                                 |
+| Column       | Type    | Constraints                          |
+| ------------ | ------- | ------------------------------------ |
+| id           | integer | PK, auto-increment                   |
+| batch_id     | integer | FK → batch_sessions.id, not null     |
+| apartment_id | integer | FK → apartments.id, not null         |
+| client_name  | text    | not null (from Excel "اسم العميل")   |
+| total        | real    | not null (from Excel "الإجمالي" row) |
+| created_by   | integer | FK → users.id                        |
+| created_at   | text    | not null                             |
+| updated_by   | integer | FK → users.id, nullable              |
+| updated_at   | text    | nullable                             |
 
 > No `parent_invoice_id` — follow-ups create new messages on the same invoice (Q7
 > decision B). No `is_paid` / `paid_at` — no paid tracking in v1 (Q8 decision C).
@@ -252,20 +253,20 @@ label)` or via application-level validation joining through `tower_id → projec
 
 #### `messages`
 
-| Column         | Type      | Constraints                              |
-| -------------- | --------- | ---------------------------------------- |
-| id             | integer   | PK, auto-increment                       |
-| invoice_id     | integer   | FK → invoices.id, not null               |
-| phone_number_id| integer   | FK → phone_numbers.id, not null          |
-| contents       | text      | not null (rendered SMS text, stored for audit) |
-| template_type  | text      | not null (enum: notification, warning)   |
-| status         | text      | not null (enum: pending, sent, failed)   |
-| error_reason   | text      | nullable (set when status = failed)      |
-| sent_at        | text      | nullable (set when status = sent)        |
-| created_by     | integer   | FK → users.id (operator who triggered)   |
-| created_at     | text      | not null                                 |
-| updated_by     | integer   | FK → users.id, nullable (system on retry)|
-| updated_at     | text      | nullable                                 |
+| Column          | Type    | Constraints                                    |
+| --------------- | ------- | ---------------------------------------------- |
+| id              | integer | PK, auto-increment                             |
+| invoice_id      | integer | FK → invoices.id, not null                     |
+| phone_number_id | integer | FK → phone_numbers.id, not null                |
+| contents        | text    | not null (rendered SMS text, stored for audit) |
+| template_type   | text    | not null (enum: notification, warning)         |
+| status          | text    | not null (enum: pending, sent, failed)         |
+| error_reason    | text    | nullable (set when status = failed)            |
+| sent_at         | text    | nullable (set when status = sent)              |
+| created_by      | integer | FK → users.id (operator who triggered)         |
+| created_at      | text    | not null                                       |
+| updated_by      | integer | FK → users.id, nullable (system on retry)      |
+| updated_at      | text    | nullable                                       |
 
 > No soft-delete columns — messages are never deleted (transactional records).
 > One row per phone number per send event. Retry resets `status` to `pending` and
@@ -273,20 +274,20 @@ label)` or via application-level validation joining through `tower_id → projec
 
 ### 3.3 Indexes
 
-| Table                | Index                                          |
-| -------------------- | ---------------------------------------------- |
-| apartments           | `(label)` — for matching during Excel import   |
-| apartments           | `(tower_id)` — for tower-scoped apartment lists|
-| apartment_contacts   | `(apartment_id)` — for contact lookup per apt  |
-| apartment_contacts   | `(contact_id)` — for reverse lookup            |
-| phone_numbers        | `(contact_id)` — for number lookup per contact |
-| batch_sessions       | `(project_id)` — for project-scoped batch list |
-| batch_sessions       | `(status)` — for filtering by lifecycle state  |
-| invoices             | `(batch_id)` — for batch detail queries        |
-| invoices             | `(apartment_id)` — for apartment history       |
-| messages             | `(invoice_id)` — for per-invoice message list  |
-| messages             | `(phone_number_id)` — for per-number history   |
-| messages             | `(status)` — for retry-failed queries          |
+| Table              | Index                                           |
+| ------------------ | ----------------------------------------------- |
+| apartments         | `(label)` — for matching during Excel import    |
+| apartments         | `(tower_id)` — for tower-scoped apartment lists |
+| apartment_contacts | `(apartment_id)` — for contact lookup per apt   |
+| apartment_contacts | `(contact_id)` — for reverse lookup             |
+| phone_numbers      | `(contact_id)` — for number lookup per contact  |
+| batch_sessions     | `(project_id)` — for project-scoped batch list  |
+| batch_sessions     | `(status)` — for filtering by lifecycle state   |
+| invoices           | `(batch_id)` — for batch detail queries         |
+| invoices           | `(apartment_id)` — for apartment history        |
+| messages           | `(invoice_id)` — for per-invoice message list   |
+| messages           | `(phone_number_id)` — for per-number history    |
+| messages           | `(status)` — for retry-failed queries           |
 
 ## 4. Excel File Format
 
@@ -296,15 +297,15 @@ label)` or via application-level validation joining through `tower_id → projec
 - **Content:** Invoices for all apartments across all towers in a project.
 - **Columns (Arabic headers):**
 
-  | Column Position | Header (Arabic)    | Meaning                          |
-  | --------------- | ------------------ | -------------------------------- |
-  | A               | رقم                | Row number (line item, resets per apartment) |
-  | B               | اسم العميل         | Client name (merged across apartment rows) |
-  | C               | رقم الشقة          | Apartment label (e.g. "A101", merged across rows) |
-  | D               | النوع              | Charge type (electricity, water, etc.) |
-  | E-L             | (various)          | Meter readings, consumption, rates, amounts |
-  | M               | (various)          | Savings                          |
-  | N               | (various)          | Final amount per line item       |
+  | Column Position | Header (Arabic) | Meaning                                           |
+  | --------------- | --------------- | ------------------------------------------------- |
+  | A               | رقم             | Row number (line item, resets per apartment)      |
+  | B               | اسم العميل      | Client name (merged across apartment rows)        |
+  | C               | رقم الشقة       | Apartment label (e.g. "A101", merged across rows) |
+  | D               | النوع           | Charge type (electricity, water, etc.)            |
+  | E-L             | (various)       | Meter readings, consumption, rates, amounts       |
+  | M               | (various)       | Savings                                           |
+  | N               | (various)       | Final amount per line item                        |
 
 - **Merged cells:** Columns A (رقم) and B (اسم العميل) and C (رقم الشقة) span
   multiple rows per apartment. The parser must resolve merged-cell ranges.
@@ -331,6 +332,95 @@ type ParsedInvoice = {
 6. Return `ParsedInvoice[]`.
 7. If no "الإجمالي" row is found for an apartment, the parser throws a structured
    error indicating which apartment is missing its total.
+
+> The invoice format above (§4.1–4.3) is a **future/alternate** format. The
+> primary format in production is the **balance-sheet format** (§4.4), parsed
+> by `parseBalanceSheetExcel`. The invoice parser (`parseInvoiceExcel`) remains
+> in the codebase but is not the default batch-creation path.
+
+### 4.4 Balance-Sheet Format (Primary)
+
+The production input is a **customer balance sheet** (كشف أرصدة عملاء), exported
+per tower. One batch accepts **multiple files** (one file per tower); the parser
+merges all files into a single batch.
+
+#### 4.4.1 Expected Structure
+
+- **Format:** `.xlsx`.
+- **Content:** One row per customer, with the apartment label embedded inside
+  the client-name string. No merged cells, no per-apartment "الإجمالي" row.
+- **Columns:**
+
+  | Column | Header (Arabic)      | Meaning                                            |
+  | ------ | -------------------- | -------------------------------------------------- |
+  | A      | الرقم                | Customer account number (numeric, e.g. `20010001`) |
+  | B      | رقم العميل / …       | Client name **with embedded apartment label**      |
+  | C      | (empty)              | —                                                  |
+  | D      | العملة               | Currency (e.g. `YER`)                              |
+  | E      | الرصيد الحالي — مدين | Debit balance (customer owes)                      |
+  | F      | الرصيد الحالي — دائن | Credit balance (customer is owed / overpaid)       |
+
+- **Header rows** (1–4): column titles + sub-headers (`مدين`/`دائن`). Skipped.
+- **Footer rows:** grand-total markers (`عدد السجلات`, `إجمالي حسب العملة`,
+  `رصيد مدين`, `الاجمالي الكلي`). Skipped.
+
+#### 4.4.2 Parser Output
+
+```typescript
+type ParsedInvoice = {
+  label: string;       // apartment label, e.g. "A101" (extracted from column B)
+  client_name: string; // cleaned client name, label + "شقة رقم" stripped
+  total: number;       // debit balance (from column E)
+};
+
+type SkippedRow = { label: string; clientName: string; amount: number };
+
+type BalanceParseResult = {
+  invoices: ParsedInvoice[];        // debit rows above the tiny threshold
+  skippedCredit: SkippedRow[];      // credit (دائن) rows — not messaged
+  skippedTiny: SkippedRow[];        // debit/zero rows below the threshold
+};
+```
+
+#### 4.4.3 Parser Behavior
+
+1. Read the workbook with `exceljs`.
+2. For each row, apply the **row filter** (triple guard): column A must be a
+   finite positive number AND column B a non-empty string AND a label must be
+   extractable from column B. This skips all header and footer rows in one rule.
+3. **Label extraction:** take the **last** token matching `[A-Za-z]+\d[\w-]*`
+   in the column B string. Handles `A101`, `B102`, `A205-305`, with or without a
+   `شقة رقم` prefix, with or without a trailing space.
+4. **Client-name cleaning:** strip the matched label token and the `شقة رقم`
+   marker from the string, trim.
+5. **Classification** per row:
+   - Debit (column E) > 0 and ≥ `TINY_THRESHOLD` (1.0 YER) → `invoices`.
+   - Debit > 0 and < threshold → `skippedTiny`.
+   - Credit (column F) > 0 and debit = 0 → `skippedCredit`.
+   - Both zero → `skippedTiny` (nothing owed).
+   - When both debit and credit are present, debit is authoritative.
+6. Return `BalanceParseResult`. If `invoices` is empty, throw a structured
+   `no_customer_rows` error.
+
+#### 4.4.4 Multi-File Merge & Duplicate Handling
+
+- `createBatch` (balance format) reads all files from `formData.getAll("files")`,
+  calls `parseBalanceSheetExcel` per file, and merges the `invoices` arrays.
+- **Duplicate labels across files:** first occurrence wins; later duplicates are
+  collected into a `duplicateCount` and surfaced as a preview warning
+  (non-blocking).
+- **Unmatched labels** (no apartment in the project with that label): **blocking**
+  error — the batch is soft-deleted, no invoices are created. The operator must
+  fix the data or add the apartment in the admin UI first.
+
+#### 4.4.5 Preview Surface
+
+The review/preview after balance-batch creation reports:
+
+- Matched apartments (full table, as in §7.2).
+- No-contact apartments (full table, as in §7.2).
+- `skippedCreditCount`, `skippedTinyCount`, `duplicateCount` as count banners
+  (non-blocking informational summary).
 
 ## 5. SMS Gateway Interface
 
@@ -375,14 +465,14 @@ interface SmsGateway {
 
 ### 6.3 Role Enforcement
 
-| Action                          | Required Role |
-| ------------------------------- | ------------- |
-| Login                           | (none)        |
-| View dashboard, batch list      | operator+     |
-| Create/send/retry batches       | operator+     |
-| Send follow-up warnings         | operator+     |
-| Manage projects/towers/apartments/contacts/phone_numbers | admin |
-| Manage users                    | admin         |
+| Action                                                   | Required Role |
+| -------------------------------------------------------- | ------------- |
+| Login                                                    | (none)        |
+| View dashboard, batch list                               | operator+     |
+| Create/send/retry batches                                | operator+     |
+| Send follow-up warnings                                  | operator+     |
+| Manage projects/towers/apartments/contacts/phone_numbers | admin         |
+| Manage users                                             | admin         |
 
 > "operator+" means operator or admin (admin inherits all operator permissions).
 
@@ -401,41 +491,54 @@ draft ──[Send]──> sending ──[all messages resolved]──> completed
 ### 7.2 Create & Preview Flow
 
 1. Operator navigates to "New Batch".
-2. Form: title (default = today's date), project (dropdown), Excel file upload.
+2. Form: title (default = today's date), project (dropdown), **format dropdown**
+   (`كشف أرصدة` default / `فواتير`), and Excel file upload. In balance format the
+   upload accepts **multiple files** (one per tower); in invoice format it accepts
+   a single file with per-tower sheet mapping.
 3. On submit, the `createBatch` server function:
    a. Creates a `batch_sessions` row with `status = 'draft'`.
-   b. Reads the uploaded `.xlsx` file buffer.
-   c. Calls `ExcelParser.parseInvoiceExcel(buffer)` → `ParsedInvoice[]`.
-   d. Matches each `ParsedInvoice.label` to `apartments WHERE label = ? AND
-      project_id = ? AND deleted_at IS NULL`.
-   e. If any labels are unmatched → return a **blocking error** with the list of
-      unmatched labels. No invoices are created. The batch remains in `draft`.
-   f. For each matched apartment, look up notification-recipient contacts and their
-      phone numbers.
-   g. Return a **preview** to the client: matched apartments with contacts/numbers/
-      totals, and a separate list of no-contact apartments.
+   b. Reads the uploaded `.xlsx` file buffer(s).
+   c. Calls the format-appropriate parser:
+   - **balance** → `parseBalanceSheetExcel(buffer)` per file, merges results
+     (§4.4). Returns `BalanceParseResult` (invoices + skipped buckets).
+   - **invoice** → `parseInvoiceExcel(buffer, sheetTowerMap)` → `ParsedInvoice[]`
+     (§4.1–4.3).
+     d. Matches each `ParsedInvoice.label` to `apartments WHERE label = ? AND
+project_id = ? AND deleted_at IS NULL`.
+     e. If any labels are unmatched → return a **blocking error** with the list of
+     unmatched labels. No invoices are created. The batch is soft-deleted.
+     f. For each matched apartment, look up notification-recipient contacts and their
+     phone numbers.
+     g. Return a **preview** to the client: matched apartments with contacts/numbers/
+     totals, a separate list of no-contact apartments, and (balance format only)
+     count banners for skipped-credit / skipped-tiny / duplicate labels.
 4. The client renders the review table:
    - **No-contact apartments** at the top (visually distinct, with an acknowledgment
      checkbox).
    - **Matched apartments** below, with columns: apartment label, client name,
      contact name(s), phone number(s), total amount.
+   - **Skip/duplicate count banners** (balance format) above the tables.
 5. Operator reviews and either:
    - Fixes data (if unmatched labels) and re-uploads.
    - Acknowledges no-contact apartments and clicks "Send".
+
+> `{amount}` in the SMS templates (§8) is the **invoice total** for invoice-format
+> batches and the **debit balance** for balance-format batches. Both render into
+> the same `عليكم {amount} للشقة {unit_label}` template.
 
 ### 7.3 Send Flow
 
 1. Operator clicks "Send" (after acknowledging no-contact apartments).
 2. The `sendBatch` server function:
    a. For each matched apartment:
-      - Create an `invoices` row (`batch_id`, `apartment_id`, `client_name`, `total`).
-      - For each notification-recipient contact → for each phone number:
-        - Render the notification template (`{amount}`, `{unit_label}`).
-        - Create a `messages` row (`invoice_id`, `phone_number_id`, `contents`,
-          `template_type = 'notification'`, `status = 'pending'`).
-   b. Update `batch_sessions.status = 'sending'`.
-   c. Invoke the Netlify background function with the `batch_id`.
-   d. Return the `batch_id` to the client.
+   - Create an `invoices` row (`batch_id`, `apartment_id`, `client_name`, `total`).
+   - For each notification-recipient contact → for each phone number:
+     - Render the notification template (`{amount}`, `{unit_label}`).
+     - Create a `messages` row (`invoice_id`, `phone_number_id`, `contents`,
+       `template_type = 'notification'`, `status = 'pending'`).
+       b. Update `batch_sessions.status = 'sending'`.
+       c. Invoke the Netlify background function with the `batch_id`.
+       d. Return the `batch_id` to the client.
 3. The client navigates to the batch detail page and begins **polling**
    `getBatchStatus(batch_id)` every 3-5 seconds.
 4. The **Netlify background function**:
@@ -444,7 +547,7 @@ draft ──[Send]──> sending ──[all messages resolved]──> completed
    c. On success: update `message.status = 'sent'`, `message.sent_at = now`.
    d. On failure: update `message.status = 'failed'`, `message.error_reason = error`.
    e. After each message, update `batch_sessions.sent` and `batch_sessions.failed`
-      counters (count of messages by status).
+   counters (count of messages by status).
    f. When all messages are resolved: update `batch_sessions.status = 'completed'`.
    g. Writes are sequential (Turso single-primary) to avoid concurrency issues.
 
@@ -479,7 +582,7 @@ The client stops polling when `status === 'completed'`.
    b. Resets each to `status = 'pending'`, clears `error_reason`.
    c. Updates `batch_sessions.status = 'sending'`.
    d. Invokes the background function (same as send flow, which picks up all
-      `pending` messages).
+   `pending` messages).
 3. Polling resumes on the client.
 
 ### 7.6 Follow-Up Warning Flow
@@ -488,20 +591,20 @@ The client stops polling when `status === 'completed'`.
 2. The `getWarningEligible` server function:
    a. Queries all `invoices WHERE batch_id = ?`.
    b. For each invoice, checks if any `message WHERE invoice_id = ? AND
-      template_type = 'warning'` exists.
+template_type = 'warning'` exists.
    c. Returns invoices with **no** warning message yet (eligible list).
 3. The client shows a selection list (checkboxes) of eligible apartments with their
    labels, client names, and totals.
 4. Operator selects apartments and clicks "Send Warning".
 5. The `sendWarning` server function:
    a. For each selected invoice:
-      - Look up the apartment's notification-recipient contacts and phone numbers
-        (same as the initial send).
-      - For each phone number:
-        - Render the warning template.
-        - Create a `messages` row (`template_type = 'warning'`, `status = 'pending'`).
-   b. Update `batch_sessions.status = 'sending'`.
-   c. Invoke the background function.
+   - Look up the apartment's notification-recipient contacts and phone numbers
+     (same as the initial send).
+   - For each phone number:
+     - Render the warning template.
+     - Create a `messages` row (`template_type = 'warning'`, `status = 'pending'`).
+       b. Update `batch_sessions.status = 'sending'`.
+       c. Invoke the background function.
 6. Polling resumes. The batch returns to `completed` when all warning messages are
    resolved.
 7. The batch detail view shows per-invoice message counts, grouped by template_type
@@ -550,19 +653,19 @@ src/routes/
 
 ### 8.2 Page Descriptions
 
-| Page                          | Description                                                        |
-| ----------------------------- | ------------------------------------------------------------------ |
-| Login                         | Username + password form. Arabic labels. Redirects to dashboard.   |
-| Dashboard                     | Last 5-10 batches with status + sent/failed counts. Quick links.   |
-| Batch List                    | Table of all batches (not archived, not soft-deleted). Filter by project. Columns: title, project, status, sent, failed, created_at. |
-| New Batch                     | Form: title (default today), project dropdown, Excel file upload. On submit → preview/review table. |
-| Batch Detail                  | If draft: review table (no-contact section + matched apartments). If sending: live progress (polling). If completed: message list with statuses, retry button, warning button, per-invoice counts. |
-| Warning Selection             | List of eligible apartments (no warning yet). Checkbox selection. Send button. |
-| Admin: Users                  | List, create, edit, soft-delete users. Role toggle (admin/operator). |
-| Admin: Projects               | List, create, edit, soft-delete projects.                          |
-| Admin: Towers                 | List, create, edit, soft-delete towers within a project.           |
-| Admin: Apartments             | List, create, edit, soft-delete apartments within a tower.         |
-| Admin: Apartment Detail       | Edit apartment + manage contacts (add/link with role + notification flag) + manage phone numbers per contact. |
+| Page                    | Description                                                                                                                                                                                                    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Login                   | Username + password form. Arabic labels. Redirects to dashboard.                                                                                                                                               |
+| Dashboard               | Last 5-10 batches with status + sent/failed counts. Quick links.                                                                                                                                               |
+| Batch List              | Table of all batches (not archived, not soft-deleted). Filter by project. Columns: title, project, status, sent, failed, created_at.                                                                           |
+| New Batch               | Form: title (default today), project dropdown, format dropdown (كشف أرصدة default / فواتير), Excel file upload (multi-file for balance, single + sheet mapping for invoice). On submit → preview/review table. |
+| Batch Detail            | If draft: review table (no-contact section + matched apartments). If sending: live progress (polling). If completed: message list with statuses, retry button, warning button, per-invoice counts.             |
+| Warning Selection       | List of eligible apartments (no warning yet). Checkbox selection. Send button.                                                                                                                                 |
+| Admin: Users            | List, create, edit, soft-delete users. Role toggle (admin/operator).                                                                                                                                           |
+| Admin: Projects         | List, create, edit, soft-delete projects.                                                                                                                                                                      |
+| Admin: Towers           | List, create, edit, soft-delete towers within a project.                                                                                                                                                       |
+| Admin: Apartments       | List, create, edit, soft-delete apartments within a tower.                                                                                                                                                     |
+| Admin: Apartment Detail | Edit apartment + manage contacts (add/link with role + notification flag) + manage phone numbers per contact.                                                                                                  |
 
 ### 8.3 RTL & Arabic
 
@@ -575,18 +678,18 @@ src/routes/
 
 ## 9. Error Handling
 
-| Scenario                         | Behavior                                                    |
-| -------------------------------- | ---------------------------------------------------------- |
-| Invalid login credentials        | Generic error message. No username enumeration.             |
-| Excel file not .xlsx             | Form validation error before upload.                        |
-| Excel parsing fails              | Structured error returned to the form. Batch stays draft.   |
-| Unmatched apartment labels       | Blocking error list shown. No invoices created.             |
-| Apartment with no contacts       | Shown at top of review table. Acknowledgment required.      |
-| SMS gateway failure (per message)| Message marked `failed` with `error_reason`. Batch continues. |
-| SMS gateway failure (all)        | All messages `failed`. Operator can retry.                  |
-| Background function timeout      | Messages still `pending` are visible. Operator can retry.   |
-| Unauthorized access to admin     | Redirect to dashboard with error toast.                     |
-| Session expired                  | Redirect to login.                                          |
+| Scenario                          | Behavior                                                      |
+| --------------------------------- | ------------------------------------------------------------- |
+| Invalid login credentials         | Generic error message. No username enumeration.               |
+| Excel file not .xlsx              | Form validation error before upload.                          |
+| Excel parsing fails               | Structured error returned to the form. Batch stays draft.     |
+| Unmatched apartment labels        | Blocking error list shown. No invoices created.               |
+| Apartment with no contacts        | Shown at top of review table. Acknowledgment required.        |
+| SMS gateway failure (per message) | Message marked `failed` with `error_reason`. Batch continues. |
+| SMS gateway failure (all)         | All messages `failed`. Operator can retry.                    |
+| Background function timeout       | Messages still `pending` are visible. Operator can retry.     |
+| Unauthorized access to admin      | Redirect to dashboard with error toast.                       |
+| Session expired                   | Redirect to login.                                            |
 
 ## 10. Security
 

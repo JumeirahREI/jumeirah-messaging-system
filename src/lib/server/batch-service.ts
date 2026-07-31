@@ -27,6 +27,7 @@ import {
   users,
 } from "./schema"
 import { renderNotification, renderWarning } from "./template-renderer"
+import { BalanceParseResult, isBalanceParseError, parseBalanceSheetExcel } from "./excel-balance-parser"
 
 const now = sql`(datetime('now'))`
 
@@ -245,6 +246,9 @@ export type BatchPreview = {
   batchId: number
   unmatchedCount: number
   missingCount: number
+  skippedCreditCount: number
+  skippedTinyCount: number
+  duplicateCount: number
 }
 
 export type CreateBatchError =
@@ -412,6 +416,169 @@ async function createAutomaticInvoices(
     batchId,
     unmatchedCount: unmatched.length,
     missingCount,
+    skippedCreditCount: 0,
+    skippedTinyCount: 0,
+    duplicateCount: 0,
+  } as const
+}
+
+async function createBalanceInvoices(
+  formData: FormData,
+  pid: number,
+  userId: number,
+  batchId: number
+): Promise<CreateBatchResult> {
+  const files = formData
+    .getAll("files")
+    .filter((f): f is File => f instanceof File)
+  if (files.length === 0) {
+    return {
+      ok: false,
+      error: "parse",
+      message: "ملف رصيد واحد على الأقل مطلوب",
+    } as const
+  }
+
+  const allowedMime = [
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+  ]
+  for (const file of files) {
+    if (file.size > 10 * 1024 * 1024) {
+      return {
+        ok: false,
+        error: "parse",
+        message: "حجم الملف يتجاوز 10 ميجابايت",
+      } as const
+    }
+    if (!allowedMime.includes(file.type)) {
+      return {
+        ok: false,
+        error: "parse",
+        message: "نوع الملف غير مدعوم. يجب أن يكون ملف Excel",
+      } as const
+    }
+  }
+
+  const allInvoices: ParsedInvoice[] = []
+  const seenLabels = new Set<string>()
+  const duplicates: string[] = []
+  let skippedCreditCount = 0
+  let skippedTinyCount = 0
+
+  for (const file of files) {
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    const { fileTypeFromBuffer } = await import("file-type")
+    const detected = await fileTypeFromBuffer(buffer)
+    if (
+      !detected ||
+      detected.mime !==
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    ) {
+      return {
+        ok: false,
+        error: "parse",
+        message: "الملف ليس ملف Excel صالح",
+      } as const
+    }
+
+    let parsed: BalanceParseResult
+    try {
+      parsed = await parseBalanceSheetExcel(buffer)
+    } catch (e) {
+      const message = isBalanceParseError(e)
+        ? e.message
+        : e instanceof Error
+          ? e.message
+          : "خطأ في تحليل الملف"
+      return { ok: false, error: "parse", message } as const
+    }
+
+    skippedCreditCount += parsed.skippedCredit.length
+    skippedTinyCount += parsed.skippedTiny.length
+    for (const inv of parsed.invoices) {
+      if (seenLabels.has(inv.label)) {
+        duplicates.push(inv.label)
+        continue
+      }
+      seenLabels.add(inv.label)
+      allInvoices.push(inv)
+    }
+  }
+
+  if (allInvoices.length === 0) {
+    return { ok: false, error: "empty_parse" } as const
+  }
+
+  const labels = allInvoices.map((p) => p.label)
+  const apartmentRows = await db
+    .select({
+      id: apartments.id,
+      label: apartments.label,
+      projectId: apartments.projectId,
+    })
+    .from(apartments)
+    .where(
+      and(
+        eq(apartments.projectId, pid),
+        isNull(apartments.deletedAt),
+        inArray(apartments.label, labels)
+      )
+    )
+
+  const apartmentByLabel = new Map(apartmentRows.map((a) => [a.label, a]))
+  const unmatched: string[] = []
+  for (const p of allInvoices) {
+    if (!apartmentByLabel.has(p.label)) unmatched.push(p.label)
+  }
+
+  if (unmatched.length > 0) {
+    await db
+      .update(batchSessions)
+      .set({ deletedBy: userId, deletedAt: now })
+      .where(eq(batchSessions.id, batchId))
+    const shown = unmatched.slice(0, 20).join("، ")
+    const suffix = unmatched.length > 20 ? ` … (${unmatched.length})` : ""
+    return {
+      ok: false,
+      error: "parse",
+      message: `تسميات شقق غير مطابقة: ${shown}${suffix}`,
+    } as const
+  }
+
+  const excelLabelSet = new Set(labels)
+  const allProjectApartments = await db
+    .select({ label: apartments.label })
+    .from(apartments)
+    .where(and(eq(apartments.projectId, pid), isNull(apartments.deletedAt)))
+  const missingCount = allProjectApartments.filter(
+    (a) => !excelLabelSet.has(a.label)
+  ).length
+
+  await db
+    .update(batchSessions)
+    .set({ excelLabels: JSON.stringify(labels) })
+    .where(eq(batchSessions.id, batchId))
+
+  const invoiceInserts = allInvoices.map((p) => ({
+    batchId,
+    apartmentId: apartmentByLabel.get(p.label)!.id,
+    clientName: p.client_name,
+    total: p.total,
+    createdBy: userId,
+  }))
+  await db.insert(invoices).values(invoiceInserts)
+
+  return {
+    ok: true,
+    batchId,
+    unmatchedCount: 0,
+    missingCount,
+    skippedCreditCount,
+    skippedTinyCount,
+    duplicateCount: duplicates.length,
   } as const
 }
 
@@ -448,8 +615,13 @@ async function createManualInvoices(
     batchId,
     unmatchedCount: 0,
     missingCount: 0,
+    skippedCreditCount: 0,
+    skippedTinyCount: 0,
+    duplicateCount: 0,
   } as const
 }
+
+export type BatchFormat = "balance" | "invoice"
 
 export async function createBatch(
   formData: FormData
@@ -465,6 +637,8 @@ export async function createBatch(
   if (Number.isNaN(pid)) throw new Error("معرّف المشروع مطلوب")
   const mode: "automatic" | "manual" =
     modeRaw === "manual" ? "manual" : "automatic"
+  const formatRaw = formData.get("format")
+  const format: BatchFormat = formatRaw === "invoice" ? "invoice" : "balance"
 
   const user = await requireRoleRateLimited("operator")
 
@@ -491,7 +665,10 @@ export async function createBatch(
   if (mode === "manual") {
     return createManualInvoices(pid, user.id, batch.id)
   }
-  return createAutomaticInvoices(formData, pid, user.id, batch.id)
+  if (format === "invoice") {
+    return createAutomaticInvoices(formData, pid, user.id, batch.id)
+  }
+  return createBalanceInvoices(formData, pid, user.id, batch.id)
 }
 
 export async function updateInvoiceTotal(input: {

@@ -32,6 +32,15 @@ vi.mock("@/lib/server/excel-parser", () => ({
   getSheetNames: vi.fn(async () => []),
 }))
 
+vi.mock("@/lib/server/excel-balance-parser", () => ({
+  parseBalanceSheetExcel: vi.fn(async () => ({
+    invoices: [],
+    skippedCredit: [],
+    skippedTiny: [],
+  })),
+  isBalanceParseError: vi.fn(() => false),
+}))
+
 type InsertCall = { table: unknown; values: unknown }
 
 vi.mock("@/lib/server/db", () => {
@@ -104,6 +113,7 @@ const {
   forceReleaseBatchLock,
 } = await import("./batch-service")
 const { parseInvoiceExcel } = await import("./excel-parser")
+const { parseBalanceSheetExcel } = await import("./excel-balance-parser")
 const { requireRole } = await import("@/lib/server/auth-helpers")
 
 function buildFormData(file: File): FormData {
@@ -111,7 +121,18 @@ function buildFormData(file: File): FormData {
   fd.set("title", "دفعة تجريبية")
   fd.set("projectId", "1")
   fd.set("mode", "automatic")
+  fd.set("format", "invoice")
   fd.set("file", file)
+  return fd
+}
+
+function buildBalanceFormData(files: File[]): FormData {
+  const fd = new FormData()
+  fd.set("title", "دفعة أرصدة")
+  fd.set("projectId", "1")
+  fd.set("mode", "automatic")
+  fd.set("format", "balance")
+  for (const f of files) fd.append("files", f)
   return fd
 }
 
@@ -177,6 +198,9 @@ describe("createBatch", () => {
       batchId: 500,
       unmatchedCount: 0,
       missingCount: 0,
+      skippedCreditCount: 0,
+      skippedTinyCount: 0,
+      duplicateCount: 0,
     })
 
     const insertCalls = (db as unknown as { __insertCalls: InsertCall[] })
@@ -280,6 +304,9 @@ describe("createBatch manual mode", () => {
       batchId: 700,
       unmatchedCount: 0,
       missingCount: 0,
+      skippedCreditCount: 0,
+      skippedTinyCount: 0,
+      duplicateCount: 0,
     })
 
     const insertCalls = (db as unknown as { __insertCalls: InsertCall[] })
@@ -323,6 +350,184 @@ describe("createBatch manual mode", () => {
     await createBatch(buildManualFormData())
 
     expect(parseInvoiceExcel).not.toHaveBeenCalled()
+  })
+})
+
+describe("createBatch balance format", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    ;(
+      db as unknown as {
+        __setResults: (r: unknown[]) => void
+      }
+    ).__setResults([])
+    ;(
+      db as unknown as {
+        __clearInsertCalls: () => void
+      }
+    ).__clearInsertCalls()
+  })
+
+  it("parses balance files, matches apartments, inserts invoices, reports skip counts", async () => {
+    vi.mocked(parseBalanceSheetExcel).mockResolvedValue({
+      invoices: [
+        { label: "A101", client_name: "عميل أ", total: 100 },
+        { label: "B101", client_name: "عميل ب", total: 200 },
+      ],
+      skippedCredit: [{ label: "A205", clientName: "x", amount: 50 }],
+      skippedTiny: [{ label: "B103", clientName: "y", amount: 0.5 }],
+    })
+
+    ;(
+      db as unknown as {
+        __setResults: (r: unknown[]) => void
+      }
+    ).__setResults([
+      [{ id: 1 }],
+      [{ id: 900 }],
+      [
+        { id: 10, label: "A101", projectId: 1 },
+        { id: 20, label: "B101", projectId: 1 },
+      ],
+      [{ label: "A101" }, { label: "B101" }],
+    ])
+
+    const result = await createBatch(buildBalanceFormData([makeFile()]))
+
+    expect(result).toEqual({
+      ok: true,
+      batchId: 900,
+      unmatchedCount: 0,
+      missingCount: 0,
+      skippedCreditCount: 1,
+      skippedTinyCount: 1,
+      duplicateCount: 0,
+    })
+
+    const insertCalls = (db as unknown as { __insertCalls: InsertCall[] })
+      .__insertCalls
+    const invoiceInsert = insertCalls.find((c) => Array.isArray(c.values))
+    expect(invoiceInsert).toBeDefined()
+    const invoiceValues = invoiceInsert!.values as Array<{
+      apartmentId: number
+      total: number
+    }>
+    expect(invoiceValues).toHaveLength(2)
+    expect(invoiceValues.map((v) => v.apartmentId).sort()).toEqual([10, 20])
+  })
+
+  it("merges multiple files and keeps first label on duplicates", async () => {
+    vi.mocked(parseBalanceSheetExcel)
+      .mockResolvedValueOnce({
+        invoices: [{ label: "A101", client_name: "أول", total: 100 }],
+        skippedCredit: [],
+        skippedTiny: [],
+      })
+      .mockResolvedValueOnce({
+        invoices: [{ label: "A101", client_name: "ثاني", total: 999 }],
+        skippedCredit: [],
+        skippedTiny: [],
+      })
+
+    ;(
+      db as unknown as {
+        __setResults: (r: unknown[]) => void
+      }
+    ).__setResults([
+      [{ id: 1 }],
+      [{ id: 901 }],
+      [{ id: 10, label: "A101", projectId: 1 }],
+      [{ label: "A101" }],
+    ])
+
+    const result = await createBatch(
+      buildBalanceFormData([makeFile(), makeFile()])
+    )
+
+    if (!result.ok) throw new Error("expected ok")
+    expect(result.duplicateCount).toBe(1)
+    expect(result.batchId).toBe(901)
+
+    const insertCalls = (db as unknown as { __insertCalls: InsertCall[] })
+      .__insertCalls
+    const invoiceInsert = insertCalls.find((c) => Array.isArray(c.values))
+    const invoiceValues = invoiceInsert!.values as Array<{
+      clientName: string
+      total: number
+    }>
+    expect(invoiceValues).toHaveLength(1)
+    expect(invoiceValues[0].clientName).toBe("أول")
+    expect(invoiceValues[0].total).toBe(100)
+  })
+
+  it("blocks on unmatched labels and soft-deletes the batch", async () => {
+    vi.mocked(parseBalanceSheetExcel).mockResolvedValue({
+      invoices: [
+        { label: "A101", client_name: "عميل", total: 100 },
+        { label: "X999", client_name: "غريب", total: 50 },
+      ],
+      skippedCredit: [],
+      skippedTiny: [],
+    })
+
+    ;(
+      db as unknown as {
+        __setResults: (r: unknown[]) => void
+      }
+    ).__setResults([
+      [{ id: 1 }],
+      [{ id: 902 }],
+      [{ id: 10, label: "A101", projectId: 1 }],
+      [{ label: "A101" }],
+    ])
+
+    const result = await createBatch(buildBalanceFormData([makeFile()]))
+
+    expect(result.ok).toBe(false)
+    if (!result.ok && result.error === "parse") {
+      expect(result.message).toContain("X999")
+    }
+  })
+
+  it("returns empty_parse when all rows are skipped", async () => {
+    vi.mocked(parseBalanceSheetExcel).mockResolvedValue({
+      invoices: [],
+      skippedCredit: [{ label: "A101", clientName: "x", amount: 50 }],
+      skippedTiny: [],
+    })
+
+    ;(
+      db as unknown as {
+        __setResults: (r: unknown[]) => void
+      }
+    ).__setResults([[{ id: 1 }], [{ id: 903 }]])
+
+    const result = await createBatch(buildBalanceFormData([makeFile()]))
+
+    expect(result).toEqual({ ok: false, error: "empty_parse" })
+  })
+
+  it("does not call parseInvoiceExcel in balance mode", async () => {
+    vi.mocked(parseBalanceSheetExcel).mockResolvedValue({
+      invoices: [{ label: "A101", client_name: "x", total: 100 }],
+      skippedCredit: [],
+      skippedTiny: [],
+    })
+    ;(
+      db as unknown as {
+        __setResults: (r: unknown[]) => void
+      }
+    ).__setResults([
+      [{ id: 1 }],
+      [{ id: 904 }],
+      [{ id: 10, label: "A101", projectId: 1 }],
+      [{ label: "A101" }],
+    ])
+
+    await createBatch(buildBalanceFormData([makeFile()]))
+
+    expect(parseInvoiceExcel).not.toHaveBeenCalled()
+    expect(parseBalanceSheetExcel).toHaveBeenCalled()
   })
 })
 

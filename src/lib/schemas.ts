@@ -81,6 +81,7 @@ export const batchCreateSchema = z.object({
   title: z.string().min(1, "العنوان مطلوب"),
   projectId: z.string().min(1, "المشروع مطلوب"),
   mode: z.enum(["automatic", "manual"]).default("automatic"),
+  format: z.enum(["balance", "invoice"]).default("balance"),
 })
 
 export const batchFilterSchema = z.object({

@@ -32,10 +32,10 @@ towers) but has no structured way to:
 
 ## 3. Target Users
 
-| Role      | Description                                                                |
-| --------- | -------------------------------------------------------------------------- |
-| Admin     | Manages reference data (projects, towers, apartments, contacts, phone numbers) and users. Can perform all operator actions. |
-| Operator  | Creates batch sessions, uploads invoice Excel files, reviews and sends SMS, performs follow-up warnings, retries failed messages. |
+| Role     | Description                                                                                                                       |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Admin    | Manages reference data (projects, towers, apartments, contacts, phone numbers) and users. Can perform all operator actions.       |
+| Operator | Creates batch sessions, uploads invoice Excel files, reviews and sends SMS, performs follow-up warnings, retries failed messages. |
 
 ## 4. Goals & Non-Goals
 
@@ -97,11 +97,14 @@ towers) but has no structured way to:
 ### Batch Creation & Notification Send
 
 - **US-10:** As an operator, I want to create a new batch session by entering a title
-  (defaults to today's date), selecting a project, and uploading an .xlsx invoice
-  file.
+  (defaults to today's date), selecting a project, choosing a file format
+  (كشف أرصدة default / فواتير), and uploading one or more .xlsx files (one per
+  tower for the balance-sheet format).
 - **US-11:** As an operator, after uploading, I want to see a review table showing
-  each apartment, its contacts, contact phone numbers, and the invoice total — so I
-  can verify before sending.
+  each apartment, its contacts, contact phone numbers, and the amount owed — so I
+  can verify before sending. For balance-sheet batches I also want to see count
+  banners for skipped credit rows, skipped tiny-balance rows, and duplicate
+  labels.
 - **US-12:** As an operator, I want apartments with no notification-recipient contacts
   displayed at the top of the review table so I am aware they will be skipped.
 - **US-13:** As an operator, I want to acknowledge the no-contact apartments and
@@ -162,7 +165,11 @@ towers) but has no structured way to:
 ```
 
 **Variables:**
-- `{amount}` — the invoice total (from the Excel "الإجمالي" row).
+
+- `{amount}` — the amount owed. For **invoice-format** batches this is the
+  invoice total (from the Excel "الإجمالي" row). For **balance-sheet-format**
+  batches (the primary production format) this is the customer's debit balance
+  (الرصيد الحالي — مدين) from the balance sheet.
 - `{unit_label}` — the apartment label (e.g. "A101").
 
 Templates are hardcoded in application configuration for v1. The rendered message
@@ -170,21 +177,27 @@ content is stored on each `message` row for audit purposes.
 
 ## 7. Business Rules
 
-| ID    | Rule                                                                                  |
-| ----- | ------------------------------------------------------------------------------------- |
-| BR-01 | A batch is scoped to a single project. The Excel file covers all towers in that project. |
-| BR-02 | Apartment matching uses the `label` field (e.g. "A101"), unique within the project.   |
-| BR-03 | Only contacts with `is_notification_recipient = true` on the apartment-contact link receive SMS. |
-| BR-04 | One SMS is sent per phone number (not per contact or per apartment).                  |
-| BR-05 | Apartments with zero notification-recipient contacts are displayed at the top of the review table and skipped on send. The operator must acknowledge them before sending. |
-| BR-06 | Unmatched apartment labels (not in the DB for the selected project) are a blocking error. The operator cannot proceed until resolved. |
-| BR-07 | Skipped (no-contact) apartments get no invoice row in the batch.                      |
-| BR-08 | One warning per invoice. Invoices that already have a warning message are excluded from the follow-up selection list. |
-| BR-09 | Follow-up warnings create new `message` rows (with `template_type = 'warning'`) on the existing invoice. No new invoice is created. |
-| BR-10 | Failed messages can be retried manually via "Retry failed." No automatic retry.       |
-| BR-11 | Draft batches can be soft-deleted. Completed batches are permanent and can be archived but not deleted. |
-| BR-12 | No hard deletes anywhere in the system. All deletions are soft (`deleted_at` + `deleted_by`). |
-| BR-13 | The first admin user is seeded via database migration. Admins can create both admins and operators. |
+| ID    | Rule                                                                                                                                                                                                                                           |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BR-01 | A batch is scoped to a single project. The Excel file covers all towers in that project.                                                                                                                                                       |
+| BR-02 | Apartment matching uses the `label` field (e.g. "A101"), unique within the project.                                                                                                                                                            |
+| BR-03 | Only contacts with `is_notification_recipient = true` on the apartment-contact link receive SMS.                                                                                                                                               |
+| BR-04 | One SMS is sent per phone number (not per contact or per apartment).                                                                                                                                                                           |
+| BR-05 | Apartments with zero notification-recipient contacts are displayed at the top of the review table and skipped on send. The operator must acknowledge them before sending.                                                                      |
+| BR-06 | Unmatched apartment labels (not in the DB for the selected project) are a blocking error. The operator cannot proceed until resolved.                                                                                                          |
+| BR-07 | Skipped (no-contact) apartments get no invoice row in the batch.                                                                                                                                                                               |
+| BR-08 | One warning per invoice. Invoices that already have a warning message are excluded from the follow-up selection list.                                                                                                                          |
+| BR-09 | Follow-up warnings create new `message` rows (with `template_type = 'warning'`) on the existing invoice. No new invoice is created.                                                                                                            |
+| BR-10 | Failed messages can be retried manually via "Retry failed." No automatic retry.                                                                                                                                                                |
+| BR-11 | Draft batches can be soft-deleted. Completed batches are permanent and can be archived but not deleted.                                                                                                                                        |
+| BR-12 | No hard deletes anywhere in the system. All deletions are soft (`deleted_at` + `deleted_by`).                                                                                                                                                  |
+| BR-13 | The first admin user is seeded via database migration. Admins can create both admins and operators.                                                                                                                                            |
+| BR-14 | The primary batch-creation format is the **balance sheet** (كشف أرصدة عملاء). One batch accepts multiple files — one file per tower — merged into a single batch. The invoice format (فواتير with الإجمالي rows) is a future/alternate format. |
+| BR-15 | In balance-sheet files, the apartment label is extracted from the client-name string (column B) as the last `letter+digits` token. The client name is stored cleaned (label + "شقة رقم" stripped).                                             |
+| BR-16 | **Credit-balance (دائن) rows are skipped** — no message is sent (the customer is owed money, so "you owe {amount}" is wrong). Skipped-credit count is shown in the preview.                                                                    |
+| BR-17 | **Tiny debit balances below 1.0 YER are skipped.** The threshold is hardcoded for v1. Skipped-tiny count is shown in the preview.                                                                                                              |
+| BR-18 | **Duplicate apartment labels across uploaded files:** first occurrence wins; later duplicates are reported as a non-blocking warning in the preview (no abort).                                                                                |
+| BR-19 | Header and footer rows in balance-sheet files (non-numeric column A: "الرقم", "عدد السجلات", "إجمالي حسب العملة", etc.) are skipped by the row filter.                                                                                         |
 
 ## 8. Out of Scope (Future)
 
