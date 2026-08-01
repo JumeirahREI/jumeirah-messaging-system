@@ -50,7 +50,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { toDisplayFormat } from "@/lib/phone"
-import { apartmentSchema, type ApartmentFormData } from "@/lib/schemas"
+import { apartmentEditSchema, type ApartmentEditFormData } from "@/lib/schemas"
 import type {
   ApartmentContactRow,
   ApartmentPhoneNumberRow,
@@ -89,8 +89,8 @@ export function EditApartmentForm({
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<ApartmentFormData>({
-    resolver: zodResolver(apartmentSchema),
+  } = useForm<ApartmentEditFormData>({
+    resolver: zodResolver(apartmentEditSchema),
     defaultValues: {
       label: initialLabel,
       unitNumber: initialUnitNumber ?? "",
@@ -101,7 +101,7 @@ export function EditApartmentForm({
     router.refresh()
   }
 
-  async function onSubmit(data: ApartmentFormData) {
+  async function onSubmit(data: ApartmentEditFormData) {
     const result = await updateApartment({
       id: apartmentId,
       label: data.label,

@@ -21,9 +21,11 @@ export const towerSchema = z.object({
 
 export const apartmentSchema = z.object({
   label: z.string().min(1, "الاسم مطلوب"),
-  unitNumber: z.string().optional(),
+  unitNumber: z.string().optional().nullable(),
   towerId: z.coerce.number().min(1, "البرج مطلوب"),
 })
+
+export const apartmentEditSchema = apartmentSchema.omit({ towerId: true })
 
 export const contactSchema = z.object({
   fullname: z.string().min(1, "الاسم مطلوب"),
@@ -99,6 +101,7 @@ export type LoginFormData = z.infer<typeof loginSchema>
 export type ProjectFormData = z.infer<typeof projectSchema>
 export type TowerFormData = z.infer<typeof towerSchema>
 export type ApartmentFormData = z.infer<typeof apartmentSchema>
+export type ApartmentEditFormData = z.infer<typeof apartmentEditSchema>
 export type ContactFormData = z.infer<typeof contactSchema>
 export type ContactUpdateFormData = z.infer<typeof contactUpdateSchema>
 export type ContactLinkFormData = z.infer<typeof contactLinkSchema>
