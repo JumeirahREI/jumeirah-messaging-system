@@ -4,6 +4,7 @@ import { and, count, desc, eq, inArray, isNull, like, sql } from "drizzle-orm"
 
 import { extractLocalNumber, toStorageFormat } from "@/lib/phone"
 import {
+  apartmentEditSchema,
   apartmentSchema,
   contactLinkSchema,
   contactSchema,
@@ -486,7 +487,7 @@ export async function createApartment(input: {
         towerId: parsed.data.towerId,
         projectId: input.projectId,
         label: parsed.data.label,
-        unitNumber: parsed.data.unitNumber ?? null,
+        unitNumber: parsed.data.unitNumber?.trim() || null,
         ...actor(user),
       })
       .returning({
@@ -512,9 +513,9 @@ export async function updateApartment(input: {
   }>
 > {
   const user = await requireRoleRateLimited("admin")
-  const parsed = apartmentSchema.safeParse({
-    ...input,
-    towerId: 1,
+  const parsed = apartmentEditSchema.safeParse({
+    label: input.label,
+    unitNumber: input.unitNumber,
   })
   if (!parsed.success)
     return { ok: false, error: parsed.error.issues[0]?.message ?? "خطأ" }
@@ -523,7 +524,7 @@ export async function updateApartment(input: {
       .update(apartments)
       .set({
         label: parsed.data.label,
-        unitNumber: parsed.data.unitNumber ?? null,
+        unitNumber: parsed.data.unitNumber?.trim() || null,
         updatedBy: user.id,
         updatedAt: now,
       })
