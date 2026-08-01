@@ -78,6 +78,7 @@ import {
   forceReleaseBatchLock,
   heartbeatBatchLock,
   releaseBatchLock,
+  resumeSending,
   retryFailed,
   sendBatch,
   softDeleteBatch,
@@ -1214,6 +1215,8 @@ function ProgressView({
 }) {
   const [retrying, setRetrying] = useState(false)
   const [retryConfirm, setRetryConfirm] = useState(false)
+  const [resuming, setResuming] = useState(false)
+  const [resumeConfirm, setResumeConfirm] = useState(false)
   const [filter, setFilter] = useState<"all" | "sent" | "failed" | "pending">(
     "all"
   )
@@ -1228,6 +1231,7 @@ function ProgressView({
       ? Math.round(((status.sent + status.failed) / status.total) * 100)
       : 0
   const isSending = status.status === "sending"
+  const pendingCount = status.total - status.sent - status.failed
 
   const filteredMessages = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -1252,6 +1256,19 @@ function ProgressView({
       return
     }
     toast.success("بدأ إعادة الإرسال")
+    onRefresh()
+  }
+
+  async function handleResume() {
+    setResuming(true)
+    const res = await resumeSending({ batchId: batch.id })
+    setResuming(false)
+    setResumeConfirm(false)
+    if (!res.ok) {
+      toast.error(res.error)
+      return
+    }
+    toast.success("تم استئناف الإرسال")
     onRefresh()
   }
 
@@ -1291,6 +1308,19 @@ function ProgressView({
           </Progress>
         </CardContent>
       </Card>
+
+      {isSending && pendingCount > 0 && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            onClick={() => setResumeConfirm(true)}
+            disabled={resuming}
+            variant="outline"
+          >
+            <RefreshCw data-icon="inline-start" />
+            استئناف الإرسال ({pendingCount})
+          </Button>
+        </div>
+      )}
 
       {status.status === "completed" && (
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1458,6 +1488,16 @@ function ProgressView({
         confirmLabel="إعادة الإرسال"
         busy={retrying}
         onConfirm={handleRetry}
+      />
+
+      <ConfirmDialog
+        open={resumeConfirm}
+        onOpenChange={setResumeConfirm}
+        title="استئناف الإرسال"
+        description={`سيتم استئناف إرسال ${pendingCount} رسالة بانتظار. هل تريد المتابعة؟`}
+        confirmLabel="استئناف"
+        busy={resuming}
+        onConfirm={handleResume}
       />
 
       {isMobile && (

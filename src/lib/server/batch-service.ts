@@ -1265,6 +1265,55 @@ export async function sendBatch(input: {
   return { ok: true, batchId } as const
 }
 
+export async function resumeSending(input: {
+  batchId: number
+}): Promise<{ ok: true; batchId: number } | { ok: false; error: string }> {
+  if (typeof input !== "object" || input === null)
+    throw new Error("إدخال غير صالح")
+  const batchId = (input as { batchId?: unknown }).batchId
+  if (typeof batchId !== "number") throw new Error("معرّف الدفعة مطلوب")
+  const user = await requireRoleRateLimited("operator")
+
+  const batchRows = await db
+    .select({ status: batchSessions.status })
+    .from(batchSessions)
+    .where(
+      and(eq(batchSessions.id, batchId), isNull(batchSessions.deletedAt))
+    )
+    .limit(1)
+  if (batchRows.length === 0) {
+    return { ok: false, error: "الدفعة غير موجودة" } as const
+  }
+  if (batchRows[0].status !== "sending") {
+    return { ok: false, error: "الدفعة ليست قيد الإرسال" } as const
+  }
+
+  const pendingRows = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(messages)
+    .innerJoin(invoices, eq(messages.invoiceId, invoices.id))
+    .where(
+      and(
+        eq(invoices.batchId, batchId),
+        eq(messages.status, "pending"),
+        isNull(invoices.deletedAt),
+        isNull(messages.deletedAt)
+      )
+    )
+  if (pendingRows[0]?.count === 0) {
+    return { ok: false, error: "لا توجد رسائل بانتظار الإرسال" } as const
+  }
+
+  await db
+    .update(batchSessions)
+    .set({ updatedBy: user.id, updatedAt: now })
+    .where(eq(batchSessions.id, batchId))
+
+  invokeBackgroundProcess(batchId)
+
+  return { ok: true, batchId } as const
+}
+
 export type BatchStatusMessage = {
   id: number
   apartmentLabel: string

@@ -147,6 +147,24 @@ describe("AlawaelSmsGateway", () => {
     if (!res.ok) expect(res.error).toContain("connection refused")
   })
 
+  it("returns failure when the request times out", async () => {
+    const fetchFn = vi.fn(
+      (_input: string, init?: RequestInit) =>
+        new Promise<Response>((_, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted", "AbortError"))
+          })
+        })
+    ) as unknown as FetchLike
+    const gw = new AlawaelSmsGateway(
+      { ...baseConfig, sendTimeoutMs: 1 },
+      { fetchFn }
+    )
+    const res = await gw.send("967777000111", "hello")
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error).toBe("انتهت مهلة الاتصال")
+  })
+
   it("sends multipart message and joins ids", async () => {
     const mock = vi.fn(async () => new Response("0:ok:part1", { status: 200 }))
     const gw = new AlawaelSmsGateway(baseConfig, {
