@@ -79,6 +79,7 @@ export async function processPendingMessages(batchId: number): Promise<void> {
   for (let i = 0; i < pendingRows.length; i += SEND_CONCURRENCY) {
     const chunk = pendingRows.slice(i, i + SEND_CONCURRENCY)
     await Promise.all(chunk.map((m) => sendOne(gateway, phoneMap, m)))
+    await refreshBatchCounters(batchId)
   }
 
   await refreshBatchCounters(batchId)
@@ -89,29 +90,46 @@ async function sendOne(
   phoneMap: Map<number, string>,
   row: { id: number; phoneNumberId: number; contents: string }
 ): Promise<void> {
-  const to = phoneMap.get(row.phoneNumberId) ?? ""
-  if (!to) {
-    await db
-      .update(messages)
-      .set({
-        status: "failed",
-        errorReason: "رقم الهاتف غير موجود",
-        updatedAt: now,
-      })
-      .where(eq(messages.id, row.id))
-    return
-  }
+  try {
+    const to = phoneMap.get(row.phoneNumberId) ?? ""
+    if (!to) {
+      await db
+        .update(messages)
+        .set({
+          status: "failed",
+          errorReason: "رقم الهاتف غير موجود",
+          updatedAt: now,
+        })
+        .where(eq(messages.id, row.id))
+      return
+    }
 
-  const result = await gateway.send(to, row.contents)
-  if (result.ok) {
-    await db
-      .update(messages)
-      .set({ status: "sent", sentAt: now, updatedAt: now })
-      .where(eq(messages.id, row.id))
-  } else {
-    await db
-      .update(messages)
-      .set({ status: "failed", errorReason: result.error, updatedAt: now })
-      .where(eq(messages.id, row.id))
+    const result = await gateway.send(to, row.contents)
+    if (result.ok) {
+      await db
+        .update(messages)
+        .set({ status: "sent", sentAt: now, updatedAt: now })
+        .where(eq(messages.id, row.id))
+    } else {
+      await db
+        .update(messages)
+        .set({ status: "failed", errorReason: result.error, updatedAt: now })
+        .where(eq(messages.id, row.id))
+    }
+  } catch (err) {
+    console.error(`[sendOne] message ${row.id} failed`, err)
+    try {
+      await db
+        .update(messages)
+        .set({
+          status: "failed",
+          errorReason:
+            err instanceof Error ? err.message : "خطأ غير متوقع في الإرسال",
+          updatedAt: now,
+        })
+        .where(eq(messages.id, row.id))
+    } catch (updateErr) {
+      console.error(`[sendOne] could not update message ${row.id}`, updateErr)
+    }
   }
 }

@@ -26,6 +26,7 @@ export class FakeSmsGateway implements SmsGateway {
 
 const DEFAULT_SEND_URL = "https://sms.alawaeltec.com/MainServlet"
 const DEFAULT_CODING = 2
+const DEFAULT_SEND_TIMEOUT_MS = 10_000
 const PART_CHAR_LIMIT = 326
 const SUCCESS_CODE = 0
 
@@ -38,6 +39,7 @@ export interface AlawaelConfig {
   sendUrl?: string
   balanceUrl?: string
   coding?: number
+  sendTimeoutMs?: number
 }
 
 export function breakMessageIntoParts(message: string): string[] {
@@ -89,6 +91,7 @@ export class AlawaelSmsGateway implements SmsGateway {
   private readonly sendUrl: string
   private readonly balanceUrl: string
   private readonly coding: number
+  private readonly sendTimeoutMs: number
   private readonly fetchFn: FetchLike
 
   constructor(config: AlawaelConfig, opts: { fetchFn?: FetchLike } = {}) {
@@ -109,6 +112,9 @@ export class AlawaelSmsGateway implements SmsGateway {
       throw new Error("ALAWAEL_SEND_URL must use HTTPS")
     this.balanceUrl = config.balanceUrl ?? ""
     this.coding = config.coding ?? DEFAULT_CODING
+    this.sendTimeoutMs =
+      config.sendTimeoutMs ??
+      Number(process.env.ALAWAEL_SEND_TIMEOUT_MS ?? DEFAULT_SEND_TIMEOUT_MS)
     this.fetchFn = opts.fetchFn ?? (globalThis.fetch as FetchLike)
   }
 
@@ -123,8 +129,15 @@ export class AlawaelSmsGateway implements SmsGateway {
       url.searchParams.set("mobileNo", to)
       url.searchParams.set("text", part)
       url.searchParams.set("coding", String(this.coding))
+      const controller = new AbortController()
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        this.sendTimeoutMs
+      )
       try {
-        const res = await this.fetchFn(url.toString())
+        const res = await this.fetchFn(url.toString(), {
+          signal: controller.signal,
+        })
         const text = await res.text()
         const parsed = parseSmsResponse(text)
         if (parsed.code !== SUCCESS_CODE) {
@@ -132,10 +145,15 @@ export class AlawaelSmsGateway implements SmsGateway {
         }
         if (parsed.id) ids.push(parsed.id)
       } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return { ok: false, error: "انتهت مهلة الاتصال" }
+        }
         return {
           ok: false,
           error: err instanceof Error ? err.message : String(err),
         }
+      } finally {
+        clearTimeout(timeoutId)
       }
     }
     return { ok: true, messageId: ids.join(",") }
@@ -164,6 +182,9 @@ function alawaelConfigFromEnv(): AlawaelConfig | null {
   const password = process.env.ALAWAEL_PASSWORD
   if (!orgName || !username || !password) return null
   const coding = Number(process.env.ALAWAEL_CODING ?? DEFAULT_CODING)
+  const sendTimeoutMs = Number(
+    process.env.ALAWAEL_SEND_TIMEOUT_MS ?? DEFAULT_SEND_TIMEOUT_MS
+  )
   return {
     orgName,
     username,
@@ -171,6 +192,9 @@ function alawaelConfigFromEnv(): AlawaelConfig | null {
     sendUrl: process.env.ALAWAEL_SEND_URL,
     balanceUrl: process.env.ALAWAEL_BALANCE_URL,
     coding: Number.isNaN(coding) ? DEFAULT_CODING : coding,
+    sendTimeoutMs: Number.isNaN(sendTimeoutMs)
+      ? DEFAULT_SEND_TIMEOUT_MS
+      : sendTimeoutMs,
   }
 }
 

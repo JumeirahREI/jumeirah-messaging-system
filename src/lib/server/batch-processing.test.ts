@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { SmsGateway } from "./sms-gateway"
+import type { SmsResult } from "./sms-gateway"
 
 vi.mock("@/lib/server/db", () => {
   const selectResults: unknown[][] = []
@@ -48,12 +49,7 @@ type DbMock = {
   __setSelectResults: (rows: unknown[][]) => void
 }
 
-function makeGateway(
-  sendImpl: (
-    to: string,
-    body: string
-  ) => Promise<{ ok: true; messageId: string } | { ok: false; error: string }>
-): SmsGateway {
+function makeGateway(sendImpl: (to: string, body: string) => Promise<SmsResult>): SmsGateway {
   return { send: sendImpl }
 }
 
@@ -98,7 +94,9 @@ describe("processPendingMessages", () => {
   it("marks message failed when phone number is missing", async () => {
     setResults([{ id: 7, phoneNumberId: 999, contents: "x" }], [], [])
 
-    const sendSpy = vi.fn(async () => ({ ok: true, messageId: "x" }))
+    const sendSpy = vi.fn(
+      async () => ({ ok: true, messageId: "x" }) as { ok: true; messageId: string }
+    )
     setSmsGateway(makeGateway(sendSpy))
 
     await processPendingMessages(42)
@@ -158,7 +156,9 @@ describe("processPendingMessages", () => {
   it("skips sending when no pending rows and refreshes counters", async () => {
     setResults([], [])
 
-    const sendSpy = vi.fn(async () => ({ ok: true, messageId: "x" }))
+    const sendSpy = vi.fn(
+      async () => ({ ok: true, messageId: "x" }) as { ok: true; messageId: string }
+    )
     setSmsGateway(makeGateway(sendSpy))
 
     await processPendingMessages(42)
