@@ -45,14 +45,55 @@ export async function refreshBatchCounters(batchId: number): Promise<void> {
 }
 
 export async function processPendingMessages(batchId: number): Promise<void> {
-  const gateway = getSmsGateway()
+  try {
+    const gateway = getSmsGateway()
 
-  const pendingRows = await db
-    .select({
-      id: messages.id,
-      phoneNumberId: messages.phoneNumberId,
-      contents: messages.contents,
-    })
+    const pendingRows = await db
+      .select({
+        id: messages.id,
+        phoneNumberId: messages.phoneNumberId,
+        contents: messages.contents,
+      })
+      .from(messages)
+      .innerJoin(invoices, eq(messages.invoiceId, invoices.id))
+      .where(
+        and(
+          eq(invoices.batchId, batchId),
+          eq(messages.status, "pending"),
+          isNull(invoices.deletedAt),
+          isNull(messages.deletedAt)
+        )
+      )
+
+    if (pendingRows.length === 0) {
+      await refreshBatchCounters(batchId)
+      return
+    }
+
+    const phoneIds = pendingRows.map((m) => m.phoneNumberId)
+    const phoneRows = await db
+      .select({ id: phoneNumbers.id, number: phoneNumbers.number })
+      .from(phoneNumbers)
+      .where(inArray(phoneNumbers.id, phoneIds))
+    const phoneMap = new Map(phoneRows.map((p) => [p.id, p.number]))
+
+    for (let i = 0; i < pendingRows.length; i += SEND_CONCURRENCY) {
+      const chunk = pendingRows.slice(i, i + SEND_CONCURRENCY)
+      await Promise.all(chunk.map((m) => sendOne(gateway, phoneMap, m)))
+      await refreshBatchCounters(batchId)
+    }
+
+    await refreshBatchCounters(batchId)
+  } catch (err) {
+    console.error(`[processPendingMessages] batch ${batchId} failed`, err)
+    await failRemainingMessages(batchId)
+    throw err
+  }
+}
+
+async function failRemainingMessages(batchId: number): Promise<void> {
+  const remaining = await db
+    .select({ id: messages.id })
     .from(messages)
     .innerJoin(invoices, eq(messages.invoiceId, invoices.id))
     .where(
@@ -64,22 +105,20 @@ export async function processPendingMessages(batchId: number): Promise<void> {
       )
     )
 
-  if (pendingRows.length === 0) {
-    await refreshBatchCounters(batchId)
-    return
-  }
-
-  const phoneIds = pendingRows.map((m) => m.phoneNumberId)
-  const phoneRows = await db
-    .select({ id: phoneNumbers.id, number: phoneNumbers.number })
-    .from(phoneNumbers)
-    .where(inArray(phoneNumbers.id, phoneIds))
-  const phoneMap = new Map(phoneRows.map((p) => [p.id, p.number]))
-
-  for (let i = 0; i < pendingRows.length; i += SEND_CONCURRENCY) {
-    const chunk = pendingRows.slice(i, i + SEND_CONCURRENCY)
-    await Promise.all(chunk.map((m) => sendOne(gateway, phoneMap, m)))
-    await refreshBatchCounters(batchId)
+  if (remaining.length > 0) {
+    await db
+      .update(messages)
+      .set({
+        status: "failed",
+        errorReason: "فشلت عملية الإرسال",
+        updatedAt: now,
+      })
+      .where(
+        inArray(
+          messages.id,
+          remaining.map((r) => r.id)
+        )
+      )
   }
 
   await refreshBatchCounters(batchId)
