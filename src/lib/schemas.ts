@@ -95,6 +95,7 @@ export const batchFilterSchema = z.object({
 export const warningSendSchema = z.object({
   batchId: z.number(),
   invoiceIds: z.array(z.number()).min(1, "اختر فاتورة واحدة على الأقل"),
+  amounts: z.record(z.number()).optional(),
 })
 
 export type LoginFormData = z.infer<typeof loginSchema>
