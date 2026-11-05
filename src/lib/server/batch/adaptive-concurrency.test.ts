@@ -43,7 +43,7 @@ describe("AdaptiveConcurrency", () => {
   it("a single slow outlier does not shrink the pool (p95 of a healthy window)", () => {
     const c = make({ highLatencyMs: 10_000, minSamples: 20, window: 100 })
     feed(c, 99, { latencyMs: 200 })
-    c.record({ latencyMs: 60_000 })
+    c.record({ latencyMs: 60_000, ambiguous: false })
     expect(c.limit).toBeGreaterThanOrEqual(10)
   })
 

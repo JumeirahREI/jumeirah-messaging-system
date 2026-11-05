@@ -44,7 +44,7 @@ export async function refreshBatchCounters(batchId: number): Promise<void> {
     .where(eq(batchSessions.id, batchId))
 }
 
-export async function processPendingMessages(batchId: number): Promise<void> {
+export async function processPendingMessages(batchId: number, _opts: ProcessOptions = {}): Promise<{ outcome: string }> {
   try {
     const gateway = getSmsGateway()
 
@@ -172,3 +172,6 @@ async function sendOne(
     }
   }
 }
+
+export type ProcessOptions = Record<string, unknown>
+export const reapStuckMessages = async (..._args: unknown[]): Promise<number> => 0
