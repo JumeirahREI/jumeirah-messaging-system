@@ -1,4 +1,4 @@
-import { getUser } from "@/lib/server/reference-data"
+import { getUser } from "@/lib/server/reference/users"
 import { EditUserForm } from "./edit-user-form"
 
 export default async function EditUserPage({

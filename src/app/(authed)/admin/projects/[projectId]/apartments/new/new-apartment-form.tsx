@@ -19,8 +19,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { apartmentSchema, type ApartmentFormData } from "@/lib/schemas"
-import type { TowerRow } from "@/lib/server/reference-data"
-import { createApartment } from "@/lib/server/reference-data"
+import type { TowerRow } from "@/lib/server/reference/towers"
+import { createApartment } from "@/lib/server/reference/apartments"
 
 export function NewApartmentForm({
   projectId,

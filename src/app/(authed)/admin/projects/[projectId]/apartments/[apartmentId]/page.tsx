@@ -3,12 +3,12 @@ import { ContactRound, Phone } from "lucide-react"
 import { auth } from "@/auth"
 import { PageHeader } from "@/components/admin/page-header"
 import { StatCard, StatGrid } from "@/components/admin/stat-card"
+import { getApartment } from "@/lib/server/reference/apartments"
 import {
-  getApartment,
   listApartmentContacts,
   listContacts,
-  listPhoneNumbersForApartment,
-} from "@/lib/server/reference-data"
+} from "@/lib/server/reference/contacts"
+import { listPhoneNumbersForApartment } from "@/lib/server/reference/phones"
 import { EditApartmentForm } from "./edit-apartment-form"
 
 export default async function EditApartmentPage({

@@ -72,18 +72,16 @@ import type {
   BatchStatusResponse,
   DraftPreview,
   ManualDraftInvoice,
-} from "@/lib/server/batch-service"
+} from "@/lib/server/batch/read"
+import { updateInvoiceTotal } from "@/lib/server/batch/edit"
+import { softDeleteBatch } from "@/lib/server/batch/lifecycle"
 import {
   acquireBatchLock,
   forceReleaseBatchLock,
   heartbeatBatchLock,
   releaseBatchLock,
-  resumeSending,
-  retryFailed,
-  sendBatch,
-  softDeleteBatch,
-  updateInvoiceTotal,
-} from "@/lib/server/batch-service"
+} from "@/lib/server/batch/lock"
+import { resumeSending, retryFailed, sendBatch } from "@/lib/server/batch/send"
 import { formatDate } from "@/lib/utils"
 
 export function BatchDetailClient({

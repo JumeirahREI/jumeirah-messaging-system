@@ -18,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { projectSchema, type ProjectFormData } from "@/lib/schemas"
-import { createProject } from "@/lib/server/reference-data"
+import { createProject } from "@/lib/server/reference/projects"
 
 export default function NewProjectPage() {
   const router = useRouter()

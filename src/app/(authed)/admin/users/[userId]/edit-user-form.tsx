@@ -33,7 +33,7 @@ import {
   resetUserPassword,
   softDeleteUser,
   updateUser,
-} from "@/lib/server/reference-data"
+} from "@/lib/server/reference/users"
 
 export function EditUserForm({
   userId,

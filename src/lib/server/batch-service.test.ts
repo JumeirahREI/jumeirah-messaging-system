@@ -104,16 +104,16 @@ vi.mock("@/lib/server/db", () => {
 })
 
 const { db } = await import("@/lib/server/db")
+const { createBatch } = await import("./batch/create")
+const { updateInvoiceTotal } = await import("./batch/edit")
+const { sendBatch } = await import("./batch/send")
 const {
-  createBatch,
-  updateInvoiceTotal,
-  sendBatch,
   acquireBatchLock,
   releaseBatchLock,
   heartbeatBatchLock,
   forceReleaseBatchLock,
-  getDraftPreview,
-} = await import("./batch-service")
+} = await import("./batch/lock")
+const { getDraftPreview } = await import("./batch/read")
 const { parseInvoiceExcel } = await import("./excel-parser")
 const { parseBalanceSheetExcel } = await import("./excel-balance-parser")
 const { requireRole } = await import("@/lib/server/auth-helpers")

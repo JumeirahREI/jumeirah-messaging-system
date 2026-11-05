@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { listUsers } from "@/lib/server/reference-data"
+import { listUsers } from "@/lib/server/reference/users"
 
 export default async function UsersListPage() {
   const users = await listUsers()

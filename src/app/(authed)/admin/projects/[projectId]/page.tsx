@@ -4,11 +4,9 @@ import { auth } from "@/auth"
 import { PageHeader } from "@/components/admin/page-header"
 import { ProjectApartments } from "@/components/admin/project-apartments"
 import { StatCard, StatGrid } from "@/components/admin/stat-card"
-import {
-  getProject,
-  listApartmentsByProject,
-  listTowers,
-} from "@/lib/server/reference-data"
+import { listApartmentsByProject } from "@/lib/server/reference/apartments"
+import { getProject } from "@/lib/server/reference/projects"
+import { listTowers } from "@/lib/server/reference/towers"
 export default async function EditProjectPage({
   params,
 }: {

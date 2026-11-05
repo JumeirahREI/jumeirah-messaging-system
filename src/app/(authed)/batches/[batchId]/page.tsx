@@ -3,8 +3,8 @@ import {
   getBatch,
   getDraftPreview,
   getManualDraftInvoices,
-} from "@/lib/server/batch-service"
-import { listContacts } from "@/lib/server/reference-data"
+} from "@/lib/server/batch/read"
+import { listContacts } from "@/lib/server/reference/contacts"
 
 import { BatchDetailClient } from "./batch-detail-client"
 

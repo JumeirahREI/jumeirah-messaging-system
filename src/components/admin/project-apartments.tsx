@@ -9,10 +9,8 @@ import { SearchInput, useSearchFilter } from "@/components/admin/search-input"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
-import type {
-  ApartmentWithTowerRow,
-  TowerRow,
-} from "@/lib/server/reference-data"
+import type { ApartmentWithTowerRow } from "@/lib/server/reference/apartments"
+import type { TowerRow } from "@/lib/server/reference/towers"
 
 const PAGE_SIZE = 24
 

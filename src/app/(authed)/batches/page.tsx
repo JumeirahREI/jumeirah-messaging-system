@@ -1,4 +1,4 @@
-import { listBatches } from "@/lib/server/batch-service"
+import { listBatches } from "@/lib/server/batch/read"
 
 import { BatchesListClient } from "./batches-list-client"
 

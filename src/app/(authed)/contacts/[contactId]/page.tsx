@@ -5,9 +5,9 @@ import { StatCard, StatGrid } from "@/components/admin/stat-card"
 import {
   getContact,
   listContactApartmentLinks,
-  listPhoneNumbers,
-  listProjects,
-} from "@/lib/server/reference-data"
+} from "@/lib/server/reference/contacts"
+import { listPhoneNumbers } from "@/lib/server/reference/phones"
+import { listProjects } from "@/lib/server/reference/projects"
 
 import { EditContactForm } from "./edit-contact-form"
 

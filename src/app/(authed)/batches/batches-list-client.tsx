@@ -36,8 +36,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import type { BatchRow } from "@/lib/server/batch-service"
-import { archiveBatch, softDeleteBatch } from "@/lib/server/batch-service"
+import type { BatchRow } from "@/lib/server/batch/read"
+import { archiveBatch, softDeleteBatch } from "@/lib/server/batch/lifecycle"
 import { formatDate } from "@/lib/utils"
 
 type StatusFilter = "all" | "draft" | "sending" | "completed"

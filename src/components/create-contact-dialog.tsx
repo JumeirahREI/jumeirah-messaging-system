@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { contactSchema, type ContactFormData } from "@/lib/schemas"
-import { createContact } from "@/lib/server/reference-data"
+import { createContact } from "@/lib/server/reference/contacts"
 
 export function CreateContactDialog({
   open,

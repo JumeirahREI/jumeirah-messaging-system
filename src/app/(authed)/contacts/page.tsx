@@ -1,7 +1,5 @@
-import {
-  listContactsPage,
-  listProjects,
-} from "@/lib/server/reference-data"
+import { listContactsPage } from "@/lib/server/reference/contacts"
+import { listProjects } from "@/lib/server/reference/projects"
 
 import { ContactsListClient } from "./contacts-list-client"
 
