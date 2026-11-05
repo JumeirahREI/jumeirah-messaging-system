@@ -8,6 +8,7 @@ import {
   FakeSmsGateway,
   setSmsGateway,
   type FetchLike,
+  type SmsGateway,
 } from "./sms-gateway"
 
 describe("FakeSmsGateway", () => {
@@ -584,9 +585,12 @@ describe("clientRef and lookupStatus", () => {
   })
 
   it("lookupStatus is unsupported for Alawael and the fake gateway", async () => {
-    const gw = new AlawaelSmsGateway(baseConfig)
-    expect(await gw.lookupStatus("x")).toBe("unsupported")
-    expect(await new FakeSmsGateway().lookupStatus("x")).toBe("unsupported")
+    const gateways: SmsGateway[] = [
+      new AlawaelSmsGateway(baseConfig),
+      new FakeSmsGateway(),
+    ]
+    for (const gw of gateways)
+      expect(await gw.lookupStatus?.("x")).toBe("unsupported")
   })
 
   it("fake failures are definite", async () => {

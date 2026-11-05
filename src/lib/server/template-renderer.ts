@@ -25,9 +25,14 @@ function sanitizeLabel(label: string): string {
 }
 
 function substitute(template: string, vars: TemplateVars): string {
-  return template
-    .replace("{amount}", formatAmount(vars.amount))
-    .replace("{unit_label}", sanitizeLabel(vars.unit_label))
+  const values = {
+    amount: formatAmount(vars.amount),
+    unit_label: sanitizeLabel(vars.unit_label),
+  }
+  return template.replace(
+    /\{(amount|unit_label)\}/g,
+    (_, key: keyof typeof values) => values[key]
+  )
 }
 
 export function renderNotification(vars: TemplateVars): string {

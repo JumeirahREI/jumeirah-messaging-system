@@ -85,12 +85,12 @@ describe("createFakeFetch", () => {
     const gateway = gatewayWith(fake)
     expect(await gateway.send("1", "a")).toEqual({
       ok: false,
+      outcome: "failed",
       error: "Bad credentials",
     })
-    expect(await gateway.send("1", "a")).toEqual({
-      ok: false,
-      error: "ECONNRESET",
-    })
+    const reset = await gateway.send("1", "a")
+    expect(reset).toMatchObject({ ok: false, outcome: "ambiguous" })
+    if (!reset.ok) expect(reset.error).toContain("ECONNRESET")
   })
 
   it("honours abort signals while delaying", async () => {
