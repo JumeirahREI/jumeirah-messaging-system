@@ -29,15 +29,13 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { contactSchema, type ContactFormData } from "@/lib/schemas"
-import type {
-  ContactApartmentLinkRow,
-  PhoneNumberRow,
-  ProjectRow,
-} from "@/lib/server/reference-data"
+import type { ContactApartmentLinkRow } from "@/lib/server/reference/contacts"
+import type { PhoneNumberRow } from "@/lib/server/reference/phones"
+import type { ProjectRow } from "@/lib/server/reference/projects"
 import {
   softDeleteContact,
   updateContact,
-} from "@/lib/server/reference-data"
+} from "@/lib/server/reference/contacts"
 
 export function EditContactForm({
   contactId,

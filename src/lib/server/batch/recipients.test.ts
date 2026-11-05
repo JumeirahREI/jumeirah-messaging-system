@@ -112,25 +112,27 @@ describe("resolveRecipients", () => {
     expect(result.apartmentsWithContacts.has(apt.id)).toBe(false)
   })
 
-  it("dedupes a phone row shared by several links of the same apartment", async () => {
+  it("returns the same phone row once per apartment it is linked to", async () => {
     const { db } = testDb
-    const apt = await createApartment(db)
+    const one = await createApartment(db)
+    const two = await createApartment(db)
     const contact = await createContact(db)
     const phone = await createPhoneNumber(db, { contactId: contact.id })
     await createApartmentContact(db, {
-      apartmentId: apt.id,
+      apartmentId: one.id,
       contactId: contact.id,
-      role: "owner",
     })
     await createApartmentContact(db, {
-      apartmentId: apt.id,
+      apartmentId: two.id,
       contactId: contact.id,
-      role: "tenant",
     })
 
-    const result = await resolveRecipients([apt.id])
+    const result = await resolveRecipients([one.id, two.id])
 
-    expect(result.phonesByApartment.get(apt.id)?.map((p) => p.id)).toEqual([
+    expect(result.phonesByApartment.get(one.id)?.map((p) => p.id)).toEqual([
+      phone.id,
+    ])
+    expect(result.phonesByApartment.get(two.id)?.map((p) => p.id)).toEqual([
       phone.id,
     ])
   })

@@ -2,7 +2,7 @@
 
 import useSWR from "swr"
 
-import type { BatchStatusResponse } from "@/lib/server/batch-service"
+import type { BatchStatusResponse } from "@/lib/server/batch/read"
 
 export function useBatchStatus(batchId: number, status: string) {
   const shouldFetch = status === "sending" || status === "completed"

@@ -32,12 +32,9 @@ import {
 import type {
   BatchDetail,
   WarningEligibleInvoice,
-} from "@/lib/server/batch-service"
-import {
-  applyWarningExcel,
-  sendWarning,
-  updateWarningAmount,
-} from "@/lib/server/batch-service"
+} from "@/lib/server/batch/read"
+import { applyWarningExcel, updateWarningAmount } from "@/lib/server/batch/edit"
+import { sendWarning } from "@/lib/server/batch/send"
 
 export function WarningClient({
   batch,

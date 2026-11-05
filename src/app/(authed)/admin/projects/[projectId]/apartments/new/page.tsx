@@ -1,4 +1,4 @@
-import { listTowers } from "@/lib/server/reference-data"
+import { listTowers } from "@/lib/server/reference/towers"
 import { NewApartmentForm } from "./new-apartment-form"
 
 export default async function NewApartmentPage({

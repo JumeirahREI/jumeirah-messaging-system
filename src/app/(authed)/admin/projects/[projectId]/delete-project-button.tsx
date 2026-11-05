@@ -15,7 +15,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { softDeleteProject } from "@/lib/server/reference-data"
+import { softDeleteProject } from "@/lib/server/reference/projects"
 import { Trash2 } from "lucide-react"
 
 export function DeleteProjectButton({ projectId }: { projectId: number }) {

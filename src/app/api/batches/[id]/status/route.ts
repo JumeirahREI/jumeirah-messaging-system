@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { auth } from "@/auth"
-import { getBatchStatus } from "@/lib/server/batch-service"
+import { getBatchStatus } from "@/lib/server/batch/read"
 
 export async function GET(
   _req: Request,

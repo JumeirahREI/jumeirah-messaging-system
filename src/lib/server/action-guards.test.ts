@@ -63,9 +63,7 @@ describe("requireRoleRateLimited", () => {
     const limit = vi.fn(async () => ({ success: true }))
     holder.limiter = { limit }
 
-    await expect(requireRoleRateLimited("operator")).rejects.toThrow(
-      "غير مصرح"
-    )
+    await expect(requireRoleRateLimited("operator")).rejects.toThrow("غير مصرح")
     expect(limit).not.toHaveBeenCalled()
   })
 

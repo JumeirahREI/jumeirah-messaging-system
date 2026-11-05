@@ -53,15 +53,17 @@ import { toDisplayFormat } from "@/lib/phone"
 import { apartmentEditSchema, type ApartmentEditFormData } from "@/lib/schemas"
 import type {
   ApartmentContactRow,
-  ApartmentPhoneNumberRow,
   ContactRow,
-} from "@/lib/server/reference-data"
+} from "@/lib/server/reference/contacts"
+import type { ApartmentPhoneNumberRow } from "@/lib/server/reference/phones"
 import {
   softDeleteApartment,
-  unlinkContact,
   updateApartment,
+} from "@/lib/server/reference/apartments"
+import {
+  unlinkContact,
   updateContactLink,
-} from "@/lib/server/reference-data"
+} from "@/lib/server/reference/contacts"
 import type { ContactRole } from "@/lib/server/schema"
 
 export function EditApartmentForm({

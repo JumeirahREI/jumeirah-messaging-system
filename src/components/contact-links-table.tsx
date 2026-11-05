@@ -39,11 +39,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import type {
-  ContactApartmentLinkRow,
-  ProjectRow,
-} from "@/lib/server/reference-data"
-import { unlinkContact, updateContactLink } from "@/lib/server/reference-data"
+import type { ContactApartmentLinkRow } from "@/lib/server/reference/contacts"
+import type { ProjectRow } from "@/lib/server/reference/projects"
+import {
+  unlinkContact,
+  updateContactLink,
+} from "@/lib/server/reference/contacts"
 import type { ContactRole } from "@/lib/server/schema"
 
 export function ContactLinksTable({

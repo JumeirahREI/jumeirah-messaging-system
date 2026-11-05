@@ -6,7 +6,7 @@ import Link from "next/link"
 import { EmptyState } from "@/components/admin/empty-state"
 import { SearchInput, useSearchFilter } from "@/components/admin/search-input"
 import { Card } from "@/components/ui/card"
-import type { ProjectWithCountsRow } from "@/lib/server/reference-data"
+import type { ProjectWithCountsRow } from "@/lib/server/reference/projects"
 
 export function ProjectsGrid({
   projects,

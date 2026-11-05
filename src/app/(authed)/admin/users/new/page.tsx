@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { userCreateSchema, type UserCreateFormData } from "@/lib/schemas"
-import { createUser } from "@/lib/server/reference-data"
+import { createUser } from "@/lib/server/reference/users"
 
 export default function NewUserPage() {
   const router = useRouter()

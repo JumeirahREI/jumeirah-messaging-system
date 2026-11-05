@@ -21,12 +21,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { contactLinkSchema, type ContactLinkFormData } from "@/lib/schemas"
-import type { ContactRow } from "@/lib/server/reference-data"
-import {
-  addPhoneNumber,
-  createContact,
-  linkContact,
-} from "@/lib/server/reference-data"
+import type { ContactRow } from "@/lib/server/reference/contacts"
+import { createContact, linkContact } from "@/lib/server/reference/contacts"
+import { addPhoneNumber } from "@/lib/server/reference/phones"
 import type { ContactRole } from "@/lib/server/schema"
 
 export type { ContactRow }

@@ -28,7 +28,7 @@ import {
   previewBatchFile,
   type BatchFormat,
   type SheetPreviewResult,
-} from "@/lib/server/batch-service"
+} from "@/lib/server/batch/create"
 
 function todayTitle(): string {
   return new Date().toISOString().slice(0, 10)
