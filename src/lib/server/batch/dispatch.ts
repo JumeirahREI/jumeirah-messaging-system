@@ -23,3 +23,7 @@ export function invokeBackgroundProcess(batchId: number): void {
     )
   })
 }
+
+export const dispatchBatchProcessing = async (
+  ..._args: unknown[]
+): Promise<{ ok: boolean; status?: number; error?: string }> => ({ ok: false })
