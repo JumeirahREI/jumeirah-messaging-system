@@ -1,13 +1,13 @@
 import { withSentryConfig } from "@sentry/nextjs"
 import type { NextConfig } from "next"
 
+import { resolveAllowedOrigins } from "./src/lib/site-url"
+
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
       bodySizeLimit: "12mb",
-      allowedOrigins: process.env.NEXT_PUBLIC_SITE_URL
-        ? [process.env.NEXT_PUBLIC_SITE_URL]
-        : ["localhost:3000"],
+      allowedOrigins: resolveAllowedOrigins(process.env.NEXT_PUBLIC_SITE_URL),
     },
     turbopackFileSystemCacheForDev: true,
   },

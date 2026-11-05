@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { auth } from "@/auth"
 import { getBatchStatus } from "@/lib/server/batch-service"
+import { parsePositiveInt } from "@/lib/server/parse-id"
 
 export async function GET(
   _req: Request,
@@ -11,11 +12,13 @@ export async function GET(
   if (!session?.user) {
     return NextResponse.json({ error: "غير مصرح" }, { status: 401 })
   }
-  const { id } = await ctx.params
-  const batchId = Number(id)
-  if (Number.isNaN(batchId)) {
+  const batchId = parsePositiveInt((await ctx.params).id)
+  if (batchId === null) {
     return NextResponse.json({ error: "معرّف غير صالح" }, { status: 400 })
   }
   const status = await getBatchStatus({ batchId })
+  if (!status) {
+    return NextResponse.json({ error: "الدفعة غير موجودة" }, { status: 404 })
+  }
   return NextResponse.json(status)
 }
