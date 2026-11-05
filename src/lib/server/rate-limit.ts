@@ -10,12 +10,22 @@ function getRedis(): Redis | null {
 
 const redis = getRedis()
 
-export const loginLimiter = redis
-  ? new Ratelimit({
-      redis,
-      limiter: Ratelimit.slidingWindow(5, "15 m"),
-      prefix: "ratelimit:login",
-    })
+export const LOGIN_USER_MAX_FAILURES = 5
+export const LOGIN_IP_MAX_FAILURES = 30
+
+export const loginLimiters = redis
+  ? {
+      user: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(LOGIN_USER_MAX_FAILURES, "15 m"),
+        prefix: "ratelimit:login:user",
+      }),
+      ip: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(LOGIN_IP_MAX_FAILURES, "15 m"),
+        prefix: "ratelimit:login:ip",
+      }),
+    }
   : null
 
 export const mutationLimiter = redis

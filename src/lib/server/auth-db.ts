@@ -1,9 +1,12 @@
 import bcrypt from "bcryptjs"
-import { and, eq, isNull } from "drizzle-orm"
+import { and, isNull, sql } from "drizzle-orm"
 
 import type { SessionUser } from "@/auth.config"
 import { db } from "@/lib/server/db"
+import { normalizeUsername } from "@/lib/server/login-attempts"
 import { users } from "@/lib/server/schema"
+
+const DUMMY_HASH = bcrypt.hashSync("dummy-password-for-timing-parity", 12)
 
 export async function authenticateUser(
   username: string,
@@ -19,12 +22,16 @@ export async function authenticateUser(
       mustResetPassword: users.mustResetPassword,
     })
     .from(users)
-    .where(and(eq(users.username, username), isNull(users.deletedAt)))
+    .where(
+      and(
+        sql`lower(${users.username}) = ${normalizeUsername(username)}`,
+        isNull(users.deletedAt)
+      )
+    )
     .limit(1)
-  if (rows.length === 0) return null
   const row = rows[0]
-  const valid = await bcrypt.compare(password, row.password)
-  if (!valid) return null
+  const valid = await bcrypt.compare(password, row?.password ?? DUMMY_HASH)
+  if (!row || !valid) return null
   return {
     id: row.id,
     fullname: row.fullname,

@@ -2,10 +2,10 @@ import NextAuth from "next-auth"
 import { NextResponse } from "next/server"
 
 import { authConfig } from "@/auth.config"
+import { PUBLIC_ROUTES } from "@/lib/public-routes"
 
 const { auth } = NextAuth(authConfig)
 
-const PUBLIC_ROUTES = ["/login", "/change-password", "/debug-sentry"]
 const AUTH_API_PREFIX = "/api/auth"
 
 export default auth((req) => {
