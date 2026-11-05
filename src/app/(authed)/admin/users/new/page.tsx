@@ -1,6 +1,7 @@
 "use client"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 
@@ -16,7 +17,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { userCreateSchema, type UserCreateFormData } from "@/lib/schemas"
-import { createUser } from "@/lib/server/reference-data"
+import { createUser } from "@/lib/server/reference/users"
+import { TemporaryPasswordDialog } from "../temporary-password-dialog"
 
 export default function NewUserPage() {
   const router = useRouter()
@@ -35,6 +37,11 @@ export default function NewUserPage() {
     },
   })
   const isAdmin = watch("isAdmin")
+  const [created, setCreated] = useState<{
+    id: number
+    username: string
+    temporaryPassword: string
+  } | null>(null)
 
   async function onSubmit(data: UserCreateFormData) {
     const result = await createUser({
@@ -47,11 +54,16 @@ export default function NewUserPage() {
       return
     }
     toast.success("تم إنشاء المستخدم")
-    router.push(`/admin/users/${result.data.id}`)
+    setCreated(result.data)
   }
 
   return (
     <div className="mx-auto max-w-md">
+      <TemporaryPasswordDialog
+        username={created?.username ?? ""}
+        temporaryPassword={created?.temporaryPassword ?? null}
+        onClose={() => router.push(`/admin/users/${created?.id}`)}
+      />
       <form onSubmit={handleSubmit(onSubmit)}>
         <Card>
           <CardHeader>

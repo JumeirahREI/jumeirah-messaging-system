@@ -20,10 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import type {
-  ContactWithCountsRow,
-  ProjectRow,
-} from "@/lib/server/reference-data"
+import type { ContactWithCountsRow } from "@/lib/server/reference/contacts"
+import type { ProjectRow } from "@/lib/server/reference/projects"
 import { formatDate } from "@/lib/utils"
 
 export function ContactsListClient({

@@ -16,6 +16,7 @@ export const batchSessions = sqliteTable(
       .references(() => projects.id),
     sent: integer("sent").notNull().default(0),
     failed: integer("failed").notNull().default(0),
+    unknown: integer("unknown").notNull().default(0),
     status: text("status").$type<BatchStatus>().notNull().default("draft"),
     mode: text("mode").$type<BatchMode>().notNull().default("automatic"),
     excelLabels: text("excel_labels"),
@@ -33,9 +34,16 @@ export const batchSessions = sqliteTable(
     archivedAt: text("archived_at"),
     lockedBy: integer("locked_by").references(() => users.id),
     lockedAt: text("locked_at"),
+    runnerId: text("runner_id"),
+    runnerLeaseUntil: text("runner_lease_until"),
   },
   (t) => ({
     projectIdx: index("batch_sessions_project_id_idx").on(t.projectId),
     statusIdx: index("batch_sessions_status_idx").on(t.status),
+    createdAtIdx: index("batch_sessions_created_at_idx").on(t.createdAt),
+    projectStatusIdx: index("batch_sessions_project_status_idx").on(
+      t.projectId,
+      t.status
+    ),
   })
 )

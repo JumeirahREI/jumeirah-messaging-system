@@ -18,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { towerSchema, type TowerFormData } from "@/lib/schemas"
-import { createTower } from "@/lib/server/reference-data"
+import { createTower } from "@/lib/server/reference/towers"
 
 export default function NewTowerPage() {
   const router = useRouter()

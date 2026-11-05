@@ -33,7 +33,8 @@ import {
   resetUserPassword,
   softDeleteUser,
   updateUser,
-} from "@/lib/server/reference-data"
+} from "@/lib/server/reference/users"
+import { TemporaryPasswordDialog } from "../temporary-password-dialog"
 
 export function EditUserForm({
   userId,
@@ -66,6 +67,9 @@ export function EditUserForm({
   const isAdmin = watch("isAdmin")
 
   const [isResetting, setIsResetting] = useState(false)
+  const [temporaryPassword, setTemporaryPassword] = useState<string | null>(
+    null
+  )
 
   async function onUpdate(data: UserUpdateFormData) {
     const result = await updateUser({
@@ -91,6 +95,7 @@ export function EditUserForm({
       return
     }
     toast.success("تم إعادة تعيين كلمة المرور")
+    setTemporaryPassword(result.data.temporaryPassword)
   }
 
   async function handleDelete() {
@@ -107,6 +112,11 @@ export function EditUserForm({
 
   return (
     <div className="flex flex-col gap-6">
+      <TemporaryPasswordDialog
+        username={initialUsername}
+        temporaryPassword={temporaryPassword}
+        onClose={() => setTemporaryPassword(null)}
+      />
       <div className="mx-auto w-full max-w-md">
         <form onSubmit={handleSubmit(onUpdate)}>
           <Card>
@@ -197,8 +207,9 @@ export function EditUserForm({
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              سيتم تعيين كلمة المرور إلى اسم المستخدم وسيتعين على المستخدم
-              تغييرها عند تسجيل الدخول.
+              سيتم إنشاء كلمة مرور مؤقتة عشوائية تظهر لك مرة واحدة فقط، وسيتعين
+              على المستخدم تغييرها عند تسجيل الدخول. ستنتهي جلسات المستخدم
+              الحالية.
             </p>
           </CardContent>
           <CardFooter>
@@ -214,8 +225,8 @@ export function EditUserForm({
                 <AlertDialogHeader>
                   <AlertDialogTitle>تأكيد إعادة التعيين؟</AlertDialogTitle>
                   <AlertDialogDescription>
-                    سيتم تعيين كلمة المرور إلى اسم المستخدم وسيتعين على المستخدم
-                    تغييرها عند تسجيل الدخول.
+                    سيتم إنشاء كلمة مرور مؤقتة عشوائية تظهر لك مرة واحدة فقط،
+                    وستنتهي جلسات المستخدم الحالية.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

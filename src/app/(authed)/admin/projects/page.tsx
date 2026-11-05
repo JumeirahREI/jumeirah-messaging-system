@@ -5,7 +5,7 @@ import { auth } from "@/auth"
 import { PageHeader } from "@/components/admin/page-header"
 import { ProjectsGrid } from "@/components/admin/projects-grid"
 import { Button } from "@/components/ui/button"
-import { listProjectsWithCounts } from "@/lib/server/reference-data"
+import { listProjectsWithCounts } from "@/lib/server/reference/projects"
 
 export default async function ProjectsListPage() {
   const session = await auth()

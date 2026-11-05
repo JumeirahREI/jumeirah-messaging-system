@@ -16,14 +16,10 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
-import type {
-  ApartmentWithTowerRow,
-  ProjectRow,
-} from "@/lib/server/reference-data"
-import {
-  linkContact,
-  listApartmentsByProject,
-} from "@/lib/server/reference-data"
+import type { ApartmentWithTowerRow } from "@/lib/server/reference/apartments"
+import type { ProjectRow } from "@/lib/server/reference/projects"
+import { listApartmentsByProject } from "@/lib/server/reference/apartments"
+import { linkContact } from "@/lib/server/reference/contacts"
 import type { ContactRole } from "@/lib/server/schema"
 
 export function ContactLinkDialog({

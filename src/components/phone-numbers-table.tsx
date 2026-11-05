@@ -9,12 +9,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toDisplayFormat } from "@/lib/phone"
 import { phoneNumberSchema, type PhoneNumberFormData } from "@/lib/schemas"
-import type { PhoneNumberRow } from "@/lib/server/reference-data"
+import type { PhoneNumberRow } from "@/lib/server/reference/phones"
 import {
   addPhoneNumber,
   deletePhoneNumber,
   updatePhoneNumber,
-} from "@/lib/server/reference-data"
+} from "@/lib/server/reference/phones"
 
 export function PhoneNumbersTable({
   contactId,

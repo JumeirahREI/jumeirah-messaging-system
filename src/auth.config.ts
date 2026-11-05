@@ -1,5 +1,7 @@
 import type { NextAuthConfig } from "next-auth"
 
+import { readSessionUpdate } from "@/lib/server/session-proof"
+
 export type Role = "operator" | "admin"
 
 export type SessionUser = {
@@ -11,73 +13,93 @@ export type SessionUser = {
 }
 
 declare module "next-auth" {
+  interface User {
+    fullname?: string
+    username?: string
+    isAdmin?: boolean
+    mustResetPassword?: boolean
+    sessionVersion?: number
+  }
   interface Session {
     user: SessionUser
     mustResetPassword: boolean
+    sessionVersion: number
   }
 }
 
-type AugmentedJWT = {
-  id?: number
-  fullname?: string
-  username?: string
-  isAdmin?: boolean
-  mustResetPassword?: boolean
+declare module "@auth/core/jwt" {
+  interface JWT {
+    id?: number
+    fullname?: string
+    username?: string
+    isAdmin?: boolean
+    mustResetPassword?: boolean
+    sessionVersion?: number
+  }
+}
+
+function readMustResetPassword(session: unknown): boolean | undefined {
+  if (typeof session !== "object" || session === null) return undefined
+  const value = (session as { mustResetPassword?: unknown }).mustResetPassword
+  return typeof value === "boolean" ? value : undefined
 }
 
 export const authConfig = {
-  trustHost: true,
+  trustHost: !["false", "0"].includes(process.env.AUTH_TRUST_HOST ?? ""),
   secret: process.env.AUTH_SECRET,
   session: { strategy: "jwt", maxAge: 60 * 60 * 2 },
   pages: { signIn: "/login" },
   callbacks: {
     jwt({ token, user, trigger, session }) {
-      const t = token as unknown as AugmentedJWT
       if (user) {
-        const u = user as unknown as SessionUser
-        t.id = u.id
-        t.fullname = u.fullname
-        t.username = u.username
-        t.isAdmin = u.isAdmin
-        t.mustResetPassword = u.mustResetPassword
+        token.id = Number(user.id)
+        token.fullname = user.fullname
+        token.username = user.username
+        token.isAdmin = user.isAdmin
+        token.mustResetPassword = user.mustResetPassword
+        token.sessionVersion = user.sessionVersion
       }
       if (trigger === "update") {
-        const s = session as { mustResetPassword?: boolean }
-        if (s.mustResetPassword !== undefined) {
-          t.mustResetPassword = s.mustResetPassword
+        const mustResetPassword = readMustResetPassword(session)
+        if (mustResetPassword !== undefined) {
+          token.mustResetPassword = mustResetPassword
+        }
+        if (token.id !== undefined) {
+          const sessionVersion = readSessionUpdate(token.id, session)
+          if (sessionVersion !== null) token.sessionVersion = sessionVersion
         }
       }
       return token
     },
     session({ session, token }) {
-      const t = token as unknown as AugmentedJWT
-      if (t.id !== undefined) {
-        ;(session as unknown as { user: SessionUser }).user = {
-          id: t.id,
-          fullname: t.fullname ?? "",
-          username: t.username ?? "",
-          isAdmin: t.isAdmin ?? false,
-          mustResetPassword: t.mustResetPassword ?? false,
-        }
-        ;(
-          session as unknown as { mustResetPassword: boolean }
-        ).mustResetPassword = t.mustResetPassword ?? false
+      if (token.id === undefined) return session
+      return {
+        ...session,
+        user: {
+          id: token.id,
+          fullname: token.fullname ?? "",
+          username: token.username ?? "",
+          isAdmin: token.isAdmin ?? false,
+          mustResetPassword: token.mustResetPassword ?? false,
+        },
+        mustResetPassword: token.mustResetPassword ?? false,
+        sessionVersion: token.sessionVersion ?? 0,
       }
-      return session
     },
     redirect({ url, baseUrl }) {
-      if (url.startsWith("/")) return new URL(url, baseUrl).toString()
-      if (new URL(url).origin === baseUrl) return url
-      return baseUrl
+      try {
+        const target = new URL(url, baseUrl)
+        return target.origin === new URL(baseUrl).origin
+          ? target.toString()
+          : baseUrl
+      } catch {
+        return baseUrl
+      }
     },
   },
   providers: [],
 } satisfies NextAuthConfig
 
-if (
-  !process.env.AUTH_SECRET &&
-  process.env.NODE_ENV === "production" &&
-  !process.env.NETLIFY
-) {
+if (!process.env.AUTH_SECRET && process.env.NODE_ENV === "production") {
   throw new Error("AUTH_SECRET environment variable is required in production")
 }

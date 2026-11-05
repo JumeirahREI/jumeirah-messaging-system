@@ -1,4 +1,4 @@
-import { getBatch, getWarningEligible } from "@/lib/server/batch-service"
+import { getBatch, getWarningEligible } from "@/lib/server/batch/read"
 
 import { WarningClient } from "./warning-client"
 

@@ -11,6 +11,7 @@ export const users = sqliteTable("users", {
   mustResetPassword: integer("must_reset_password", { mode: "boolean" })
     .notNull()
     .default(false),
+  sessionVersion: integer("session_version").notNull().default(0),
   createdBy: integer("created_by").references((): AnySQLiteColumn => users.id),
   createdAt: text("created_at")
     .notNull()

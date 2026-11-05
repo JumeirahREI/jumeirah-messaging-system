@@ -104,6 +104,7 @@ users
 | fullname   | text    | not null                      |
 | username   | text    | not null, unique              |
 | password   | text    | not null (bcrypt hash)        |
+| session_version | integer | not null, default 0 (bumped to revoke sessions) |
 | is_admin   | integer | not null, default 0 (boolean) |
 | created_by | integer | FK → users.id                 |
 | created_at | text    | not null (ISO timestamp)      |
@@ -221,7 +222,10 @@ label)` or via application-level validation joining through `tower_id → projec
 | project_id  | integer | FK → projects.id, not null                  |
 | sent        | integer | not null, default 0 (total messages sent)   |
 | failed      | integer | not null, default 0 (total messages failed) |
+| unknown     | integer | not null, default 0 (messages with unconfirmed outcome) |
 | status      | text    | not null (enum: draft, sending, completed)  |
+| runner_id   | text    | nullable (processing lease holder)          |
+| runner_lease_until | text | nullable (processing lease expiry)       |
 | created_by  | integer | FK → users.id                               |
 | created_at  | text    | not null                                    |
 | updated_by  | integer | FK → users.id, nullable                     |
@@ -260,7 +264,12 @@ label)` or via application-level validation joining through `tower_id → projec
 | phone_number_id | integer | FK → phone_numbers.id, not null                |
 | contents        | text    | not null (rendered SMS text, stored for audit) |
 | template_type   | text    | not null (enum: notification, warning)         |
-| status          | text    | not null (enum: pending, sent, failed)         |
+| status          | text    | not null (enum: pending, sending, sent, failed, unknown) |
+| claimed_at      | text    | nullable (when a runner claimed the row)       |
+| attempts        | integer | not null, default 0                            |
+| gateway_message_id | text | nullable (provider message id)                 |
+| client_ref      | text    | nullable, unique when set                      |
+| parts_sent      | integer | not null, default 0 (delivered multipart parts) |
 | error_reason    | text    | nullable (set when status = failed)            |
 | sent_at         | text    | nullable (set when status = sent)              |
 | created_by      | integer | FK → users.id (operator who triggered)         |
@@ -288,6 +297,16 @@ label)` or via application-level validation joining through `tower_id → projec
 | messages           | `(invoice_id)` — for per-invoice message list   |
 | messages           | `(phone_number_id)` — for per-number history    |
 | messages           | `(status)` — for retry-failed queries           |
+| messages           | unique `(invoice_id, phone_number_id, template_type)` where `deleted_at IS NULL` |
+| messages           | unique `(client_ref)` where `client_ref IS NOT NULL` |
+| batch_sessions     | `(created_at)` — for the batch list ordering    |
+| batch_sessions     | `(project_id, status)` — for project and status filters |
+
+Migration `0005_phase1_additive` soft-deletes existing duplicate live messages
+before creating the unique index (keeps sent over pending over failed, then the
+lowest id). Migrations are applied by `bun run db:migrate` (`scripts/migrate.ts`),
+which the Netlify build runs only when `CONTEXT` is unset or `production`;
+deploy previews and branch deploys skip it unless `ALLOW_NON_PRODUCTION_MIGRATE=1`.
 
 ## 4. Excel File Format
 
