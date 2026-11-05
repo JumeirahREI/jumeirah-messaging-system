@@ -103,7 +103,7 @@ Only files with `"use server"` export async actions. Pure helpers live in non-se
 **Findings:** B2 (unique constraint), B3 (`sending` message state), S1 (`sessionVersion`), B7 (lock fields reviewed), build (`db:push` on every build).
 **Owns:** `src/lib/server/schema/**`, `drizzle/**`, `drizzle.config.ts`, `netlify.toml` (build command only), `scripts/migrate.ts` (new), `package.json` (`db:migrate` script only), `docs/SRS.md` (schema section).
 **Changes:**
-1. `messages.status` adds `"sending"`; new nullable `claimed_at`, `attempts` (int, default 0), `gateway_message_id`, `parts_sent` (int, default 0).
+1. `messages.status` adds `"sending"` and `"unknown"` (outcome unconfirmed: the gateway timed out or the response was ambiguous); new nullable `claimed_at`, `attempts` (int, default 0), `gateway_message_id`, `client_ref` (text, unique when set; sent to the provider if it supports a reference), `parts_sent` (int, default 0). `batch_sessions` adds `unknown` (int, default 0) counter, `runner_lease_until` (text) and `runner_id` (text) for the processing lease.
 2. Unique index on `messages(invoice_id, phone_number_id, template_type)` where `deleted_at is null`. The migration first soft-deletes or merges existing duplicate rows. Include a data-fix SQL step and a dry-run report script.
 3. `users.session_version` (int, default 0).
 4. `batch_sessions` index on `(created_at)` and on `(project_id, status)`.
@@ -130,8 +130,14 @@ Only files with `"use server"` export async actions. Pure helpers live in non-se
 2. Constructor error never includes secret values (names of missing fields only). Add a `redact()` util so URLs logged or surfaced never contain the password; strip the URL from any error message.
 3. `renderNotification` and `renderWarning` use function replacers (`$&`, `$'` in labels render literally).
 4. `parseSmsResponse` keeps the full message when it contains `:`; non-numeric code → structured error.
-5. `send()` returns `partsSent` on partial multipart failure (`{ ok:false, error, partsSent }`) so callers can avoid re-sending delivered parts. `breakMessageIntoParts` avoids degenerate tiny parts (minimum window position).
-**Red tests:** gateway factory throws in prod with missing env; error text for missing-username case does not contain the password string; `$&` label renders literally; response `0:OK:id` and `1:err: with: colons`; partial multipart failure returns `partsSent=1`; thrown fetch error text has no password.
+5. `send()` returns `partsSent` on partial multipart failure so callers can avoid re-sending delivered parts. `breakMessageIntoParts` avoids degenerate tiny parts (minimum window position).
+6. **Outcome classification.** `SmsResult` becomes `{ ok: true, messageId } | { ok: false, outcome: "failed" | "ambiguous", error, partsSent? }`.
+   - `failed` (definite): the provider replied with a non-zero code, or the request provably never left the machine (DNS failure, connection refused).
+   - `ambiguous`: timeout, connection reset after the request was written, HTTP 5xx, or an unparseable or empty body.
+   - Timeouts are split: a short connect timeout (default 8 s) and a longer response timeout (default 40 s), both configurable by env (`ALAWAEL_CONNECT_TIMEOUT_MS`, `ALAWAEL_SEND_TIMEOUT_MS`). A timeout is never reported as a definite failure.
+   - If the provider supports a client reference (open decision 8), `send()` accepts and forwards `clientRef`.
+7. Optional `lookupStatus(clientRef | messageId)` on the gateway interface (implemented only if the provider has a status or delivery-report API; otherwise returns `"unsupported"`).
+**Red tests:** gateway factory throws in prod with missing env; error text for missing-username case does not contain the password string; `$&` label renders literally; response `0:OK:id` and `1:err: with: colons`; partial multipart failure returns `partsSent=1`; thrown fetch error text has no password; response-timeout → `ambiguous`; connection refused → `failed`; 502 → `ambiguous`; empty body → `ambiguous`; non-zero code → `failed`; a response slower than the old 10 s limit but under the new one succeeds; connect and response timeouts are independently configurable.
 
 ### P1-E: Security and config hygiene
 **Findings:** S5, S6, S7 (config parts), build items, stray files.
@@ -158,23 +164,41 @@ All of these build on the Phase 1 module layout and schema.
 **Owns:** `src/lib/server/batch/send.ts`, `src/lib/server/batch/recipients.ts` and their tests.
 **Changes:**
 1. `sendBatch`: atomic claim `UPDATE batch_sessions SET status='sending' WHERE id=? AND status='draft' AND deleted_at IS NULL RETURNING`. If zero rows, return "not a draft" without inserting anything. Message insert and status change happen in one transaction (`db.transaction` or `db.batch`). If insert fails, the claim rolls back.
-2. Same atomic claim pattern for `sendWarning` (warning insert guarded by the unique index, `ON CONFLICT DO NOTHING`), `retryFailed` (`failed→pending` only rows still `failed`) and `resumeSending`.
+2. Same atomic claim pattern for `sendWarning` (warning insert guarded by the unique index, `ON CONFLICT DO NOTHING`), `retryFailed` (`failed→pending` only rows still `failed`; **never touches `unknown` rows**) and `resumeSending`.
 3. `resolveRecipients` dedupes by **normalized phone number**, not phone row id.
 4. Chunked inserts (≤ 500 rows per statement) inside the transaction; chunked `inArray`.
 **Red tests:** `Promise.allSettled([sendBatch, sendBatch])` yields exactly one success and one set of messages; concurrent `sendWarning` for the same invoice creates one warning; two contacts sharing a number produce one message; 5,000 recipients insert without a variable-limit error; failed insert leaves the batch in `draft`; `retryFailed` twice doesn't double-flip.
 
 ### P2-B: Processing engine
-**Findings:** B1, B3, send performance.
-**Owns:** `src/lib/server/batch-processing.ts` (+ test), `src/lib/server/batch/dispatch.ts` (+ test), `netlify/functions/process-batch-background.ts` is **not** touched (owned by P1-E, done).
+**Findings:** B1, B3, send performance, the 15-minute Netlify function limit, timeout-marked-as-failed.
+**Owns:** `src/lib/server/batch-processing.ts` (+ test), `src/lib/server/batch/dispatch.ts` (+ test), `src/lib/server/batch/lease.ts` (new, + test), `netlify/functions/resume-batches-scheduled.ts` (new, + test). `netlify/functions/process-batch-background.ts` is **not** edited here (owned by P1-E, done); the new code is called through `processPendingMessages`, whose signature gains an options argument.
+**Design:** processing is **resumable**. No invocation needs to finish a batch; any invocation may stop and another continues. Per-message claims make this safe.
 **Changes:**
-1. `dispatch.ts`: absolute URL (`process.env.URL` / `DEPLOY_URL` on Netlify), `await` the dispatch `fetch`, expect 202; **no in-process fallback** on Netlify. If dispatch fails, the batch stays `sending` with pending messages and the UI "resume" works. Local dev uses a configurable `APP_URL`, not a hardcoded port.
+1. `dispatch.ts`: absolute URL (`process.env.URL` / `DEPLOY_URL` on Netlify), `await` the dispatch `fetch`, expect 202; **no in-process fallback** on Netlify. If dispatch fails, the batch stays `sending` with pending messages and the watchdog (item 8) or the UI "resume" recovers it. Local dev uses a configurable `APP_URL`, not a hardcoded port.
 2. Per-message atomic claim: `UPDATE messages SET status='sending', claimed_at=now, attempts=attempts+1 WHERE id=? AND status='pending' RETURNING`. Only the claimer sends. A second worker finds nothing to claim.
-3. A reaper: messages stuck in `sending` longer than a timeout are set `failed` with reason "حالة الإرسال غير مؤكدة" (uncertain), never silently `pending`, so a retry is a deliberate operator choice.
-4. Remove `failRemainingMessages` mass-fail. Unexpected engine errors leave unprocessed messages `pending` and surface the error on the batch. Only the single message being processed can fail.
-5. Honor `partsSent` from the gateway: on retry, resume at the next part, or mark clearly as partially delivered.
-6. Worker pool (concurrency N, configurable) instead of chunk barriers; counters refreshed at most every K messages or T seconds and once at the end; `inArray` chunking.
-7. Time budget: stop cleanly before the platform limit and leave the rest `pending` for the next invocation (`resume`).
-**Red tests:** two concurrent `processPendingMessages` calls → each message sent exactly once (scripted gateway counts calls); a DB error during counter refresh doesn't fail pending messages; relative-URL regression (dispatch builds an absolute URL; a rejected dispatch is surfaced); stuck `sending` reaped to uncertain-failed; slow message doesn't block the pool; time budget leaves the remainder pending; 10,000 pending rows don't exceed variable limits.
+3. **Outcome handling** (consumes the P1-D classification): `ok` → `sent`; `failed` → `failed` with the provider reason; `ambiguous` → **`unknown`** with the reason, never `failed`, never auto-retried. Automatic retry (max 2, exponential backoff with jitter) applies only to `failed` outcomes that are provably pre-send (connection refused or DNS). `batch_sessions.unknown` is maintained alongside `sent` and `failed`; a batch is `completed` when no message is `pending` or `sending`.
+4. **Reaper:** messages stuck in `sending` longer than the claim timeout (greater than the response timeout plus margin) become `unknown`, with reason "حالة الإرسال غير مؤكدة", never silently `pending`.
+5. Remove `failRemainingMessages` mass-fail. Unexpected engine errors leave unprocessed messages `pending` and surface the error on the batch. Only the single message being processed can change state.
+6. Honor `partsSent`: record `parts_sent` per message; an `ambiguous` or `failed` multipart send keeps the count so that a deliberate retry resumes at the next part or warns about partial delivery.
+7. **Time budget and self-chaining.** `processPendingMessages(batchId, { budgetMs })` (default `PROCESS_TIME_BUDGET_MS` = 12 minutes of the 15-minute limit):
+   - after the budget elapses it stops claiming new messages and lets in-flight sends finish (bounded by the response timeout);
+   - if `pending` messages remain it dispatches a fresh background invocation for the same batch and awaits the 202; each chained invocation gets a full budget, so batch size is unbounded;
+   - the chain has a hop counter, logged and capped (default 100) as a runaway guard.
+8. **Watchdog.** `resume-batches-scheduled.ts` is a Netlify scheduled function (every 2 minutes). It does no sending. It finds batches that are `sending` with `pending` messages and an expired or absent lease, reaps stuck `sending` messages, and dispatches the background function for each such batch (limited to a few per tick). It recovers from a failed chain link, a crash, or a deploy mid-run. **Verify current Netlify scheduled-function limits and background-function behavior in the docs before implementing.**
+9. **Lease** (`lease.ts`): `acquireLease(batchId, runnerId, ttl)` is one atomic `UPDATE ... WHERE runner_lease_until IS NULL OR runner_lease_until < now RETURNING`; `renewLease` runs every ~30 s while working; `releaseLease` on exit. A worker that cannot acquire the lease exits immediately, so the chain and the watchdog never run two workers on one batch. The lease expiry cutoff is computed in JS (same lesson as B7).
+10. **Adaptive worker pool:** concurrency starts at `SEND_CONCURRENCY` (default 10, configurable); it is reduced (multiplicative decrease) when the rolling p95 latency or the ambiguous-outcome rate crosses a threshold, and grows slowly (additive increase) when healthy, within `[1, SEND_CONCURRENCY_MAX]`. A slow message never blocks other slots (no chunk barrier). Counters are refreshed at most every K messages or T seconds and once at the end; `inArray` is chunked.
+**Red tests:**
+- two concurrent `processPendingMessages` calls → each message sent exactly once (scripted gateway counts calls);
+- a DB error during counter refresh doesn't change pending messages;
+- relative-URL regression: dispatch builds an absolute URL, and a rejected dispatch is surfaced;
+- `ambiguous` result → `unknown`, `failed` result → `failed`, and neither is auto-retried (only the pre-send failure is, max 2);
+- stuck `sending` reaped to `unknown`;
+- a slow message doesn't block the pool;
+- **15-minute cut simulation:** fake clock, 3,000 messages, budget 12 min per run → run 1 stops with pending left and dispatches exactly one continuation; the continuation finishes the rest; every message is sent exactly once across runs; the hop cap stops a runaway chain;
+- lease: a second worker exits immediately; an expired lease can be taken over; renewal keeps it alive;
+- watchdog: a batch with pending messages and an expired lease is re-dispatched; a batch with a live lease is not; a completed batch is ignored; stuck `sending` rows are reaped first;
+- adaptive concurrency shrinks under high latency and recovers;
+- 10,000 pending rows don't exceed variable limits.
 
 ### P2-C: Identity and password lifecycle
 **Findings:** S1, S2, S4.
@@ -226,12 +250,15 @@ All of these build on the Phase 1 module layout and schema.
 ### P3-C: Read-path performance
 **Findings:** status payload, polling, listing.
 **Owns:** `src/lib/server/batch/read.ts` (+ test), `src/app/api/batches/[id]/status/route.ts`, `src/lib/hooks/use-batch-status.ts`, `src/app/(authed)/batches/[batchId]/batch-detail-client.tsx` (messages table and polling only), `src/app/(authed)/batches/batches-list-client.tsx`.
-**Changes:** `getBatchStatus` returns counts + a paginated messages page (`?page&pageSize&status`) instead of all rows; ETag / `updatedAt` conditional responses; polling interval backs off (3 s → 10 s) and stops when completed; `listBatches` uses one query for rows+count or a window function, and the new `created_at` index from P1-B.
-**Red tests:** 5,000-message batch status response size and query count bounded; pagination correctness and stable ordering; unchanged status returns 304; hook stops polling on `completed`; list total correct with filters.
+**Changes:** `getBatchStatus` returns counts (`sent`, `failed`, `unknown`, `pending`) + a paginated messages page (`?page&pageSize&status`) instead of all rows; ETag / `updatedAt` conditional responses; polling interval backs off (3 s → 10 s) and stops when completed; `listBatches` uses one query for rows+count or a window function, and the new `created_at` index from P1-B. UI: an "unconfirmed" (`unknown`) count and filter with an explanatory notice ("قد تكون هذه الرسائل قد أُرسلت"), a status badge for `unknown`, and buttons that call `resolveUnknownMessages` (contract below, implemented in P3-D). The detail page also shows that the batch is still processing across chained runs (no "stuck" false alarm).
+**Contract with P3-D:** `resolveUnknownMessages({ batchId: number, messageIds?: number[], resolution: "retry" | "mark_sent" | "mark_failed" }) → { ok: true; affected: number } | { ok: false; error: string }`. The UI uses a mocked implementation of this signature in its tests.
+**Red tests:** 5,000-message batch status response size and query count bounded; pagination correctness and stable ordering; unchanged status returns 304; hook stops polling on `completed`; list total correct with filters; `unknown` count and filter render; the retry button shows a duplicate warning dialog before calling the action.
 
 ### P3-D: Lock enforcement and warning/edit paths
 **Findings:** B7 (server-side enforcement), perf (per-row updates).
-**Owns:** `src/lib/server/batch/edit.ts` (+ test), `src/lib/server/batch/send.ts` (lock check only, via `assertLockHeld`), `src/lib/server/batch/lifecycle.ts` (lock check only) — coordinate: P2-A and P2-E are finished, so ownership is free now.
+**Owns:** `src/lib/server/batch/edit.ts` (+ test), `src/lib/server/batch/unknown.ts` (new, + test), `src/lib/server/batch/send.ts` (lock check only, via `assertLockHeld`), `src/lib/server/batch/lifecycle.ts` (lock check only) — coordinate: P2-A and P2-E are finished, so ownership is free now.
+**Also:** implement `resolveUnknownMessages` in `unknown.ts` (contract in P3-C). `retry` moves selected `unknown` messages to `pending` (only rows still `unknown`, atomically) and dispatches processing; `mark_sent` and `mark_failed` record the operator's decision, `resolvedBy` and the time; all three update batch counters, run under `requireRoleRateLimited("operator")`, and require the batch lock when the batch is manual. If the gateway implements `lookupStatus`, an `auto` reconciliation helper is run first and only unresolved rows remain operator decisions.
+**Extra red tests:** `retry` on a message that is no longer `unknown` is a no-op; concurrent `retry` twice dispatches each message once; `mark_sent` updates counters; counters never go negative; non-operators are rejected.
 **Changes:** manual-mode draft mutations (`updateInvoiceTotal`, manual invoice edits, `sendBatch`, `softDeleteBatch`) require the caller to hold a live lock; `sendBatch` no longer clears someone else's lock; `applyWarningExcel` and `sendWarning` update totals with one `db.batch` / `CASE` statement instead of N updates; invoice total rounding unified through one function.
 **Red tests:** user B cannot edit or send while A holds a live lock; expired lock allows B; sending by the holder clears the lock; applying a 2,000-row warning Excel issues a bounded number of statements; rounding consistent between create, edit and warning paths.
 
@@ -257,6 +284,7 @@ All of these build on the Phase 1 module layout and schema.
 ### P4-B: End-to-end regression suite for the review findings
 **Owns:** `src/test/regression/**` (new files only), `playwright` specs under `e2e/` (new).
 **Content:** one test per review finding ID, named `B1`…`S7` and `PERF-*`, written against the public actions with the real migrated test DB: double-send, concurrent workers, partial multipart, fake-gateway-in-prod refusal, lock expiry, JWT revocation, login lockout isolation, Netlify function auth, template `$` injection, large batch sizes. Playwright smoke: login, create a batch, send, watch status, with the scripted gateway.
+Additional regression tests for the production issues: a batch larger than one invocation's budget completes across chained runs with each message sent exactly once; the watchdog resumes a batch after a simulated crash mid-run; a gateway timeout on a message that the provider actually delivered ends as `unknown` (not `failed`), is skipped by "retry failed", and appears in the unconfirmed count; a response between 10 s and the new response timeout is treated as success.
 Because most of the logic landed in Phases 1–3, expect these to pass at once. Any that don't are real gaps and go back to the owning task as a fix.
 
 **Gate → Phase 5.**
@@ -281,6 +309,8 @@ A fresh reviewer (not any implementer) re-audits the diff against every finding 
 | Finding | Task |
 |---|---|
 | B1 background never runs | P2-B |
+| 15-minute function limit (production) | P1-B (lease columns), P2-B (budget, chaining, lease, watchdog) |
+| Timeout marks delivered SMS as failed (production) | P1-B (`unknown` status), P1-D (classification, timeouts), P2-A, P2-B, P3-C, P3-D |
 | B2 double send | P1-B (index), P2-A |
 | B3 mass-fail / multipart | P1-D (`partsSent`), P2-B |
 | B4 fake gateway in prod | P1-D |
@@ -316,6 +346,11 @@ A fresh reviewer (not any implementer) re-audits the diff against every finding 
 2. **Migrations (P1-B):** default is a `drizzle migrate` step on production deploys only, never on previews. Say so if you prefer a manual or CI-only step.
 3. **SMS provider:** does Alawael accept POST or credentials outside the query string? Default: keep GET and redact everywhere.
 4. **Redis in production (P1-C):** default is fail closed, so logins are refused if Upstash is unreachable or unset. Alternative: fall back to an in-memory limiter.
-5. **Uncertain deliveries (P2-B):** default is to mark stuck or timed-out sends as failed-uncertain and require a deliberate retry. Alternative: a distinct `unknown` status in the UI (more UI work).
-6. **Netlify background function:** assumed available on your plan. If not, P2-B needs a queue alternative, such as a scheduled function or a self-chaining resume.
+5. **Uncertain deliveries (P2-B):** decided: a distinct `unknown` message status (the earlier "failed-uncertain" alternative is dropped). Timed-out and ambiguous sends become `unknown`, are never auto-retried, and are resolved by the operator through `resolveUnknownMessages`.
+6. **Netlify background function and scheduled function:** assumed available on your plan, with a 15-minute limit for background functions. The design (time budget, self-chaining, watchdog) is built around that limit. Confirm the scheduled-function limits in the current Netlify docs at the start of P2-B.
 7. **Branching:** all work lands on `ccr-c3a510e9-1dkn0o` via per-task worktree branches merged by the orchestrator; no PR is opened unless you ask.
+8. **Provider questions (answers adjust P1-D and P2-B; defaults are used if unanswered):**
+   - Does Alawael offer a delivery-report or status-query API, or accept a client reference? Default: no, so `lookupStatus` returns `"unsupported"` and `unknown` messages are resolved manually.
+   - What is the allowed request rate and concurrency, and what is the typical and worst-case send latency in production? Default: `SEND_CONCURRENCY=10`, max 20, connect timeout 8 s, response timeout 40 s, all configurable by env.
+   - What is the size of your largest batch? Default: unbounded through chaining, with the hop cap at 100 invocations.
+9. **Tunables introduced** (all documented in `.env.example` by P5-B): `PROCESS_TIME_BUDGET_MS`, `SEND_CONCURRENCY`, `SEND_CONCURRENCY_MAX`, `ALAWAEL_CONNECT_TIMEOUT_MS`, `ALAWAEL_SEND_TIMEOUT_MS`, `CHAIN_MAX_HOPS`, `LEASE_TTL_MS`.
