@@ -167,6 +167,21 @@ Merged and gated (typecheck, 341 tests, build, no new lint errors). Code now liv
 - **Production migration risk (P1-B):** if production was created with `db:push` it has no migrations table, so the first `drizzle migrate()` would replay 0000–0004 and fail. Task P4-C below baselines it.
 - **Lint:** repo-wide lint still has 5 pre-existing `react-hooks/set-state-in-effect` errors; the gate remains "no new lint errors versus `docs/fix-plan-baseline.md`".
 
+## Phase 2 outcomes and carry-over (recorded after the Phase 2 merge)
+
+Merged and gated (typecheck, 581 tests stable across 3 repeated runs, build with and without `TURSO_DATABASE_URL`, no new lint errors). Facts for Phase 3 and later:
+
+- **B7 was real** (stale locks never expired; two concurrent acquires both won). **Last-admin race was real.** Both are fixed with regression tests.
+- **Engine API:** `dispatchBatchProcessing`, `processPendingMessages(batchId, options)`, `reapStuckMessages`, `refreshBatchCounters`, `acquireLease`/`renewLease`/`releaseLease`, `resumeStalledBatches`, `AdaptiveConcurrency`. `invokeBackgroundProcess` is now async and awaited in `send.ts` after commit. New env tunables: `PROCESS_TIME_BUDGET_MS`, `SEND_CONCURRENCY`, `SEND_CONCURRENCY_MAX`, `CHAIN_MAX_HOPS`, `LEASE_TTL_MS`, `CLAIM_TIMEOUT_MS`, `ALAWAEL_CONNECT_TIMEOUT_MS`, `ALAWAEL_SEND_TIMEOUT_MS`, and dispatch reads `URL`/`DEPLOY_URL`/`DEPLOY_PRIME_URL`/`APP_URL` (P5-B documents them). `undici` is now a dependency (enforced SMS connect timeout).
+- **Message states** are `pending -> sending -> sent | failed | unknown`. Ambiguous, reaped and thrown outcomes end as `unknown`; `parts_sent` is stored; a re-queued message resumes at `startPart = parts_sent + 1`. `retryFailed` never touches `unknown`.
+- **Unknown resolution contract:** `src/lib/server/batch/unknown-types.ts` (`ResolveUnknownInput`, `ResolveUnknownResult`) and a stub `src/lib/server/batch/unknown.ts` (`resolveUnknownMessages`, currently returns not-implemented) are committed on the integration branch. **P3-D replaces the stub; P3-C codes the UI against the types.** Neither may change the types without the orchestrator.
+- **Identity:** `getCurrentUser`/`requireRole` are DB-backed (cached per request); session updates need an HMAC proof (`session-proof.ts`); `/session-expired` is public. Usernames are normalized on write; legacy mixed-case duplicates are not reconciled (P3-A reports them, does not delete).
+- **Locks:** `checkLockHeld`/`assertLockHeld` exist and are **not yet called** anywhere (P3-D wires them). Lock timeout 300 s, strict `<` boundary.
+- **Behavior kept:** `softDeleteBatch` still only deletes draft batches (P2-E widened it by mistake; the merge restored the original rule and added the sending refusal).
+- **Open verification items (need a real Netlify deploy / Turso):** `process.env.NETLIFY` and `URL`/`DEPLOY_URL` present at function runtime; Netlify's own bundler resolving the `@/` alias (local esbuild bundling worked); scheduled-function quota; `PRAGMA foreign_keys` on remote Turso; first production migration baseline (P4-C).
+- **Create path:** invoice inserts in `batch/create.ts` are not chunked (hits the variable limit around 4,500+ apartments); P3-B chunks them.
+- **Cleanup:** delete the stale `.e2e-server.mjs` (P3-E).
+
 ## Phase 2 — Core correctness (5 parallel tasks)
 
 All of these build on the Phase 1 module layout and schema.
