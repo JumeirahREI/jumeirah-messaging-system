@@ -191,12 +191,25 @@ describe("dispatchBatchProcessing off Netlify", () => {
 })
 
 describe("invokeBackgroundProcess (compat)", () => {
-  it("is fire-and-forget and logs a failed dispatch without throwing", async () => {
+  it("resolves only after the dispatch settles and logs a failed dispatch without throwing", async () => {
     netlifyEnv()
-    const fetchFn = vi.fn(async () => new Response("x", { status: 500 }))
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const fetchFn = vi.fn(async () => {
+      await gate
+      return new Response("x", { status: 500 })
+    })
     vi.stubGlobal("fetch", fetchFn)
-    expect(invokeBackgroundProcess(9)).toBeUndefined()
+    let settled = false
+    const pending = invokeBackgroundProcess(9).then(() => {
+      settled = true
+    })
     await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1))
-    await vi.waitFor(() => expect(console.error).toHaveBeenCalled())
+    expect(settled).toBe(false)
+    release()
+    await pending
+    expect(console.error).toHaveBeenCalled()
   })
 })
