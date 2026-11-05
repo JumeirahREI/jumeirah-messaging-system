@@ -41,9 +41,10 @@ describe("validateNewPassword", () => {
 
   it("rejects the username and passwords containing it, case-insensitively", async () => {
     const message = "لا يمكن أن تحتوي كلمة المرور على اسم المستخدم"
-    expect(await validateNewPassword("nashwan", { username: "nashwan" })).toBe(
-      message
-    )
+    expect(await validateNewPassword("Nashwan.Alsalem", {
+        username: "nashwan.alsalem",
+      })
+    ).toBe(message)
     expect(await validateNewPassword("xxNASHWANxx99", options)).toBe(message)
   })
 

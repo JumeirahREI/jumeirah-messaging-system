@@ -121,8 +121,8 @@ describe("getCurrentUser / requireRole revalidation", () => {
 
   it("treats a token without a session version as version 0", async () => {
     const row = await createUser(testDb.db)
-    const { sessionVersion: _omitted, ...withoutVersion } = sessionFor(row)
-    session = withoutVersion
+    const { user, mustResetPassword } = sessionFor(row)
+    session = { user, mustResetPassword }
     expect(await getCurrentUser()).toMatchObject({ id: row.id })
   })
 
