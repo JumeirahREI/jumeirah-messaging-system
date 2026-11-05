@@ -83,24 +83,26 @@ vi.mock("@/lib/server/db", () => {
     then: (resolve: (v: unknown) => unknown) =>
       Promise.resolve(undefined).then(resolve),
   }
-  return {
-    db: {
-      select: vi.fn(() => makeSelectChain()),
-      insert: vi.fn((table: unknown) => {
-        currentTable = table
-        return makeSelectChain()
-      }),
-      update: vi.fn(() => updateChain),
-      __setResults: (r: unknown[]) => {
-        results = r
-        consumeCount = 0
-      },
-      __insertCalls: insertCalls,
-      __clearInsertCalls: () => {
-        insertCalls.length = 0
-      },
+  const dbMock = {
+    select: vi.fn(() => makeSelectChain()),
+    insert: vi.fn((table: unknown) => {
+      currentTable = table
+      return makeSelectChain()
+    }),
+    update: vi.fn(() => updateChain),
+    __setResults: (r: unknown[]) => {
+      results = r
+      consumeCount = 0
     },
+    __insertCalls: insertCalls,
+    __clearInsertCalls: () => {
+      insertCalls.length = 0
+    },
+    transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(dbMock)
+    ),
   }
+  return { db: dbMock }
 })
 
 const { db } = await import("@/lib/server/db")
@@ -184,13 +186,13 @@ describe("createBatch", () => {
       }
     ).__setResults([
       [{ id: 1 }],
-      [{ id: 500 }],
       [
         { id: 10, label: "A101", projectId: 1 },
         { id: 11, label: "A102", projectId: 1 },
         { id: 12, label: "A103", projectId: 1 },
       ],
       [{ label: "A101" }, { label: "A102" }, { label: "A103" }],
+      [{ id: 500 }],
     ])
 
     const result = await createBatch(buildFormData(makeFile()))
@@ -233,9 +235,9 @@ describe("createBatch", () => {
       }
     ).__setResults([
       [{ id: 1 }],
-      [{ id: 501 }],
       [{ id: 10, label: "A101", projectId: 1 }],
       [{ label: "A101" }, { label: "A102" }],
+      [{ id: 501 }],
     ])
 
     const result = await createBatch(buildFormData(makeFile()))
@@ -292,11 +294,11 @@ describe("createBatch manual mode", () => {
       }
     ).__setResults([
       [{ id: 1 }],
-      [{ id: 700 }],
       [
         { id: 10, label: "A101", projectId: 1 },
         { id: 11, label: "A102", projectId: 1 },
       ],
+      [{ id: 700 }],
     ])
 
     const result = await createBatch(buildManualFormData())
@@ -331,7 +333,7 @@ describe("createBatch manual mode", () => {
       db as unknown as {
         __setResults: (r: unknown[]) => void
       }
-    ).__setResults([[{ id: 1 }], [{ id: 700 }], []])
+    ).__setResults([[{ id: 1 }], [], [{ id: 700 }]])
 
     const result = await createBatch(buildManualFormData())
 
@@ -345,8 +347,8 @@ describe("createBatch manual mode", () => {
       }
     ).__setResults([
       [{ id: 1 }],
-      [{ id: 800 }],
       [{ id: 10, label: "A101", projectId: 1 }],
+      [{ id: 800 }],
     ])
 
     await createBatch(buildManualFormData())
@@ -386,12 +388,12 @@ describe("createBatch balance format", () => {
       }
     ).__setResults([
       [{ id: 1 }],
-      [{ id: 900 }],
       [
         { id: 10, label: "A101", projectId: 1 },
         { id: 20, label: "B101", projectId: 1 },
       ],
       [{ label: "A101" }, { label: "B101" }],
+      [{ id: 900 }],
     ])
 
     const result = await createBatch(buildBalanceFormData([makeFile()]))
@@ -437,9 +439,9 @@ describe("createBatch balance format", () => {
       }
     ).__setResults([
       [{ id: 1 }],
-      [{ id: 901 }],
       [{ id: 10, label: "A101", projectId: 1 }],
       [{ label: "A101" }],
+      [{ id: 901 }],
     ])
 
     const result = await createBatch(
@@ -478,9 +480,9 @@ describe("createBatch balance format", () => {
       }
     ).__setResults([
       [{ id: 1 }],
-      [{ id: 902 }],
       [{ id: 10, label: "A101", projectId: 1 }],
       [{ label: "A101" }],
+      [{ id: 902 }],
     ])
 
     const result = await createBatch(buildBalanceFormData([makeFile()]))
@@ -521,9 +523,9 @@ describe("createBatch balance format", () => {
       }
     ).__setResults([
       [{ id: 1 }],
-      [{ id: 904 }],
       [{ id: 10, label: "A101", projectId: 1 }],
       [{ label: "A101" }],
+      [{ id: 904 }],
     ])
 
     await createBatch(buildBalanceFormData([makeFile()]))

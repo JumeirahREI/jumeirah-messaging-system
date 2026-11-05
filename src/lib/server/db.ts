@@ -4,53 +4,82 @@ import type { LibSQLDatabase } from "drizzle-orm/libsql"
 import { drizzle } from "drizzle-orm/libsql"
 import * as schema from "./schema"
 
-declare global {
-  var __dbClient: Client | undefined
-  var __db: LibSQLDatabase<typeof schema> | undefined
-}
+export type DB = LibSQLDatabase<typeof schema>
+export type { Client }
 
-function createDb(): {
-  client: Client
-  db: LibSQLDatabase<typeof schema>
-} {
-  const url = process.env.TURSO_DATABASE_URL
-  if (!url) {
-    throw new Error("TURSO_DATABASE_URL is not set")
-  }
-  const authToken = process.env.TURSO_AUTH_TOKEN
-  const client = createClient(
-    url.startsWith("file:") ? { url } : { url, authToken }
-  )
-  void client.execute("PRAGMA foreign_keys = ON")
-  const db = drizzle({ client, schema })
-  return { client, db }
+type Connection = { client: Client; db: DB }
+
+declare global {
+  var __dbConnection: Connection | undefined
 }
 
 const globalForDb = globalThis as typeof globalThis & {
-  __dbClient?: Client
-  __db?: LibSQLDatabase<typeof schema>
+  __dbConnection?: Connection
 }
 
-function getSingleton(): {
-  client: Client
-  db: LibSQLDatabase<typeof schema>
-} {
-  if (globalForDb.__dbClient && globalForDb.__db) {
-    return { client: globalForDb.__dbClient, db: globalForDb.__db }
+const GUARDED_METHODS = [
+  "execute",
+  "batch",
+  "migrate",
+  "transaction",
+  "executeMultiple",
+] as const
+
+async function enableForeignKeys(execute: Client["execute"], isFile: boolean) {
+  if (isFile) await execute("PRAGMA foreign_keys = ON")
+  const result = await execute("PRAGMA foreign_keys")
+  const enabled = Number(result.rows[0]?.[0]) === 1
+  if (enabled) return
+  const message =
+    "Foreign key enforcement is OFF on the database connection / فرض المفاتيح الأجنبية غير مفعّل"
+  if (isFile) throw new Error(message)
+  console.warn(message)
+}
+
+function createConnection(): Connection {
+  const url = process.env.TURSO_DATABASE_URL
+  if (!url) {
+    throw new Error(
+      "TURSO_DATABASE_URL is not set / متغير البيئة TURSO_DATABASE_URL غير مُعيَّن"
+    )
   }
-  const created = createDb()
-  globalForDb.__dbClient = created.client
-  globalForDb.__db = created.db
-  return created
+  const isFile = url.startsWith("file:")
+  const client = createClient(
+    isFile ? { url } : { url, authToken: process.env.TURSO_AUTH_TOKEN }
+  )
+
+  const ready = enableForeignKeys(client.execute.bind(client), isFile)
+  ready.catch(() => {})
+
+  for (const name of GUARDED_METHODS) {
+    const original = (
+      client[name] as (...args: unknown[]) => Promise<unknown>
+    ).bind(client)
+    Object.defineProperty(client, name, {
+      value: async (...args: unknown[]) => {
+        await ready
+        return original(...args)
+      },
+    })
+  }
+
+  return { client, db: drizzle({ client, schema }) }
 }
 
-const hasServerEnv = Boolean(process.env.TURSO_DATABASE_URL)
+function getConnection(): Connection {
+  return (globalForDb.__dbConnection ??= createConnection())
+}
 
-export const client: Client = hasServerEnv
-  ? getSingleton().client
-  : (null as unknown as Client)
-export const db: LibSQLDatabase<typeof schema> = hasServerEnv
-  ? getSingleton().db
-  : (null as unknown as LibSQLDatabase<typeof schema>)
+function lazy<T extends object>(pick: (connection: Connection) => T): T {
+  return new Proxy({} as T, {
+    get(_, property) {
+      const target = pick(getConnection())
+      const value = Reflect.get(target, property, target)
+      return typeof value === "function" ? value.bind(target) : value
+    },
+    has: (_, property) => property in pick(getConnection()),
+  })
+}
 
-export type DB = LibSQLDatabase<typeof schema>
+export const client: Client = lazy((c) => c.client)
+export const db: DB = lazy((c) => c.db)

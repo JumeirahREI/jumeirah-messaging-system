@@ -5,7 +5,13 @@ import { requireRole } from "@/lib/server/auth-helpers"
 import { requireRoleRateLimited } from "@/lib/server/action-guards"
 import { db } from "@/lib/server/db"
 import { apartmentContacts, apartments, towers } from "@/lib/server/schema"
-import { actor, now, safeMutation, type MutationResult } from "./shared"
+import {
+  actor,
+  deletion,
+  now,
+  safeMutation,
+  type MutationResult,
+} from "./shared"
 
 export type ApartmentRow = {
   id: number
@@ -169,24 +175,24 @@ export async function softDeleteApartment(input: {
   id: number
 }): Promise<MutationResult<{ id: number }>> {
   const user = await requireRoleRateLimited("admin")
-  const result = await db
-    .update(apartments)
-    .set({ deletedBy: user.id, deletedAt: now })
-    .where(and(eq(apartments.id, input.id), isNull(apartments.deletedAt)))
-    .returning({ id: apartments.id })
-  if (result.length === 0) {
-    return { ok: false, error: "الشقة غير موجودة" } as const
-  }
-
-  await db
-    .update(apartmentContacts)
-    .set({ deletedAt: now })
-    .where(
-      and(
-        eq(apartmentContacts.apartmentId, input.id),
-        isNull(apartmentContacts.deletedAt)
+  return db.transaction(async (tx) => {
+    const result = await tx
+      .update(apartments)
+      .set(deletion(user))
+      .where(and(eq(apartments.id, input.id), isNull(apartments.deletedAt)))
+      .returning({ id: apartments.id })
+    if (result.length === 0) {
+      return { ok: false, error: "الشقة غير موجودة" } as const
+    }
+    await tx
+      .update(apartmentContacts)
+      .set(deletion(user))
+      .where(
+        and(
+          eq(apartmentContacts.apartmentId, input.id),
+          isNull(apartmentContacts.deletedAt)
+        )
       )
-    )
-
-  return { ok: true, data: result[0] } as const
+    return { ok: true, data: result[0] } as const
+  })
 }

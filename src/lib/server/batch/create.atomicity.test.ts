@@ -51,9 +51,8 @@ vi.mock("@/lib/server/excel-balance-parser", () => ({
 
 const { createBatch } = await import("./create")
 const { parseInvoiceExcel } = await import("@/lib/server/excel-parser")
-const { parseBalanceSheetExcel } = await import(
-  "@/lib/server/excel-balance-parser"
-)
+const { parseBalanceSheetExcel } =
+  await import("@/lib/server/excel-balance-parser")
 
 const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 const file = () => new File([new Uint8Array([0])], "f.xlsx", { type: XLSX })

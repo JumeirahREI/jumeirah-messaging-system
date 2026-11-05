@@ -22,7 +22,7 @@ import {
   projects,
   towers,
 } from "@/lib/server/schema"
-import { now, ParsedInvoice, encodeParseStats } from "./shared"
+import { ParsedInvoice, encodeParseStats } from "./shared"
 
 export type SheetPreviewTower = { id: number; label: string }
 
@@ -102,12 +102,26 @@ export type CreateBatchError =
 
 export type CreateBatchResult = ({ ok: true } & BatchPreview) | CreateBatchError
 
-async function createAutomaticInvoices(
+type InvoiceDraft = {
+  apartmentId: number
+  clientName: string
+  total: number
+}
+
+type BatchPlan = {
+  ok: true
+  excelLabels: string[] | null
+  parseStats: string | null
+  invoices: InvoiceDraft[]
+  stats: Omit<BatchPreview, "batchId">
+}
+
+type PlanResult = BatchPlan | CreateBatchError
+
+async function planAutomaticInvoices(
   formData: FormData,
-  pid: number,
-  userId: number,
-  batchId: number
-): Promise<CreateBatchResult> {
+  pid: number
+): Promise<PlanResult> {
   const file = formData.get("file")
   if (!(file instanceof File)) throw new Error("الملف مطلوب")
 
@@ -224,51 +238,36 @@ async function createAutomaticInvoices(
     (a) => !excelLabelSet.has(a.label)
   ).length
 
-  await db
-    .update(batchSessions)
-    .set({ excelLabels: JSON.stringify(labels) })
-    .where(eq(batchSessions.id, batchId))
-
-  const invoiceInserts: Array<{
-    batchId: number
-    apartmentId: number
-    clientName: string
-    total: number
-    createdBy: number
-  }> = []
+  const invoiceDrafts: InvoiceDraft[] = []
   for (const p of parsed) {
     const apt = apartmentByLabel.get(p.label)
     if (!apt) continue
-    invoiceInserts.push({
-      batchId,
+    invoiceDrafts.push({
       apartmentId: apt.id,
       clientName: p.client_name,
       total: p.total,
-      createdBy: userId,
     })
-  }
-
-  if (invoiceInserts.length > 0) {
-    await db.insert(invoices).values(invoiceInserts)
   }
 
   return {
     ok: true,
-    batchId,
-    unmatchedCount: unmatched.length,
-    missingCount,
-    skippedCreditCount: 0,
-    skippedTinyCount: 0,
-    duplicateCount: 0,
+    excelLabels: labels,
+    parseStats: null,
+    invoices: invoiceDrafts,
+    stats: {
+      unmatchedCount: unmatched.length,
+      missingCount,
+      skippedCreditCount: 0,
+      skippedTinyCount: 0,
+      duplicateCount: 0,
+    },
   } as const
 }
 
-async function createBalanceInvoices(
+async function planBalanceInvoices(
   formData: FormData,
-  pid: number,
-  userId: number,
-  batchId: number
-): Promise<CreateBatchResult> {
+  pid: number
+): Promise<PlanResult> {
   const files = formData
     .getAll("files")
     .filter((f): f is File => f instanceof File)
@@ -356,10 +355,6 @@ async function createBalanceInvoices(
   }
 
   if (unmatched.length > 0) {
-    await db
-      .update(batchSessions)
-      .set({ deletedBy: userId, deletedAt: now })
-      .where(eq(batchSessions.id, batchId))
     const shown = unmatched.slice(0, 20).join("، ")
     const suffix = unmatched.length > 20 ? ` … (${unmatched.length})` : ""
     return {
@@ -378,75 +373,58 @@ async function createBalanceInvoices(
     (a) => !excelLabelSet.has(a.label)
   ).length
 
-  await db
-    .update(batchSessions)
-    .set({
-      excelLabels: JSON.stringify(labels),
-      parseStats: encodeParseStats({
-        skippedCreditCount,
-        skippedTinyCount,
-        duplicateCount: duplicates.length,
-      }),
-    })
-    .where(eq(batchSessions.id, batchId))
-
-  const invoiceInserts = allInvoices.map((p) => ({
-    batchId,
+  const invoiceDrafts = allInvoices.map((p) => ({
     // Safe: unmatched labels returned early above, so every label is in the map.
     apartmentId: apartmentByLabel.get(p.label)!.id,
     clientName: p.client_name,
     total: p.total,
-    createdBy: userId,
   }))
-  await db.insert(invoices).values(invoiceInserts)
 
   return {
     ok: true,
-    batchId,
-    unmatchedCount: 0,
-    missingCount,
-    skippedCreditCount,
-    skippedTinyCount,
-    duplicateCount: duplicates.length,
+    excelLabels: labels,
+    parseStats: encodeParseStats({
+      skippedCreditCount,
+      skippedTinyCount,
+      duplicateCount: duplicates.length,
+    }),
+    invoices: invoiceDrafts,
+    stats: {
+      unmatchedCount: 0,
+      missingCount,
+      skippedCreditCount,
+      skippedTinyCount,
+      duplicateCount: duplicates.length,
+    },
   } as const
 }
 
-async function createManualInvoices(
-  pid: number,
-  userId: number,
-  batchId: number
-): Promise<CreateBatchResult> {
+async function planManualInvoices(pid: number): Promise<PlanResult> {
   const apartmentRows = await db
     .select({ id: apartments.id })
     .from(apartments)
     .where(and(eq(apartments.projectId, pid), isNull(apartments.deletedAt)))
 
   if (apartmentRows.length === 0) {
-    await db
-      .update(batchSessions)
-      .set({ deletedBy: userId, deletedAt: now })
-      .where(eq(batchSessions.id, batchId))
     return { ok: false, error: "empty_project" } as const
   }
 
-  const invoiceInserts = apartmentRows.map((a) => ({
-    batchId,
-    apartmentId: a.id,
-    clientName: "",
-    total: 0,
-    createdBy: userId,
-  }))
-
-  await db.insert(invoices).values(invoiceInserts)
-
   return {
     ok: true,
-    batchId,
-    unmatchedCount: 0,
-    missingCount: 0,
-    skippedCreditCount: 0,
-    skippedTinyCount: 0,
-    duplicateCount: 0,
+    excelLabels: null,
+    parseStats: null,
+    invoices: apartmentRows.map((a) => ({
+      apartmentId: a.id,
+      clientName: "",
+      total: 0,
+    })),
+    stats: {
+      unmatchedCount: 0,
+      missingCount: 0,
+      skippedCreditCount: 0,
+      skippedTinyCount: 0,
+      duplicateCount: 0,
+    },
   } as const
 }
 
@@ -480,22 +458,36 @@ export async function createBatch(
     return { ok: false, error: "invalid_project" } as const
   }
 
-  const [batch] = await db
-    .insert(batchSessions)
-    .values({
-      title: title.trim(),
-      projectId: pid,
-      status: "draft",
-      mode,
-      createdBy: user.id,
-    })
-    .returning({ id: batchSessions.id })
+  const plan =
+    mode === "manual"
+      ? await planManualInvoices(pid)
+      : format === "invoice"
+        ? await planAutomaticInvoices(formData, pid)
+        : await planBalanceInvoices(formData, pid)
+  if (!plan.ok) return plan
 
-  if (mode === "manual") {
-    return createManualInvoices(pid, user.id, batch.id)
-  }
-  if (format === "invoice") {
-    return createAutomaticInvoices(formData, pid, user.id, batch.id)
-  }
-  return createBalanceInvoices(formData, pid, user.id, batch.id)
+  return db.transaction(async (tx) => {
+    const [batch] = await tx
+      .insert(batchSessions)
+      .values({
+        title: title.trim(),
+        projectId: pid,
+        status: "draft",
+        mode,
+        createdBy: user.id,
+        excelLabels: plan.excelLabels ? JSON.stringify(plan.excelLabels) : null,
+        parseStats: plan.parseStats,
+      })
+      .returning({ id: batchSessions.id })
+    if (plan.invoices.length > 0) {
+      await tx.insert(invoices).values(
+        plan.invoices.map((invoice) => ({
+          ...invoice,
+          batchId: batch.id,
+          createdBy: user.id,
+        }))
+      )
+    }
+    return { ok: true, batchId: batch.id, ...plan.stats } as const
+  })
 }

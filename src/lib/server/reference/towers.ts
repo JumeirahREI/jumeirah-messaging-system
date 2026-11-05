@@ -1,11 +1,18 @@
 "use server"
-import { and, count, desc, eq, inArray, isNull } from "drizzle-orm"
+import { and, count, desc, eq, isNull } from "drizzle-orm"
 import { towerSchema } from "@/lib/schemas"
 import { requireRole } from "@/lib/server/auth-helpers"
 import { requireRoleRateLimited } from "@/lib/server/action-guards"
 import { db } from "@/lib/server/db"
-import { apartmentContacts, apartments, towers } from "@/lib/server/schema"
-import { actor, now, safeMutation, type MutationResult } from "./shared"
+import { apartments, towers } from "@/lib/server/schema"
+import {
+  actor,
+  deletion,
+  now,
+  safeMutation,
+  softDeleteApartmentsWhere,
+  type MutationResult,
+} from "./shared"
 
 export type TowerRow = {
   id: number
@@ -133,30 +140,16 @@ export async function softDeleteTower(input: {
   id: number
 }): Promise<MutationResult<{ id: number }>> {
   const user = await requireRoleRateLimited("admin")
-  const result = await db
-    .update(towers)
-    .set({ deletedBy: user.id, deletedAt: now })
-    .where(and(eq(towers.id, input.id), isNull(towers.deletedAt)))
-    .returning({ id: towers.id })
-  if (result.length === 0) {
-    return { ok: false, error: "البرج غير موجود" } as const
-  }
-
-  const aptRows = await db
-    .select({ id: apartments.id })
-    .from(apartments)
-    .where(and(eq(apartments.towerId, input.id), isNull(apartments.deletedAt)))
-  const aptIds = aptRows.map((a) => a.id)
-  if (aptIds.length > 0) {
-    await db
-      .update(apartments)
-      .set({ deletedAt: now })
-      .where(inArray(apartments.id, aptIds))
-    await db
-      .update(apartmentContacts)
-      .set({ deletedAt: now })
-      .where(inArray(apartmentContacts.apartmentId, aptIds))
-  }
-
-  return { ok: true, data: result[0] } as const
+  return db.transaction(async (tx) => {
+    const result = await tx
+      .update(towers)
+      .set(deletion(user))
+      .where(and(eq(towers.id, input.id), isNull(towers.deletedAt)))
+      .returning({ id: towers.id })
+    if (result.length === 0) {
+      return { ok: false, error: "البرج غير موجود" } as const
+    }
+    await softDeleteApartmentsWhere(tx, user, eq(apartments.towerId, input.id))
+    return { ok: true, data: result[0] } as const
+  })
 }

@@ -5,12 +5,19 @@ import { requireRole } from "@/lib/server/auth-helpers"
 import { requireRoleRateLimited } from "@/lib/server/action-guards"
 import { db } from "@/lib/server/db"
 import {
-  apartmentContacts,
   apartments,
+  batchSessions,
   projects,
   towers,
 } from "@/lib/server/schema"
-import { actor, now, safeMutation, type MutationResult } from "./shared"
+import {
+  actor,
+  deletion,
+  now,
+  safeMutation,
+  softDeleteApartmentsWhere,
+  type MutationResult,
+} from "./shared"
 
 export type ProjectRow = {
   id: number
@@ -123,44 +130,48 @@ export async function softDeleteProject(input: {
   id: number
 }): Promise<MutationResult<{ id: number }>> {
   const user = await requireRoleRateLimited("admin")
-  const result = await db
-    .update(projects)
-    .set({ deletedBy: user.id, deletedAt: now })
-    .where(and(eq(projects.id, input.id), isNull(projects.deletedAt)))
-    .returning({ id: projects.id })
-  if (result.length === 0) {
-    return { ok: false, error: "المشروع غير موجود" } as const
-  }
-
-  const towerRows = await db
-    .select({ id: towers.id })
-    .from(towers)
-    .where(and(eq(towers.projectId, input.id), isNull(towers.deletedAt)))
-  const towerIds = towerRows.map((t) => t.id)
-  if (towerIds.length > 0) {
-    await db
-      .update(towers)
-      .set({ deletedAt: now })
-      .where(inArray(towers.id, towerIds))
-
-    const aptRows = await db
-      .select({ id: apartments.id })
-      .from(apartments)
+  return db.transaction(async (tx) => {
+    const [sending] = await tx
+      .select({ id: batchSessions.id })
+      .from(batchSessions)
       .where(
-        and(inArray(apartments.towerId, towerIds), isNull(apartments.deletedAt))
+        and(
+          eq(batchSessions.projectId, input.id),
+          eq(batchSessions.status, "sending"),
+          isNull(batchSessions.deletedAt)
+        )
       )
-    const aptIds = aptRows.map((a) => a.id)
-    if (aptIds.length > 0) {
-      await db
-        .update(apartments)
-        .set({ deletedAt: now })
-        .where(inArray(apartments.id, aptIds))
-      await db
-        .update(apartmentContacts)
-        .set({ deletedAt: now })
-        .where(inArray(apartmentContacts.apartmentId, aptIds))
+      .limit(1)
+    if (sending) {
+      return {
+        ok: false,
+        error: "لا يمكن حذف المشروع أثناء وجود دفعة قيد الإرسال",
+      } as const
     }
-  }
 
-  return { ok: true, data: result[0] } as const
+    const result = await tx
+      .update(projects)
+      .set(deletion(user))
+      .where(and(eq(projects.id, input.id), isNull(projects.deletedAt)))
+      .returning({ id: projects.id })
+    if (result.length === 0) {
+      return { ok: false, error: "المشروع غير موجود" } as const
+    }
+
+    const projectTowerIds = tx
+      .select({ id: towers.id })
+      .from(towers)
+      .where(eq(towers.projectId, input.id))
+    await softDeleteApartmentsWhere(
+      tx,
+      user,
+      inArray(apartments.towerId, projectTowerIds)
+    )
+    await tx
+      .update(towers)
+      .set(deletion(user))
+      .where(and(eq(towers.projectId, input.id), isNull(towers.deletedAt)))
+
+    return { ok: true, data: result[0] } as const
+  })
 }

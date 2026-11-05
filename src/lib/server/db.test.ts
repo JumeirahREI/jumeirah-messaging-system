@@ -6,7 +6,7 @@ import { migrate } from "drizzle-orm/libsql/migrator"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 type DbModule = typeof import("./db")
-type Globals = { __dbClient?: unknown; __db?: unknown }
+type Globals = { __dbConnection?: { client: { close?: () => void } } }
 
 let dir: string
 
@@ -16,7 +16,9 @@ async function expectFkViolation(run: () => Promise<unknown>) {
     (e: unknown) => e
   )
   const cause = error instanceof Error ? error.cause : undefined
-  const text = [error, cause].map((e) => (e instanceof Error ? e.message : "")).join(" ")
+  const text = [error, cause]
+    .map((e) => (e instanceof Error ? e.message : ""))
+    .join(" ")
   expect(text).toMatch(/FOREIGN KEY/i)
 }
 
@@ -29,10 +31,8 @@ const savedEnv = {
 
 function resetGlobals() {
   const g = globalThis as Globals
-  const client = g.__dbClient as { close?: () => void } | undefined
-  client?.close?.()
-  delete g.__dbClient
-  delete g.__db
+  g.__dbConnection?.client.close?.()
+  delete g.__dbConnection
 }
 
 function restoreEnv(key: string, value: string | undefined) {
@@ -87,10 +87,10 @@ describe("db with a file: URL", () => {
   it("reuses one client across accesses", async () => {
     const mod = await load(`file:${join(dir, "b.db")}`)
     await mod.client.execute("SELECT 1")
-    const first = (globalThis as Globals).__dbClient
+    const first = (globalThis as Globals).__dbConnection
     await mod.client.execute("SELECT 1")
     expect(first).toBeDefined()
-    expect((globalThis as Globals).__dbClient).toBe(first)
+    expect((globalThis as Globals).__dbConnection).toBe(first)
   })
 
   it("rejects a message with a bad invoice_id, also after transactions", async () => {
