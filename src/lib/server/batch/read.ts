@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/server/auth-helpers"
 import { parseBatchIdInput, parseIdInput } from "@/lib/server/action-guards"
 import { computeReconciliation } from "@/lib/server/batch-reconciliation"
 import { db } from "@/lib/server/db"
-import type { BatchMode, BatchStatus } from "@/lib/server/schema"
+import type { BatchMode, BatchStatus, MessageStatus } from "@/lib/server/schema"
 import {
   apartmentContacts,
   apartments,
@@ -419,7 +419,7 @@ export type BatchStatusMessage = {
   contactName: string | null
   phoneNumber: string
   templateType: "notification" | "warning"
-  status: "pending" | "sent" | "failed"
+  status: MessageStatus
   errorReason: string | null
   sentAt: string | null
 }
