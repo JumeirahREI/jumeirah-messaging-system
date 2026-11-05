@@ -13,9 +13,8 @@ vi.mock("@/lib/server/db", () => ({
   },
 }))
 
-const { assertLockHeld, checkLockHeld, isLockExpired } = await import(
-  "./lock-guard"
-)
+const { assertLockHeld, checkLockHeld, isLockExpired } =
+  await import("./lock-guard")
 
 let testDb: TestDb
 
