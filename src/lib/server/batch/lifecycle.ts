@@ -1,5 +1,5 @@
 "use server"
-import { and, eq, inArray, isNull, ne } from "drizzle-orm"
+import { and, eq, inArray, isNull } from "drizzle-orm"
 import {
   requireRoleRateLimited,
   parseIdInput,
@@ -25,7 +25,7 @@ export async function softDeleteBatch(input: {
       .where(
         and(
           eq(batchSessions.id, id),
-          ne(batchSessions.status, "sending"),
+          eq(batchSessions.status, "draft"),
           isNull(batchSessions.deletedAt)
         )
       )
@@ -40,7 +40,7 @@ export async function softDeleteBatch(input: {
         error:
           batch?.status === "sending"
             ? "لا يمكن حذف الدفعة أثناء الإرسال"
-            : "لا يمكن حذف الدفعة (غير موجودة)",
+            : "لا يمكن حذف الدفعة (غير موجودة أو ليست مسودة)",
       } as const
     }
     const invoiceIds = tx

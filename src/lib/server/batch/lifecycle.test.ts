@@ -53,7 +53,10 @@ describe("softDeleteBatch", () => {
 
     const result = await softDeleteBatch({ id: batch.id })
 
-    expect(result.ok).toBe(false)
+    expect(result).toEqual({
+      ok: false,
+      error: "لا يمكن حذف الدفعة أثناء الإرسال",
+    })
     expect(await deletedAt(batch.id)).toBeNull()
   })
 
@@ -72,13 +75,16 @@ describe("softDeleteBatch", () => {
     expect(res.rows[0].deleted_at).not.toBeNull()
   })
 
-  it("deletes a completed batch", async () => {
+  it("rejects deleting a completed batch with the original error", async () => {
     const batch = await createBatch(testDb.db, { status: "completed" })
 
     const result = await softDeleteBatch({ id: batch.id })
 
-    expect(result.ok).toBe(true)
-    expect(await deletedAt(batch.id)).not.toBeNull()
+    expect(result).toEqual({
+      ok: false,
+      error: "لا يمكن حذف الدفعة (غير موجودة أو ليست مسودة)",
+    })
+    expect(await deletedAt(batch.id)).toBeNull()
   })
 
   it("keeps archiving completed batches only", async () => {
