@@ -10,7 +10,7 @@ import {
 const getBatchStatus = vi.fn()
 
 vi.mock("@/auth", () => authModule())
-vi.mock("@/lib/server/batch-service", () => ({
+vi.mock("@/lib/server/batch/read", () => ({
   getBatchStatus: (...args: unknown[]) => getBatchStatus(...args),
 }))
 
