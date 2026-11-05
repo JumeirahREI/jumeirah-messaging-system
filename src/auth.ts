@@ -22,7 +22,7 @@ export const { handlers, signIn, signOut, auth, unstable_update } = NextAuth({
         }
         const user = await authenticateUser(username, password)
         if (!user) return null
-        return user as unknown as { id: string; name: string; email: string }
+        return { ...user, id: String(user.id) }
       },
     }),
   ],
