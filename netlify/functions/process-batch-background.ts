@@ -21,12 +21,25 @@ function readHeader(
   return key ? headers[key] : undefined
 }
 
-function parseBatchId(body: string | null): number | null {
+function parseHop(value: unknown): number | null {
+  if (value === undefined) return 0
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+    ? value
+    : null
+}
+
+function parsePayload(
+  body: string | null
+): { batchId: number; hop: number } | null {
   try {
     const parsed: unknown = JSON.parse(body ?? "{}")
-    return typeof parsed === "object" && parsed !== null
-      ? parsePositiveInt((parsed as { batchId?: unknown }).batchId)
-      : null
+    if (typeof parsed !== "object" || parsed === null) return null
+    const { batchId, hop } = parsed as { batchId?: unknown; hop?: unknown }
+    const id = parsePositiveInt(batchId)
+    const hopValue = parseHop(hop)
+    return id === null || hopValue === null
+      ? null
+      : { batchId: id, hop: hopValue }
   } catch {
     return null
   }
@@ -39,11 +52,12 @@ export const handler: Handler = async (event) => {
   )
   if (!authorized) return respond(401, { error: "غير مصرح" })
 
-  const batchId = parseBatchId(event.body)
-  if (batchId === null) return respond(400, { error: "معرّف غير صالح" })
+  const payload = parsePayload(event.body)
+  if (payload === null) return respond(400, { error: "معرّف غير صالح" })
+  const { batchId, hop } = payload
 
   try {
-    await processPendingMessages(batchId)
+    await processPendingMessages(batchId, { hop })
     return respond(200, { ok: true, batchId })
   } catch (err) {
     console.error("[process-batch-background] failed", err)
