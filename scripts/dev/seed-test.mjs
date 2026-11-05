@@ -1,7 +1,16 @@
 import { createClient } from "@libsql/client"
 import bcrypt from "bcryptjs"
 
-const client = createClient({ url: "file:local.db" })
+import { checkSeedTarget } from "./seed-guard.mjs"
+
+const dbUrl = process.env.TURSO_DATABASE_URL ?? "file:local.db"
+const refusal = checkSeedTarget({ nodeEnv: process.env.NODE_ENV, dbUrl })
+if (refusal) {
+  console.error(refusal)
+  process.exit(1)
+}
+
+const client = createClient({ url: dbUrl })
 
 // Reset: delete all users, re-seed with mustResetPassword=true
 await client.execute("DELETE FROM users")
