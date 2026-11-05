@@ -7,6 +7,7 @@ import {
   createApartmentContact,
   createContact,
   createPhoneNumber,
+  createTower,
 } from "@/test/fixtures"
 
 const holder = vi.hoisted(() => ({ db: null as unknown }))
@@ -137,7 +138,7 @@ describe("resolveRecipients", () => {
     ])
   })
 
-  it("keeps distinct phone rows that share a number (dedupe is by phone id)", async () => {
+  it("keeps only the lowest phone id when two contacts share a number", async () => {
     const { db } = testDb
     const apt = await createApartment(db)
     const a = await createContact(db)
@@ -146,19 +147,99 @@ describe("resolveRecipients", () => {
       contactId: a.id,
       number: "971500000001",
     })
-    const phoneB = await createPhoneNumber(db, {
+    await createPhoneNumber(db, {
       contactId: b.id,
       number: "971500000001",
     })
-    await createApartmentContact(db, { apartmentId: apt.id, contactId: a.id })
     await createApartmentContact(db, { apartmentId: apt.id, contactId: b.id })
+    await createApartmentContact(db, { apartmentId: apt.id, contactId: a.id })
 
     const result = await resolveRecipients([apt.id])
 
-    expect(
-      (result.phonesByApartment.get(apt.id) ?? []).map((p) => p.id).sort()
-    ).toEqual([phoneA.id, phoneB.id].sort())
+    expect(result.phonesByApartment.get(apt.id)?.map((p) => p.id)).toEqual([
+      phoneA.id,
+    ])
+    expect(result.apartmentsWithContacts.has(apt.id)).toBe(true)
   })
+
+  it("dedupes one contact's number stored twice, even in different formats", async () => {
+    const { db } = testDb
+    const apt = await createApartment(db)
+    const contact = await createContact(db)
+    const first = await createPhoneNumber(db, {
+      contactId: contact.id,
+      number: "967771234567",
+    })
+    await createPhoneNumber(db, { contactId: contact.id, number: "771234567" })
+    await createApartmentContact(db, {
+      apartmentId: apt.id,
+      contactId: contact.id,
+    })
+
+    const result = await resolveRecipients([apt.id])
+
+    expect(result.phonesByApartment.get(apt.id)?.map((p) => p.id)).toEqual([
+      first.id,
+    ])
+  })
+
+  it("keeps distinct numbers and the same number in different apartments", async () => {
+    const { db } = testDb
+    const one = await createApartment(db)
+    const two = await createApartment(db)
+    const contact = await createContact(db)
+    const phoneA = await createPhoneNumber(db, {
+      contactId: contact.id,
+      number: "967771111111",
+    })
+    const phoneB = await createPhoneNumber(db, {
+      contactId: contact.id,
+      number: "967772222222",
+    })
+    await createApartmentContact(db, {
+      apartmentId: one.id,
+      contactId: contact.id,
+    })
+    await createApartmentContact(db, {
+      apartmentId: two.id,
+      contactId: contact.id,
+    })
+
+    const result = await resolveRecipients([one.id, two.id])
+
+    for (const apt of [one, two]) {
+      expect(
+        (result.phonesByApartment.get(apt.id) ?? []).map((p) => p.id).sort()
+      ).toEqual([phoneA.id, phoneB.id].sort())
+    }
+  })
+
+  it("resolves more than 500 apartments without a variable-limit error", async () => {
+    const { db } = testDb
+    const contact = await createContact(db)
+    await createPhoneNumber(db, { contactId: contact.id })
+    const apts = []
+    const tower = await createTower(db)
+    for (let i = 0; i < 520; i++) {
+      apts.push(
+        await createApartment(db, {
+          towerId: tower.id,
+          projectId: tower.projectId,
+          createdBy: tower.createdBy,
+        })
+      )
+    }
+    for (const apt of apts) {
+      await createApartmentContact(db, {
+        apartmentId: apt.id,
+        contactId: contact.id,
+      })
+    }
+
+    const result = await resolveRecipients(apts.map((a) => a.id))
+
+    expect(result.apartmentsWithContacts.size).toBe(520)
+  }, 60_000)
 
   it("treats a contact without phones as having no recipients", async () => {
     const { db } = testDb
