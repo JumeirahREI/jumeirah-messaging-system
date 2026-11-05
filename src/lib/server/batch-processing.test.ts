@@ -6,6 +6,7 @@ import { createTestDb, type TestDb } from "@/test/db"
 import { okGateway, seedBatch, statusCounts } from "@/test/engine"
 import { createMessage } from "@/test/fixtures"
 import { behaviors, ScriptedSmsGateway } from "@/test/sms"
+import type { DispatchResult } from "@/lib/server/batch/dispatch"
 import type { DB } from "@/lib/server/db"
 import { batchSessions, messages } from "@/lib/server/schema"
 import type { SmsGateway, SmsResult } from "@/lib/server/sms-gateway"
@@ -23,10 +24,15 @@ const UNCERTAIN = "حالة الإرسال غير مؤكدة"
 
 let t: TestDb
 let clock: number
-let dispatch: ReturnType<typeof vi.fn>
+let dispatch: ReturnType<typeof dispatchOk>
 
 const dispatchOk = () =>
-  vi.fn(async (_id: number, _o: { hop: number }) => ({ ok: true, status: 202 }))
+  vi.fn(
+    async (_id: number, _o: { hop: number }): Promise<DispatchResult> => ({
+      ok: true,
+      status: 202,
+    })
+  )
 
 function opts(over: Partial<ProcessOptions> = {}): ProcessOptions {
   return {
@@ -392,7 +398,7 @@ describe("failure isolation", () => {
       get(target, prop) {
         if (prop === "update")
           return (table: unknown) => {
-            if (table === messages && ++messageUpdates === 3)
+            if (table === messages && ++messageUpdates === 4)
               throw new Error("claim boom")
             return target.update(table as typeof messages)
           }
@@ -682,13 +688,13 @@ describe("time budget and chaining", () => {
     const { gateway } = clockGateway(10_000)
     const atCap = await processPendingMessages(
       seeded.batchId,
-      opts({ gateway, budgetMs: 1, hop: 100, maxHops: 100 })
+      opts({ gateway, budgetMs: 1, hop: 100, maxHops: 100, concurrency: 1, concurrencyMax: 1 })
     )
     expect(atCap.outcome).toBe("hop_cap")
     expect(dispatch).not.toHaveBeenCalled()
     const below = await processPendingMessages(
       seeded.batchId,
-      opts({ gateway, budgetMs: 1, hop: 99, maxHops: 100 })
+      opts({ gateway, budgetMs: 1, hop: 99, maxHops: 100, concurrency: 1, concurrencyMax: 1 })
     )
     expect(below.outcome).toBe("chained")
     expect(dispatch).toHaveBeenCalledWith(seeded.batchId, { hop: 100 })
@@ -715,7 +721,7 @@ describe("time budget and chaining", () => {
     dispatch.mockRejectedValue(new Error("network"))
     const res = await processPendingMessages(
       seeded.batchId,
-      opts({ gateway, budgetMs: 1 })
+      opts({ gateway, budgetMs: 1, concurrency: 1, concurrencyMax: 1 })
     )
     expect(res.outcome).toBe("chain_failed")
   })
@@ -728,7 +734,10 @@ describe("time budget and chaining", () => {
       leaseAtDispatch = (await batch(seeded.batchId))?.runnerId
       return { ok: true, status: 202 }
     })
-    await processPendingMessages(seeded.batchId, opts({ gateway, budgetMs: 1 }))
+    await processPendingMessages(
+      seeded.batchId,
+      opts({ gateway, budgetMs: 1, concurrency: 1, concurrencyMax: 1 })
+    )
     expect(leaseAtDispatch).toBeNull()
   })
 })
