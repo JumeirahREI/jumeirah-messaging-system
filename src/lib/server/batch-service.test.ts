@@ -83,24 +83,26 @@ vi.mock("@/lib/server/db", () => {
     then: (resolve: (v: unknown) => unknown) =>
       Promise.resolve(undefined).then(resolve),
   }
-  return {
-    db: {
-      select: vi.fn(() => makeSelectChain()),
-      insert: vi.fn((table: unknown) => {
-        currentTable = table
-        return makeSelectChain()
-      }),
-      update: vi.fn(() => updateChain),
-      __setResults: (r: unknown[]) => {
-        results = r
-        consumeCount = 0
-      },
-      __insertCalls: insertCalls,
-      __clearInsertCalls: () => {
-        insertCalls.length = 0
-      },
+  const txProxy: Record<string, unknown> = {}
+  const dbMock = {
+    select: vi.fn(() => makeSelectChain()),
+    insert: vi.fn((table: unknown) => {
+      currentTable = table
+      return makeSelectChain()
+    }),
+    update: vi.fn(() => updateChain),
+    transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(txProxy)),
+    __setResults: (r: unknown[]) => {
+      results = r
+      consumeCount = 0
+    },
+    __insertCalls: insertCalls,
+    __clearInsertCalls: () => {
+      insertCalls.length = 0
     },
   }
+  Object.assign(txProxy, dbMock)
+  return { db: dbMock }
 })
 
 const { db } = await import("@/lib/server/db")
@@ -665,6 +667,7 @@ describe("sendBatch manual gating", () => {
         { id: 10, label: "A101" },
         { id: 11, label: "A102" },
       ],
+      [{ id: 5 }],
     ])
 
     const result = await sendBatch({ batchId: 5 })
@@ -697,6 +700,7 @@ describe("sendBatch manual gating", () => {
         { id: 10, label: "A101" },
         { id: 11, label: "A102" },
       ],
+      [{ id: 5 }],
     ])
 
     const result = await sendBatch({ batchId: 5 })
@@ -725,6 +729,7 @@ describe("sendBatch manual gating", () => {
         { id: 10, label: "A101" },
         { id: 11, label: "A102" },
       ],
+      [{ id: 5 }],
     ])
 
     const result = await sendBatch({ batchId: 5 })
