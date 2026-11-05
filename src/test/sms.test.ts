@@ -20,15 +20,43 @@ describe("ScriptedSmsGateway", () => {
       script: [behaviors.failure("nope"), behaviors.success("id-2")],
       defaultBehavior: behaviors.failure("default"),
     })
-    expect(await gateway.send("1", "a")).toEqual({ ok: false, error: "nope" })
+    expect(await gateway.send("1", "a")).toEqual({
+      ok: false,
+      outcome: "failed",
+      preSend: false,
+      error: "nope",
+    })
     expect(await gateway.send("2", "b")).toEqual({
       ok: true,
       messageId: "id-2",
     })
     expect(await gateway.send("3", "c")).toEqual({
       ok: false,
+      outcome: "failed",
+      preSend: false,
       error: "default",
     })
+  })
+
+  it("scripts ambiguous and pre-send outcomes and records startPart", async () => {
+    const gateway = new ScriptedSmsGateway({
+      script: [
+        behaviors.ambiguous("timed out"),
+        behaviors.failure("refused", { preSend: true }),
+      ],
+    })
+    expect(await gateway.send("1", "a")).toEqual({
+      ok: false,
+      outcome: "ambiguous",
+      error: "timed out",
+    })
+    expect(await gateway.send("1", "a", { startPart: 2 })).toEqual({
+      ok: false,
+      outcome: "failed",
+      preSend: true,
+      error: "refused",
+    })
+    expect(gateway.calls[1]?.startPart).toBe(2)
   })
 
   it("throws when scripted to throw", async () => {
@@ -86,6 +114,7 @@ describe("createFakeFetch", () => {
     expect(await gateway.send("1", "a")).toEqual({
       ok: false,
       outcome: "failed",
+      preSend: false,
       error: "Bad credentials",
     })
     const reset = await gateway.send("1", "a")

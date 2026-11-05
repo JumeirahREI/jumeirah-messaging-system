@@ -1,3 +1,6 @@
+import { createServer, type Server } from "node:net"
+import type { AddressInfo } from "node:net"
+
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { createFakeFetch } from "@/test/sms"
@@ -9,6 +12,7 @@ import {
   setSmsGateway,
   type FetchLike,
   type SmsGateway,
+  type SmsResult,
 } from "./sms-gateway"
 
 describe("FakeSmsGateway", () => {
@@ -415,7 +419,18 @@ describe("outcome classification of transport errors", () => {
     }
   )
 
-  it.each(["ECONNRESET", "UND_ERR_SOCKET", "UND_ERR_CONNECT_TIMEOUT"])(
+  it("a connect-phase timeout never sent bytes, so it is a definite pre-send failure", async () => {
+    const res = await sendWith(
+      errorWithCode("Connect Timeout Error", "UND_ERR_CONNECT_TIMEOUT")
+    )
+    expect(res).toMatchObject({
+      ok: false,
+      outcome: "failed",
+      preSend: true,
+    })
+  })
+
+  it.each(["ECONNRESET", "UND_ERR_SOCKET"])(
     "%s is ambiguous",
     async (code) => {
       expect(await sendWith(errorWithCode(code, code))).toMatchObject({
@@ -647,4 +662,165 @@ describe("breakMessageIntoParts properties", () => {
     expect(parts.join("")).toBe(text)
     for (const p of parts) expect(p).toBe(Array.from(p).join(""))
   })
+})
+
+describe("SmsResult contract", () => {
+  it("requires outcome on failures (compile-time)", () => {
+    // @ts-expect-error outcome is required in the failure branch
+    const missingOutcome: SmsResult = { ok: false, error: "x" }
+    const definite = {
+      ok: false,
+      outcome: "failed",
+      error: "x",
+      preSend: false,
+    } satisfies SmsResult
+    const ambiguous = {
+      ok: false,
+      outcome: "ambiguous",
+      error: "x",
+    } satisfies SmsResult
+    expect([missingOutcome, definite, ambiguous]).toHaveLength(3)
+  })
+})
+
+describe("preSend classification", () => {
+  const sendWith = async (error: Error) => {
+    const { fetch } = createFakeFetch({ defaultResponse: { error } })
+    return new AlawaelSmsGateway(baseConfig, { fetchFn: fetch }).send(
+      phone,
+      "hi"
+    )
+  }
+
+  it.each([
+    "ENOTFOUND",
+    "ECONNREFUSED",
+    "ENETUNREACH",
+    "EHOSTUNREACH",
+    "EAI_AGAIN",
+  ])("%s is failed with preSend true", async (code) => {
+    expect(await sendWith(errorWithCode(code, code))).toMatchObject({
+      ok: false,
+      outcome: "failed",
+      preSend: true,
+    })
+  })
+
+  it("an invalid URL is failed with preSend true", async () => {
+    const { fetch } = createFakeFetch()
+    const gw = new AlawaelSmsGateway(
+      { ...baseConfig, sendUrl: "https://" },
+      { fetchFn: fetch }
+    )
+    expect(await gw.send(phone, "hi")).toMatchObject({
+      outcome: "failed",
+      preSend: true,
+    })
+  })
+
+  it("a provider error code is failed with preSend false", async () => {
+    const { fetch } = createFakeFetch({
+      defaultResponse: { body: "1001:Invalid Login" },
+    })
+    const res = await new AlawaelSmsGateway(baseConfig, {
+      fetchFn: fetch,
+    }).send(phone, "hi")
+    expect(res).toMatchObject({
+      ok: false,
+      outcome: "failed",
+      preSend: false,
+    })
+  })
+
+  it("the fake gateway failure is failed with preSend false", async () => {
+    expect(
+      await new FakeSmsGateway({ failRate: 1 }).send(phone, "b")
+    ).toMatchObject({ outcome: "failed", preSend: false })
+  })
+
+  it("ambiguous results carry no preSend flag", async () => {
+    const res = await sendWith(errorWithCode("reset", "ECONNRESET"))
+    expect(res).toMatchObject({ outcome: "ambiguous" })
+    expect(res).not.toHaveProperty("preSend", true)
+  })
+})
+
+describe("startPart", () => {
+  const long = "A".repeat(300) + ". " + "B".repeat(100)
+  const partCount = breakMessageIntoParts(long).length
+
+  it("skips earlier parts and reports cumulative partsSent", async () => {
+    const { fetch, calls } = createFakeFetch({
+      script: [{ body: "1001:Quota exceeded" }],
+    })
+    const gw = new AlawaelSmsGateway(baseConfig, { fetchFn: fetch })
+    const res = await gw.send(phone, long, { startPart: 2 })
+    expect(partCount).toBe(2)
+    expect(calls).toHaveLength(1)
+    expect(new URL(calls[0]?.url ?? "").searchParams.get("text")).toBe(
+      breakMessageIntoParts(long)[1]
+    )
+    expect(res).toMatchObject({ ok: false, partsSent: 1 })
+  })
+
+  it("succeeds when only the remaining parts are sent", async () => {
+    const { fetch, calls } = createFakeFetch({
+      defaultResponse: { body: "0:OK:p2" },
+    })
+    const gw = new AlawaelSmsGateway(baseConfig, { fetchFn: fetch })
+    expect(await gw.send(phone, long, { startPart: 2 })).toEqual({
+      ok: true,
+      messageId: "p2",
+    })
+    expect(calls).toHaveLength(1)
+  })
+
+  it("startPart 1 or undefined sends every part", async () => {
+    const { fetch, calls } = createFakeFetch()
+    const gw = new AlawaelSmsGateway(baseConfig, { fetchFn: fetch })
+    await gw.send(phone, long, { startPart: 1 })
+    expect(calls).toHaveLength(2)
+  })
+
+  it("a startPart beyond the last part sends nothing and succeeds", async () => {
+    const { fetch, calls } = createFakeFetch()
+    const gw = new AlawaelSmsGateway(baseConfig, { fetchFn: fetch })
+    expect(await gw.send(phone, long, { startPart: 3 })).toMatchObject({
+      ok: true,
+    })
+    expect(calls).toHaveLength(0)
+  })
+})
+
+describe("enforced connect timeout (real network stack)", () => {
+  let server: Server | undefined
+  afterEach(() => {
+    server?.close()
+    server = undefined
+  })
+
+  it("a stalled TLS handshake fails fast as a pre-send failure", async () => {
+    const sockets: import("node:net").Socket[] = []
+    server = createServer((socket) => {
+      sockets.push(socket)
+      socket.on("error", () => {})
+    })
+    await new Promise<void>((r) => server?.listen(0, "127.0.0.1", r))
+    const { port } = server.address() as AddressInfo
+    const gw = new AlawaelSmsGateway({
+      ...baseConfig,
+      sendUrl: `https://127.0.0.1:${port}/MainServlet`,
+      connectTimeoutMs: 200,
+      sendTimeoutMs: 8_000,
+    })
+    const started = Date.now()
+    const res = await gw.send(phone, "hi")
+    sockets.forEach((s) => s.destroy())
+    expect(Date.now() - started).toBeLessThan(3_000)
+    expect(res).toMatchObject({
+      ok: false,
+      outcome: "failed",
+      preSend: true,
+    })
+  }, 15_000)
 })

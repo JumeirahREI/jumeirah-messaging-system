@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 
 import { auth } from "@/auth"
 import { requireRole } from "@/lib/server/auth-helpers"
-import { processPendingMessages } from "@/lib/server/batch-processing"
+import { dispatchBatchProcessing } from "@/lib/server/batch/dispatch"
 import { db } from "@/lib/server/db"
 import { verifyBearer } from "@/lib/server/function-auth"
 import { parsePositiveInt } from "@/lib/server/parse-id"
@@ -62,9 +62,16 @@ export async function POST(
   if (!batch) return fail("الدفعة غير موجودة", 404)
   if (batch.status !== "sending") return fail("الدفعة ليست قيد الإرسال", 409)
 
-  void processPendingMessages(batchId).catch((err) => {
-    console.error(`[process] batch ${batchId} failed`, err)
-  })
+  try {
+    const dispatched = await dispatchBatchProcessing(batchId)
+    if (!dispatched.ok) {
+      console.error(`[process] batch ${batchId} dispatch failed`, dispatched)
+      return fail("تعذر بدء المعالجة", 502)
+    }
+  } catch (err) {
+    console.error(`[process] batch ${batchId} dispatch threw`, err)
+    return fail("تعذر بدء المعالجة", 502)
+  }
 
   return NextResponse.json({ ok: true, batchId }, { status: 202 })
 }

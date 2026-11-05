@@ -8,15 +8,15 @@ import {
   setTestUser,
 } from "@/test/auth"
 
-const processPendingMessages = vi.fn()
+const dispatchBatchProcessing = vi.fn()
 const checkRateLimit = vi.fn()
 const batchRows: { current: { status: string }[] } = { current: [] }
 
 vi.mock("@/auth", () => authModule())
 vi.mock("@/lib/server/auth-helpers", () => authHelpersModule())
-vi.mock("@/lib/server/batch-processing", () => ({
-  processPendingMessages: (...args: unknown[]) =>
-    processPendingMessages(...args),
+vi.mock("@/lib/server/batch/dispatch", () => ({
+  dispatchBatchProcessing: (...args: unknown[]) =>
+    dispatchBatchProcessing(...args),
 }))
 vi.mock("@/lib/server/rate-limit", () => ({
   mutationLimiter: { name: "mutation" },
@@ -50,7 +50,7 @@ function call(
 const sameOrigin = { origin: "http://localhost:3000" }
 
 beforeEach(() => {
-  processPendingMessages.mockReset().mockResolvedValue(undefined)
+  dispatchBatchProcessing.mockReset().mockResolvedValue({ ok: true })
   checkRateLimit.mockReset().mockResolvedValue(true)
   batchRows.current = [{ status: "sending" }]
   vi.stubEnv("NETLIFY_FUNCTION_SECRET", SECRET)
@@ -65,7 +65,7 @@ describe("POST /api/batches/[id]/process", () => {
   it.each(["1.5", "-1", "0", "abc", "1e3"])("400 for id %s", async (id) => {
     const res = await call(id, sameOrigin)
     expect(res.status).toBe(400)
-    expect(processPendingMessages).not.toHaveBeenCalled()
+    expect(dispatchBatchProcessing).not.toHaveBeenCalled()
   })
 
   it("401 without a session", async () => {
@@ -77,7 +77,7 @@ describe("POST /api/batches/[id]/process", () => {
   it("403 when Origin is absent and no bearer is given", async () => {
     const res = await call("1")
     expect(res.status).toBe(403)
-    expect(processPendingMessages).not.toHaveBeenCalled()
+    expect(dispatchBatchProcessing).not.toHaveBeenCalled()
   })
 
   it("403 when Origin is absent and the bearer is wrong or the secret is unset", async () => {
@@ -100,7 +100,7 @@ describe("POST /api/batches/[id]/process", () => {
     checkRateLimit.mockResolvedValue(false)
     const res = await call("1", sameOrigin)
     expect(res.status).toBe(429)
-    expect(processPendingMessages).not.toHaveBeenCalled()
+    expect(dispatchBatchProcessing).not.toHaveBeenCalled()
   })
 
   it("rate limits per user with the mutation limiter", async () => {
@@ -121,13 +121,30 @@ describe("POST /api/batches/[id]/process", () => {
     batchRows.current = [{ status }]
     const res = await call("1", sameOrigin)
     expect(res.status).toBe(409)
-    expect(processPendingMessages).not.toHaveBeenCalled()
+    expect(dispatchBatchProcessing).not.toHaveBeenCalled()
   })
 
   it("202 and starts processing for a sending batch", async () => {
     const res = await call("7", sameOrigin)
     expect(res.status).toBe(202)
     expect(await res.json()).toEqual({ ok: true, batchId: 7 })
-    expect(processPendingMessages).toHaveBeenCalledWith(7)
+    expect(dispatchBatchProcessing).toHaveBeenCalledWith(7)
+  })
+
+  it("502 and no state change when the dispatch is rejected", async () => {
+    dispatchBatchProcessing.mockResolvedValue({
+      ok: false,
+      status: 500,
+      error: "nope",
+    })
+    const res = await call("7", sameOrigin)
+    expect(res.status).toBe(502)
+    expect(JSON.stringify(await res.json())).not.toContain("nope")
+  })
+
+  it("502 when the dispatch throws", async () => {
+    dispatchBatchProcessing.mockRejectedValue(new Error("net"))
+    const res = await call("7", sameOrigin)
+    expect(res.status).toBe(502)
   })
 })

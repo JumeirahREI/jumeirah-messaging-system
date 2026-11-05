@@ -75,8 +75,29 @@ describe("process-batch-background handler", () => {
   it("200 and processes the batch", async () => {
     const res = await invoke({ authorization: `Bearer ${SECRET}` }, { batchId: 4 })
     expect(res.statusCode).toBe(200)
-    expect(processPendingMessages).toHaveBeenCalledWith(4)
+    expect(processPendingMessages).toHaveBeenCalledWith(4, { hop: 0 })
   })
+
+  it("passes a valid hop through to the engine", async () => {
+    const res = await invoke(
+      { authorization: `Bearer ${SECRET}` },
+      { batchId: 4, hop: 7 }
+    )
+    expect(res.statusCode).toBe(200)
+    expect(processPendingMessages).toHaveBeenCalledWith(4, { hop: 7 })
+  })
+
+  it.each([-1, 1.5, "3", "abc", null, {}])(
+    "400 for invalid hop %s",
+    async (hop) => {
+      const res = await invoke(
+        { authorization: `Bearer ${SECRET}` },
+        { batchId: 4, hop }
+      )
+      expect(res.statusCode).toBe(400)
+      expect(processPendingMessages).not.toHaveBeenCalled()
+    }
+  )
 
   it("500 without leaking details when processing throws", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
