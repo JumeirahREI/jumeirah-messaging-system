@@ -1,5 +1,5 @@
 "use server"
-import { and, eq, isNull, sql } from "drizzle-orm"
+import { and, eq, isNull, lt, or } from "drizzle-orm"
 import { requireRole } from "@/lib/server/auth-helpers"
 import {
   requireRoleRateLimited,
@@ -7,9 +7,7 @@ import {
 } from "@/lib/server/action-guards"
 import { db } from "@/lib/server/db"
 import { batchSessions, users } from "@/lib/server/schema"
-import { now } from "./shared"
-
-const LOCK_TIMEOUT_SECONDS = 5 * 60
+import { formatSqliteUtc, LOCK_TIMEOUT_SECONDS } from "./lock-time"
 
 export type BatchLockInfo = {
   lockedBy: number | null
@@ -24,10 +22,32 @@ export async function acquireBatchLock(input: {
 > {
   const batchId = parseBatchIdInput(input)
   const user = await requireRoleRateLimited("operator")
+  const cutoff = formatSqliteUtc(
+    new Date(Date.now() - LOCK_TIMEOUT_SECONDS * 1000)
+  )
 
-  const batchRows = await db
+  const acquired = await db
+    .update(batchSessions)
+    .set({ lockedBy: user.id, lockedAt: formatSqliteUtc(new Date()) })
+    .where(
+      and(
+        eq(batchSessions.id, batchId),
+        eq(batchSessions.status, "draft"),
+        eq(batchSessions.mode, "manual"),
+        isNull(batchSessions.deletedAt),
+        or(
+          isNull(batchSessions.lockedBy),
+          eq(batchSessions.lockedBy, user.id),
+          isNull(batchSessions.lockedAt),
+          lt(batchSessions.lockedAt, cutoff)
+        )
+      )
+    )
+    .returning({ id: batchSessions.id })
+  if (acquired.length > 0) return { ok: true }
+
+  const [batch] = await db
     .select({
-      id: batchSessions.id,
       status: batchSessions.status,
       mode: batchSessions.mode,
       lockedBy: batchSessions.lockedBy,
@@ -36,65 +56,34 @@ export async function acquireBatchLock(input: {
     .from(batchSessions)
     .where(and(eq(batchSessions.id, batchId), isNull(batchSessions.deletedAt)))
     .limit(1)
-  if (batchRows.length === 0) {
-    return {
-      ok: false,
-      error: "الدفعة غير موجودة",
-      lockedBy: { lockedBy: null, lockedAt: null, lockedByName: null },
-    }
+  const unlocked: BatchLockInfo = {
+    lockedBy: null,
+    lockedAt: null,
+    lockedByName: null,
   }
-  const batch = batchRows[0]
+  if (!batch) {
+    return { ok: false, error: "الدفعة غير موجودة", lockedBy: unlocked }
+  }
   if (batch.status !== "draft") {
-    return {
-      ok: false,
-      error: "الدفعة ليست مسودة",
-      lockedBy: { lockedBy: null, lockedAt: null, lockedByName: null },
-    }
+    return { ok: false, error: "الدفعة ليست مسودة", lockedBy: unlocked }
   }
   if (batch.mode !== "manual") {
     return {
       ok: false,
       error: "القفل ينطبق على الدفعات اليدوية فقط",
-      lockedBy: { lockedBy: null, lockedAt: null, lockedByName: null },
+      lockedBy: unlocked,
     }
   }
-
-  const expiredRows = await db
-    .select({
-      id: batchSessions.id,
-      lockedBy: batchSessions.lockedBy,
-      lockedAt: batchSessions.lockedAt,
-    })
-    .from(batchSessions)
-    .where(
-      and(
-        eq(batchSessions.id, batchId),
-        sql`${batchSessions.lockedAt} is not null`,
-        sql`${batchSessions.lockedAt} < datetime('now', '-${LOCK_TIMEOUT_SECONDS} seconds')`
-      )
-    )
-    .limit(1)
-  const isExpired = expiredRows.length > 0
-
-  if (batch.lockedBy !== null && batch.lockedBy !== user.id && !isExpired) {
-    const lockerName = await getUserName(batch.lockedBy)
-    return {
-      ok: false,
-      error: "الدفعة مقفلة بواسطة مستخدم آخر",
-      lockedBy: {
-        lockedBy: batch.lockedBy,
-        lockedAt: batch.lockedAt,
-        lockedByName: lockerName,
-      },
-    }
+  return {
+    ok: false,
+    error: "الدفعة مقفلة بواسطة مستخدم آخر",
+    lockedBy: {
+      lockedBy: batch.lockedBy,
+      lockedAt: batch.lockedAt,
+      lockedByName:
+        batch.lockedBy === null ? null : await getUserName(batch.lockedBy),
+    },
   }
-
-  await db
-    .update(batchSessions)
-    .set({ lockedBy: user.id, lockedAt: now })
-    .where(eq(batchSessions.id, batchId))
-
-  return { ok: true }
 }
 
 export async function releaseBatchLock(input: {
@@ -124,7 +113,7 @@ export async function heartbeatBatchLock(input: {
 
   const rows = await db
     .update(batchSessions)
-    .set({ lockedAt: now })
+    .set({ lockedAt: formatSqliteUtc(new Date()) })
     .where(
       and(eq(batchSessions.id, batchId), eq(batchSessions.lockedBy, user.id))
     )

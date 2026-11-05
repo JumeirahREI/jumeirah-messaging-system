@@ -792,6 +792,7 @@ describe("acquireBatchLock", () => {
         __setResults: (r: unknown[]) => void
       }
     ).__setResults([
+      [],
       [
         {
           id: 5,
@@ -817,6 +818,7 @@ describe("acquireBatchLock", () => {
         __setResults: (r: unknown[]) => void
       }
     ).__setResults([
+      [],
       [
         {
           id: 5,
@@ -842,6 +844,7 @@ describe("acquireBatchLock", () => {
         __setResults: (r: unknown[]) => void
       }
     ).__setResults([
+      [],
       [
         {
           id: 5,
@@ -851,7 +854,6 @@ describe("acquireBatchLock", () => {
           lockedAt: "2099-01-01 00:00:00",
         },
       ],
-      [],
       [{ name: "Other User" }],
     ])
 
