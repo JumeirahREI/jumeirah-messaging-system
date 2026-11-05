@@ -1,10 +1,19 @@
+import { Agent, fetch as undiciFetch } from "undici"
+
 import { redact } from "@/lib/server/redact"
 
 export type SmsResult =
   | { ok: true; messageId: string }
   | {
       ok: false
-      outcome?: "failed" | "ambiguous"
+      outcome: "failed"
+      error: string
+      preSend: boolean
+      partsSent?: number
+    }
+  | {
+      ok: false
+      outcome: "ambiguous"
       error: string
       partsSent?: number
     }
@@ -14,6 +23,7 @@ export type SmsStatusLookup =
 
 export interface SmsSendOptions {
   clientRef?: string
+  startPart?: number
 }
 
 export interface SmsGateway {
@@ -31,7 +41,12 @@ export class FakeSmsGateway implements SmsGateway {
   async send(to: string, body: string): Promise<SmsResult> {
     console.log(`[FakeSms] to=${to} body=${body.slice(0, 40)}…`)
     if (this.failRate > 0 && Math.random() < this.failRate) {
-      return { ok: false, outcome: "failed", error: "محاكاة فشل الإرسال" }
+      return {
+        ok: false,
+        outcome: "failed",
+        preSend: false,
+        error: "محاكاة فشل الإرسال",
+      }
     }
     return {
       ok: true,
@@ -58,6 +73,7 @@ const PRE_SEND_ERROR_CODES = new Set([
   "ENETUNREACH",
   "EHOSTUNREACH",
   "ERR_INVALID_URL",
+  "UND_ERR_CONNECT_TIMEOUT",
 ])
 const AMBIGUOUS_SUFFIX = "حالة الإرسال غير مؤكدة"
 
@@ -76,6 +92,7 @@ export interface AlawaelConfig {
 }
 
 type FailedSmsResult = Extract<SmsResult, { ok: false }>
+type DefiniteFailure = Extract<FailedSmsResult, { outcome: "failed" }>
 
 function positiveInt(
   value: number | string | undefined,
@@ -155,6 +172,15 @@ function errorDetail(err: unknown): string {
   return source instanceof Error ? source.message : String(source)
 }
 
+function connectTimeoutFetch(connectTimeoutMs: number): FetchLike {
+  const dispatcher = new Agent({ connect: { timeout: connectTimeoutMs } })
+  return (input, init) =>
+    undiciFetch(input, {
+      signal: init?.signal,
+      dispatcher,
+    }) as unknown as Promise<Response>
+}
+
 export class AlawaelSmsGateway implements SmsGateway {
   readonly connectTimeoutMs: number
   readonly sendTimeoutMs: number
@@ -191,7 +217,7 @@ export class AlawaelSmsGateway implements SmsGateway {
     )
     this.clientRefParam =
       config.clientRefParam ?? process.env.ALAWAEL_CLIENT_REF_PARAM ?? ""
-    this.fetchFn = opts.fetchFn ?? (globalThis.fetch as FetchLike)
+    this.fetchFn = opts.fetchFn ?? connectTimeoutFetch(this.connectTimeoutMs)
   }
 
   async send(
@@ -201,7 +227,9 @@ export class AlawaelSmsGateway implements SmsGateway {
   ): Promise<SmsResult> {
     const parts = breakMessageIntoParts(body)
     const ids: string[] = []
+    const firstIndex = Math.max(0, Math.floor((opts.startPart ?? 1) - 1))
     for (const [index, part] of parts.entries()) {
+      if (index < firstIndex) continue
       const ref =
         opts.clientRef && parts.length > 1
           ? `${opts.clientRef}-${index + 1}`
@@ -218,14 +246,20 @@ export class AlawaelSmsGateway implements SmsGateway {
     return "unsupported"
   }
 
-  private fail(
-    outcome: "failed" | "ambiguous",
-    error: string
-  ): FailedSmsResult {
+  private clean(error: string): string {
+    return redact(error.replace(/https?:\/\/\S+/gi, "[url]"), this.password)
+  }
+
+  private ambiguous(error: string): FailedSmsResult {
+    return { ok: false, outcome: "ambiguous", error: this.clean(error) }
+  }
+
+  private definite(error: string, preSend: boolean): DefiniteFailure {
     return {
       ok: false,
-      outcome,
-      error: redact(error.replace(/https?:\/\/\S+/gi, "[url]"), this.password),
+      outcome: "failed",
+      preSend,
+      error: this.clean(error),
     }
   }
 
@@ -255,20 +289,18 @@ export class AlawaelSmsGateway implements SmsGateway {
       })
       const text = await res.text()
       if (res.status >= 500)
-        return this.fail(
-          "ambiguous",
+        return this.ambiguous(
           `خطأ من مزود الخدمة (HTTP ${res.status})، ${AMBIGUOUS_SUFFIX}`
         )
       const parsed = parseSmsResponse(text)
       if (parsed.kind === "empty")
-        return this.fail("ambiguous", `رد فارغ من المزود، ${AMBIGUOUS_SUFFIX}`)
+        return this.ambiguous(`رد فارغ من المزود، ${AMBIGUOUS_SUFFIX}`)
       if (parsed.kind === "invalid")
-        return this.fail(
-          "ambiguous",
+        return this.ambiguous(
           `رد غير مفهوم من المزود، ${AMBIGUOUS_SUFFIX}: ${parsed.raw.slice(0, 200)}`
         )
       if (parsed.code !== SUCCESS_CODE)
-        return this.fail("failed", parsed.message.trim() || text.trim())
+        return this.definite(parsed.message.trim() || text.trim(), false)
       return { ok: true, id: parsed.id }
     } catch (err) {
       return this.classifyThrown(err, timedOut)
@@ -279,19 +311,15 @@ export class AlawaelSmsGateway implements SmsGateway {
 
   private classifyThrown(err: unknown, timedOut: boolean): FailedSmsResult {
     if (timedOut)
-      return this.fail(
-        "ambiguous",
-        `انتهت مهلة انتظار رد المزود، ${AMBIGUOUS_SUFFIX}`
-      )
+      return this.ambiguous(`انتهت مهلة انتظار رد المزود، ${AMBIGUOUS_SUFFIX}`)
     const code = errorCode(err)
     const detail = errorDetail(err)
     const preSend =
       (code !== undefined && PRE_SEND_ERROR_CODES.has(code)) ||
       (err instanceof TypeError && /invalid url/i.test(err.message))
     if (preSend)
-      return this.fail("failed", `تعذر الاتصال بمزود الرسائل: ${detail}`)
-    return this.fail(
-      "ambiguous",
+      return this.definite(`تعذر الاتصال بمزود الرسائل: ${detail}`, true)
+    return this.ambiguous(
       `انقطع الاتصال بمزود الرسائل، ${AMBIGUOUS_SUFFIX}: ${detail}`
     )
   }

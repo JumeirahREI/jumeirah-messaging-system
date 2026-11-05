@@ -145,7 +145,7 @@ describe("processPendingMessages", () => {
     )
 
     setSmsGateway(
-      makeGateway(async () => ({ ok: false, error: "gateway down" }))
+      makeGateway(async () => ({ ok: false, outcome: "failed", preSend: false, error: "gateway down" }))
     )
 
     await processPendingMessages(42)

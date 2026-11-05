@@ -1,8 +1,14 @@
-import type { FetchLike, SmsGateway, SmsResult } from "@/lib/server/sms-gateway"
+import type {
+  FetchLike,
+  SmsGateway,
+  SmsResult,
+  SmsSendOptions,
+} from "@/lib/server/sms-gateway"
 
 export type SmsBehavior =
   | { kind: "success"; messageId: string }
-  | { kind: "failure"; error: string }
+  | { kind: "failure"; error: string; preSend: boolean; partsSent?: number }
+  | { kind: "ambiguous"; error: string; partsSent?: number }
   | { kind: "throw"; error: string }
   | { kind: "delay"; ms: number; then: SmsBehavior }
 
@@ -11,7 +17,19 @@ export const behaviors = {
     kind: "success",
     messageId,
   }),
-  failure: (error = "send failed"): SmsBehavior => ({ kind: "failure", error }),
+  failure: (
+    error = "send failed",
+    opts: { preSend?: boolean; partsSent?: number } = {}
+  ): SmsBehavior => ({
+    kind: "failure",
+    error,
+    preSend: opts.preSend ?? false,
+    partsSent: opts.partsSent,
+  }),
+  ambiguous: (
+    error = "send outcome unknown",
+    opts: { partsSent?: number } = {}
+  ): SmsBehavior => ({ kind: "ambiguous", error, partsSent: opts.partsSent }),
   throwing: (error = "gateway exploded"): SmsBehavior => ({
     kind: "throw",
     error,
@@ -27,6 +45,7 @@ export interface SmsCall {
   to: string
   body: string
   at: number
+  startPart?: number
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
@@ -36,7 +55,24 @@ async function play(behavior: SmsBehavior): Promise<SmsResult> {
     case "success":
       return { ok: true, messageId: behavior.messageId }
     case "failure":
-      return { ok: false, error: behavior.error }
+      return {
+        ok: false,
+        outcome: "failed",
+        preSend: behavior.preSend,
+        error: behavior.error,
+        ...(behavior.partsSent === undefined
+          ? {}
+          : { partsSent: behavior.partsSent }),
+      }
+    case "ambiguous":
+      return {
+        ok: false,
+        outcome: "ambiguous",
+        error: behavior.error,
+        ...(behavior.partsSent === undefined
+          ? {}
+          : { partsSent: behavior.partsSent }),
+      }
     case "throw":
       throw new Error(behavior.error)
     case "delay":
@@ -61,8 +97,12 @@ export class ScriptedSmsGateway implements SmsGateway {
     this.queue.push(...scripted)
   }
 
-  async send(to: string, body: string): Promise<SmsResult> {
-    this.calls.push({ to, body, at: Date.now() })
+  async send(
+    to: string,
+    body: string,
+    opts: SmsSendOptions = {}
+  ): Promise<SmsResult> {
+    this.calls.push({ to, body, at: Date.now(), startPart: opts.startPart })
     return play(this.queue.shift() ?? this.defaultBehavior)
   }
 }
