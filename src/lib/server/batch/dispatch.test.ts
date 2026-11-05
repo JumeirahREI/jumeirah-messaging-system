@@ -58,9 +58,9 @@ describe("dispatchBatchProcessing on Netlify", () => {
     netlifyEnv()
     const fetchFn = okFetch()
     await dispatchBatchProcessing(7, undefined, { fetchFn })
-    expect(JSON.parse(String((fetchFn.mock.calls[0] as FetchArgs)[1].body))).toEqual(
-      { batchId: 7, hop: 0 }
-    )
+    expect(
+      JSON.parse(String((fetchFn.mock.calls[0] as FetchArgs)[1].body))
+    ).toEqual({ batchId: 7, hop: 0 })
   })
 
   it.each([

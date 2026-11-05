@@ -207,7 +207,7 @@ export async function sendBatch(input: {
     return { ok: true, batchId } as const
   })
 
-  if (result.ok) invokeBackgroundProcess(batchId)
+  if (result.ok) await invokeBackgroundProcess(batchId)
   return result
 }
 
@@ -258,7 +258,7 @@ export async function resumeSending(input: {
     return { ok: false, error: "لا توجد رسائل بانتظار الإرسال" } as const
   }
 
-  invokeBackgroundProcess(batchId)
+  await invokeBackgroundProcess(batchId)
 
   return { ok: true, batchId } as const
 }
@@ -299,7 +299,7 @@ export async function retryFailed(input: {
     return { ok: true, batchId } as const
   })
 
-  if (result.ok) invokeBackgroundProcess(batchId)
+  if (result.ok) await invokeBackgroundProcess(batchId)
   return result
 }
 
@@ -460,6 +460,6 @@ export async function sendWarning(input: {
     return { ok: true, batchId } as const
   })
 
-  if (result.ok) invokeBackgroundProcess(batchId)
+  if (result.ok) await invokeBackgroundProcess(batchId)
   return result
 }

@@ -29,9 +29,8 @@ function baseUrl(): string | undefined {
 }
 
 async function defaultProcessLocal(batchId: number, opts: { hop: number }) {
-  const { processPendingMessages } = await import(
-    "@/lib/server/batch-processing"
-  )
+  const { processPendingMessages } =
+    await import("@/lib/server/batch-processing")
   return processPendingMessages(batchId, { hop: opts.hop })
 }
 
@@ -95,15 +94,14 @@ export async function dispatchBatchProcessing(
   return { ok: true }
 }
 
-export function invokeBackgroundProcess(batchId: number): void {
-  void dispatchBatchProcessing(batchId)
-    .then((res) => {
-      if (!res.ok)
-        console.error(
-          `[invokeBackgroundProcess] batch ${batchId} dispatch failed: ${res.error ?? res.status}`
-        )
-    })
-    .catch((err) =>
-      console.error(`[invokeBackgroundProcess] batch ${batchId} threw`, err)
-    )
+export async function invokeBackgroundProcess(batchId: number): Promise<void> {
+  try {
+    const res = await dispatchBatchProcessing(batchId)
+    if (!res.ok)
+      console.error(
+        `[invokeBackgroundProcess] batch ${batchId} dispatch failed: ${res.error ?? res.status}`
+      )
+  } catch (err) {
+    console.error(`[invokeBackgroundProcess] batch ${batchId} threw`, err)
+  }
 }
