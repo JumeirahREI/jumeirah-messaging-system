@@ -155,6 +155,18 @@ Only files with `"use server"` export async actions. Pure helpers live in non-se
 
 ---
 
+## Phase 1 outcomes and carry-over (recorded after the Phase 1 merge)
+
+Merged and gated (typecheck, 341 tests, build, no new lint errors). Code now lives in `src/lib/server/batch/*` and `src/lib/server/reference/*`; `batch-service.ts` and `reference-data.ts` no longer exist. Facts later tasks must respect:
+
+- **SMS contract (P1-D):** `SmsResult` failure carries optional `outcome: "failed" | "ambiguous"`, `partsSent?`. P2-B makes `outcome` required, adds a `preSend: boolean` flag to definite failures, and a `startPart` option on `send`. `connectTimeoutMs` is configurable but **not enforced** (plain `fetch`); P2-B enforces it with an undici `Agent({ connect: { timeout } })` dispatcher (check the Node/undici version Netlify provides; add the dependency only if needed) or documents why not. Worst-case single-part latency is about 40 s, so the claim timeout must exceed 40 s plus margin.
+- **Dispatch auth (P1-E):** the process route needs a session AND (same-origin OR bearer); the Netlify function needs `Authorization: Bearer ${NETLIFY_FUNCTION_SECRET}` with body `{"batchId": <positive int>}`. The route returns 409 unless the batch is already `sending`. P2-B's `dispatch.ts` must target the Netlify function on Netlify (bearer only), and for chained and watchdog dispatch it must not depend on a user session.
+- **Schema (P1-B):** new columns on `messages` (`claimed_at`, `attempts`, `gateway_message_id`, `client_ref`, `parts_sent`, statuses `sending` and `unknown`), `batch_sessions` (`unknown`, `runner_id`, `runner_lease_until`), `users.session_version`, unique live index on `(invoice_id, phone_number_id, template_type)`. P2-A must use `ON CONFLICT DO NOTHING` or catch the constraint error.
+- **Auth (P1-C):** `loginGuard` (`createLoginGuard`, `check`, `recordFailure`, `recordSuccess`) and `getClientIp` are reusable for the change-password limiter (P2-C). `loginLimiter` was replaced by `loginLimiters`. `AUTH_SECRET` must be present in the Netlify **build** scope (checked at import during `next build`). `authenticateUser` uses `lower(username)`; the DB column's unique index is case-sensitive, so P2-C and P3-A must normalize usernames on write and block case-insensitive duplicates.
+- **Known not done (P1-E):** `.e2e-server.mjs` is a stale TanStack-era script; delete it in P3-E.
+- **Production migration risk (P1-B):** if production was created with `db:push` it has no migrations table, so the first `drizzle migrate()` would replay 0000–0004 and fail. Task P4-C below baselines it.
+- **Lint:** repo-wide lint still has 5 pre-existing `react-hooks/set-state-in-effect` errors; the gate remains "no new lint errors versus `docs/fix-plan-baseline.md`".
+
 ## Phase 2 — Core correctness (5 parallel tasks)
 
 All of these build on the Phase 1 module layout and schema.
@@ -290,6 +302,12 @@ Because most of the logic landed in Phases 1–3, expect these to pass at once. 
 **Gate → Phase 5.**
 
 ---
+
+### P4-C: Baseline tooling for the first production migration
+**Owns:** `scripts/migrate.ts`, `scripts/baseline-migrations.ts` (new), their tests, `docs/SRS.md` (deployment section).
+**Why:** production was created with `drizzle-kit push`, so it has no `__drizzle_migrations` rows. The first `migrate()` would try to recreate existing tables.
+**Changes:** `scripts/baseline-migrations.ts` inspects the target DB: if application tables exist but `__drizzle_migrations` is missing or empty, it marks migrations 0000–0004 as applied (writing the same hash and timestamp rows drizzle would) and leaves 0005+ to run normally; it refuses when the schema doesn't match the 0004 snapshot (compare table and column lists) and supports `--dry-run`. `migrate.ts` calls the baseline check first in production. Never destructive.
+**Red tests:** push-created DB (apply 0000–0004 SQL without journal rows) → baseline then migrate succeeds and the data survives; a fresh DB → plain migrate; a DB that diverges from the 0004 snapshot → refuses with a clear message; `--dry-run` writes nothing; idempotent on repeat.
 
 ## Phase 5 — Final verification (3 parallel tasks, read-mostly)
 
