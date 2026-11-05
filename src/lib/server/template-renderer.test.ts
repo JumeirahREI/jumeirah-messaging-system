@@ -64,4 +64,24 @@ describe("template-renderer", () => {
       )
     })
   })
+
+  describe("literal label rendering", () => {
+    it.each(["A$&B", "A$'B", "A$`B", "A$$B"])(
+      "renders %s literally",
+      (label) => {
+        const expected = `للشقة ${label} يرجى`
+        expect(renderNotification({ amount: 1, unit_label: label })).toContain(
+          expected
+        )
+        expect(renderWarning({ amount: 1, unit_label: label })).toContain(
+          expected
+        )
+      }
+    )
+
+    it("does not re-expand placeholders found in the label", () => {
+      const out = renderNotification({ amount: 5, unit_label: "{amount}" })
+      expect(out).toContain("للشقة {amount} يرجى")
+    })
+  })
 })
