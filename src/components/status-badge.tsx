@@ -1,8 +1,8 @@
 import { Badge } from "@/components/ui/badge"
+import type { MessageStatus } from "@/lib/server/schema"
 import { cn } from "@/lib/utils"
 
 type BatchStatus = "draft" | "sending" | "completed"
-type MessageStatus = "pending" | "sent" | "failed"
 
 const BATCH_STATUS: Record<
   BatchStatus,
@@ -36,7 +36,13 @@ const MESSAGE_STATUS: Record<
     variant: "default",
     className: "bg-success/15 text-success",
   },
+  sending: { label: "جارٍ الإرسال", variant: "default" },
   failed: { label: "فاشلة", variant: "destructive" },
+  unknown: {
+    label: "غير مؤكدة",
+    variant: "secondary",
+    className: "bg-warning/15 text-warning",
+  },
 }
 
 export function BatchStatusBadge({ status }: { status: BatchStatus }) {

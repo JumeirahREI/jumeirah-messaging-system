@@ -19,7 +19,7 @@ import {
   isExcelParseError,
   parseInvoiceExcel,
 } from "./excel-parser"
-import type { BatchMode, BatchStatus } from "./schema"
+import type { BatchMode, BatchStatus, MessageStatus } from "./schema"
 import {
   apartmentContacts,
   apartments,
@@ -1569,7 +1569,7 @@ export type BatchStatusMessage = {
   contactName: string | null
   phoneNumber: string
   templateType: "notification" | "warning"
-  status: "pending" | "sent" | "failed"
+  status: MessageStatus
   errorReason: string | null
   sentAt: string | null
 }

@@ -12,6 +12,7 @@
     "check": "prettier --check \"**/*.{ts,tsx,js,jsx}\"",
     "typecheck": "tsc --noEmit",
     "db:push": "drizzle-kit push",
+    "db:migrate": "bun run scripts/migrate.ts",
     "db:seed": "bun run drizzle/seed.ts",
     "db:seed:apartments": "bun run drizzle/seed-apartments.ts"
   },
