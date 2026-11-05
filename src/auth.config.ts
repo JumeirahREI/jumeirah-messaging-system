@@ -1,5 +1,7 @@
 import type { NextAuthConfig } from "next-auth"
 
+import { readSessionUpdate } from "@/lib/server/session-proof"
+
 export type Role = "operator" | "admin"
 
 export type SessionUser = {
@@ -16,10 +18,12 @@ declare module "next-auth" {
     username?: string
     isAdmin?: boolean
     mustResetPassword?: boolean
+    sessionVersion?: number
   }
   interface Session {
     user: SessionUser
     mustResetPassword: boolean
+    sessionVersion: number
   }
 }
 
@@ -30,6 +34,7 @@ declare module "@auth/core/jwt" {
     username?: string
     isAdmin?: boolean
     mustResetPassword?: boolean
+    sessionVersion?: number
   }
 }
 
@@ -52,11 +57,16 @@ export const authConfig = {
         token.username = user.username
         token.isAdmin = user.isAdmin
         token.mustResetPassword = user.mustResetPassword
+        token.sessionVersion = user.sessionVersion
       }
       if (trigger === "update") {
         const mustResetPassword = readMustResetPassword(session)
         if (mustResetPassword !== undefined) {
           token.mustResetPassword = mustResetPassword
+        }
+        if (token.id !== undefined) {
+          const sessionVersion = readSessionUpdate(token.id, session)
+          if (sessionVersion !== null) token.sessionVersion = sessionVersion
         }
       }
       return token
@@ -73,6 +83,7 @@ export const authConfig = {
           mustResetPassword: token.mustResetPassword ?? false,
         },
         mustResetPassword: token.mustResetPassword ?? false,
+        sessionVersion: token.sessionVersion ?? 0,
       }
     },
     redirect({ url, baseUrl }) {

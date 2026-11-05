@@ -40,6 +40,16 @@ describe("authenticateUser (real db)", () => {
     expect(hash).toMatch(/^\$2[aby]\$\d\d\$/)
   })
 
+  it("returns the session version of the user row", async () => {
+    const created = await createUser(testDb.db, {
+      username: "versioned",
+      password: await bcrypt.hash("correct-horse-battery", 4),
+      sessionVersion: 3,
+    })
+    const user = await authenticateUser("versioned", "correct-horse-battery")
+    expect(user).toMatchObject({ id: created.id, sessionVersion: 3 })
+  })
+
   it("still rejects a wrong password", async () => {
     expect(await authenticateUser("admin.mixed", "nope")).toBeNull()
   })
