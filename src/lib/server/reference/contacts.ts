@@ -18,7 +18,13 @@ import {
   projects,
   towers,
 } from "@/lib/server/schema"
-import { actor, now, safeMutation, type MutationResult } from "./shared"
+import {
+  actor,
+  deletion,
+  now,
+  safeMutation,
+  type MutationResult,
+} from "./shared"
 
 export type ContactRow = { id: number; fullname: string }
 
@@ -101,30 +107,35 @@ export async function softDeleteContact(input: {
   id: number
 }): Promise<MutationResult<{ id: number }>> {
   const user = await requireRoleRateLimited("operator")
-  const result = await db
-    .update(contacts)
-    .set({ deletedBy: user.id, deletedAt: now })
-    .where(and(eq(contacts.id, input.id), isNull(contacts.deletedAt)))
-    .returning({ id: contacts.id })
-  if (result.length === 0) {
-    return { ok: false, error: "جهة الاتصال غير موجودة" } as const
-  }
-  await db
-    .update(phoneNumbers)
-    .set({ deletedAt: now })
-    .where(
-      and(eq(phoneNumbers.contactId, input.id), isNull(phoneNumbers.deletedAt))
-    )
-  await db
-    .update(apartmentContacts)
-    .set({ deletedAt: now })
-    .where(
-      and(
-        eq(apartmentContacts.contactId, input.id),
-        isNull(apartmentContacts.deletedAt)
+  return db.transaction(async (tx) => {
+    const result = await tx
+      .update(contacts)
+      .set(deletion(user))
+      .where(and(eq(contacts.id, input.id), isNull(contacts.deletedAt)))
+      .returning({ id: contacts.id })
+    if (result.length === 0) {
+      return { ok: false, error: "جهة الاتصال غير موجودة" } as const
+    }
+    await tx
+      .update(phoneNumbers)
+      .set(deletion(user))
+      .where(
+        and(
+          eq(phoneNumbers.contactId, input.id),
+          isNull(phoneNumbers.deletedAt)
+        )
       )
-    )
-  return { ok: true, data: result[0] } as const
+    await tx
+      .update(apartmentContacts)
+      .set(deletion(user))
+      .where(
+        and(
+          eq(apartmentContacts.contactId, input.id),
+          isNull(apartmentContacts.deletedAt)
+        )
+      )
+    return { ok: true, data: result[0] } as const
+  })
 }
 
 export type ContactWithCountsRow = ContactRow & {

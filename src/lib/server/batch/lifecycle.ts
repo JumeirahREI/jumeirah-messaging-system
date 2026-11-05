@@ -1,5 +1,5 @@
 "use server"
-import { and, eq, inArray, isNull } from "drizzle-orm"
+import { and, eq, inArray, isNull, ne } from "drizzle-orm"
 import {
   requireRoleRateLimited,
   parseIdInput,
@@ -13,45 +13,52 @@ export async function softDeleteBatch(input: {
 }): Promise<{ ok: true; data: { id: number } } | { ok: false; error: string }> {
   const id = parseIdInput(input)
   const user = await requireRoleRateLimited("operator")
-  const rows = await db
-    .update(batchSessions)
-    .set({
-      deletedBy: user.id,
-      deletedAt: now,
-      lockedBy: null,
-      lockedAt: null,
-    })
-    .where(
-      and(
-        eq(batchSessions.id, id),
-        eq(batchSessions.status, "draft"),
-        isNull(batchSessions.deletedAt)
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .update(batchSessions)
+      .set({
+        deletedBy: user.id,
+        deletedAt: now,
+        lockedBy: null,
+        lockedAt: null,
+      })
+      .where(
+        and(
+          eq(batchSessions.id, id),
+          ne(batchSessions.status, "sending"),
+          isNull(batchSessions.deletedAt)
+        )
       )
-    )
-    .returning({ id: batchSessions.id })
-  if (rows.length === 0) {
-    return {
-      ok: false,
-      error: "لا يمكن حذف الدفعة (غير موجودة أو ليست مسودة)",
-    } as const
-  }
-  const invoiceIds = await db
-    .select({ id: invoices.id })
-    .from(invoices)
-    .where(and(eq(invoices.batchId, id), isNull(invoices.deletedAt)))
-
-  if (invoiceIds.length > 0) {
-    const ids = invoiceIds.map((i) => i.id)
-    await db
+      .returning({ id: batchSessions.id })
+    if (rows.length === 0) {
+      const [batch] = await tx
+        .select({ status: batchSessions.status })
+        .from(batchSessions)
+        .where(and(eq(batchSessions.id, id), isNull(batchSessions.deletedAt)))
+      return {
+        ok: false,
+        error:
+          batch?.status === "sending"
+            ? "لا يمكن حذف الدفعة أثناء الإرسال"
+            : "لا يمكن حذف الدفعة (غير موجودة)",
+      } as const
+    }
+    const invoiceIds = tx
+      .select({ id: invoices.id })
+      .from(invoices)
+      .where(and(eq(invoices.batchId, id), isNull(invoices.deletedAt)))
+    await tx
       .update(messages)
       .set({ deletedBy: user.id, deletedAt: now })
-      .where(and(inArray(messages.invoiceId, ids), isNull(messages.deletedAt)))
-    await db
+      .where(
+        and(inArray(messages.invoiceId, invoiceIds), isNull(messages.deletedAt))
+      )
+    await tx
       .update(invoices)
       .set({ deletedBy: user.id, deletedAt: now })
-      .where(and(inArray(invoices.id, ids), isNull(invoices.deletedAt)))
-  }
-  return { ok: true, data: rows[0] } as const
+      .where(and(eq(invoices.batchId, id), isNull(invoices.deletedAt)))
+    return { ok: true, data: rows[0] } as const
+  })
 }
 
 export async function archiveBatch(input: {
